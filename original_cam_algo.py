@@ -86,14 +86,14 @@ def angle_dist_from_bbox(bbox, xoffset, yoffset):
     dist_px   = 1.5 * math.hypot(midx, midy)   # raw pixel distance scaled like C++
     return angle_deg, dist_px, (cx, cy)
 
-def apply_ball_distance_calibration(balldist):
-    """Piecewise exponential mapping identical to C++."""
-    if balldist == -5:
-        return -5
-    if balldist < 185:
-        return -228.02 * math.exp(-0.00198188 * balldist) + 200.086
-    else:
-        return 7.01168 * math.exp(0.00594217 * balldist) + 27.48
+    def apply_ball_distance_calibration(balldist):
+        """Piecewise exponential mapping identical to C++."""
+        if balldist == -5:
+            return -5
+        if balldist < 185:
+            return -228.02 * math.exp(-0.00198188 * balldist) + 200.086
+        else:
+            return 7.01168 * math.exp(0.00594217 * balldist) + 27.48
 
 # =========================
 # Main

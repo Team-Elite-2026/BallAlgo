@@ -5,7 +5,7 @@ import json
 import os
 import time
 import csv
-
+import picamzero
 # ========================
 # Config
 # ========================
