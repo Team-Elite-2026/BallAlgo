@@ -1,9 +1,20 @@
+import os
+
+
+def _env_flag(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 SERIAL_PORT = "/dev/serial0"  # Pi hardware UART
 SERIAL_BAUD = 2000000
 SERIAL_TIMEOUT = 0.01
 ENABLE_SERIAL = True
 
-ENABLE_LIDAR = True
+# Set BALLALGO_ENABLE_LIDAR=0 on robots without LD19 hardware.
+ENABLE_LIDAR = _env_flag("BALLALGO_ENABLE_LIDAR", True)
 # LD19 wiring:
 # - LD19 TX -> Pi RX on GPIO13 (UART4 RX on Pi 5/CM5)
 # - LD19 PWM -> GPIO12 (held LOW to keep internal speed control active)

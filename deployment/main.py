@@ -209,6 +209,7 @@ def track_ball(
         "last_position": last_position,
         "last_sector": last_sector,
         "v_ema": v_ema,
+        "ball_found": ball_found,
         "searched_sectors": searched_sectors,
         "best": best,
         "predicted_sector": predicted_sector,
@@ -243,7 +244,7 @@ def draw_sector_overlay(frame, sector_center, searched_sectors, predicted_sector
 def process_video(show_video):
     robot_serial = open_robot_serial() if cfg.ENABLE_SERIAL else None
     heading_reader = RobotHeadingReader(cfg.ROBOT_HEADING_DEG)
-    gpio_handle = setup_lidar_pwm_ground()
+    gpio_handle = setup_lidar_pwm_ground() if cfg.ENABLE_LIDAR else None
 
     lidar_reader = None
     lidar_localizer = None
@@ -257,6 +258,8 @@ def process_video(show_video):
             field_height_mm=cfg.FIELD_HEIGHT_MM,
             lidar_yaw_offset_deg=cfg.LIDAR_YAW_OFFSET_DEG,
         )
+    else:
+        print("[LIDAR] Disabled by BALLALGO_ENABLE_LIDAR=0")
 
     cv2.setUseOptimized(True)
     threshold_data = load_thresholds()
@@ -322,6 +325,7 @@ def process_video(show_video):
         predicted_sector = ball_data["predicted_sector"]
         angle_deg = ball_data["angle_deg"]
         dist_px = ball_data["dist_px"]
+        ball_found = ball_data["ball_found"]
 
         draw_sector_overlay(frame, sector_center, searched_sectors, predicted_sector, best)
 
@@ -365,9 +369,12 @@ def process_video(show_video):
 
         lidar_x = int(last_pose["x_mm"]) if last_pose["valid"] else -5
         lidar_y = int(last_pose["y_mm"]) if last_pose["valid"] else -5
+        ball_vx = int(round(v_ema[0])) if (ball_found and v_ema is not None) else 0
+        ball_vy = int(round(v_ema[1])) if (ball_found and v_ema is not None) else 0
 
         send_string = (
-            f"{int(angle_deg)}b{int(ball_dist)}a{int(blue_angle)}c{int(yellow_angle)}d{lidar_x}e{lidar_y}f"
+            f"{int(angle_deg)}b{int(ball_dist)}a{int(blue_angle)}c{int(yellow_angle)}d"
+            f"{lidar_x}e{lidar_y}f{ball_vx}g{ball_vy}i"
         )
         safe_write(robot_serial, send_string)
 
