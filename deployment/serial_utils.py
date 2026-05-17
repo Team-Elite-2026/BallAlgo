@@ -6,27 +6,36 @@ import config as cfg
 
 
 def open_robot_serial():
-    try:
-        ser = serial.Serial(
-            port=cfg.SERIAL_PORT,
-            baudrate=cfg.SERIAL_BAUD,
-            timeout=cfg.SERIAL_TIMEOUT,
-        )
-        time.sleep(0.1)
-        print(f"[SERIAL] Connected on {cfg.SERIAL_PORT}")
-        return ser
-    except Exception as exc:
-        print(f"[SERIAL] Failed to open serial: {exc}")
-        return None
+    candidate_ports = [cfg.SERIAL_PORT]
+    for fallback in ("/dev/ttyAMA0", "/dev/ttyS0"):
+        if fallback not in candidate_ports:
+            candidate_ports.append(fallback)
+
+    for port in candidate_ports:
+        try:
+            ser = serial.Serial(
+                port=port,
+                baudrate=cfg.SERIAL_BAUD,
+                timeout=cfg.SERIAL_TIMEOUT,
+            )
+            time.sleep(0.1)
+            print(f"[SERIAL] Connected on {port}")
+            return ser
+        except Exception as exc:
+            print(f"[SERIAL] Failed to open {port}: {exc}")
+
+    return None
 
 
 def safe_write(serial_conn, message):
     if serial_conn is None:
-        return
+        return False
     try:
         serial_conn.write(message.encode("utf-8"))
-    except serial.SerialException:
-        pass
+        return True
+    except serial.SerialException as exc:
+        print(f"[SERIAL] Write failed: {exc}")
+        return False
 
 
 class RobotHeadingReader:

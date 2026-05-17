@@ -243,6 +243,7 @@ def draw_sector_overlay(frame, sector_center, searched_sectors, predicted_sector
 
 def process_video(show_video):
     robot_serial = open_robot_serial() if cfg.ENABLE_SERIAL else None
+    next_serial_retry_time = time.monotonic()
     heading_reader = RobotHeadingReader(cfg.ROBOT_HEADING_DEG)
     gpio_handle = setup_lidar_pwm_ground() if cfg.ENABLE_LIDAR else None
 
@@ -289,6 +290,10 @@ def process_video(show_video):
         frame = next_frame
         if frame is None:
             break
+
+        if cfg.ENABLE_SERIAL and robot_serial is None and time.monotonic() >= next_serial_retry_time:
+            robot_serial = open_robot_serial()
+            next_serial_retry_time = time.monotonic() + 1.0
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         bin_ball = cv2.inRange(hsv, lower_ball, upper_ball)
@@ -376,7 +381,14 @@ def process_video(show_video):
             f"{int(angle_deg)}b{int(ball_dist)}a{int(blue_angle)}c{int(yellow_angle)}d"
             f"{lidar_x}e{lidar_y}f{ball_vx}g{ball_vy}i"
         )
-        safe_write(robot_serial, send_string)
+        write_ok = safe_write(robot_serial, send_string)
+        if cfg.ENABLE_SERIAL and (not write_ok) and robot_serial is not None:
+            try:
+                robot_serial.close()
+            except Exception:
+                pass
+            robot_serial = None
+            next_serial_retry_time = time.monotonic() + 1.0
 
         next_frame = cv2.cvtColor(picam2.capture_array(), cv2.COLOR_RGB2BGR)
 
