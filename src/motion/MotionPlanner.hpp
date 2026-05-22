@@ -1,0 +1,34 @@
+#pragma once
+
+#include "estimation/BallKalman.hpp"
+#include "estimation/PoseKalman.hpp"
+#include "motion/AStar3D.hpp"
+#include "motion/HermiteSpline.hpp"
+#include "motion/VelocityProfile.hpp"
+
+#include <cstdint>
+#include <vector>
+
+namespace ballalgo {
+
+struct PlannedChunk {
+  uint64_t trajectoryId;
+  uint64_t startTimePi;
+  uint16_t dtMs;
+  std::vector<MotionAction> actions;
+};
+
+class MotionPlanner {
+ public:
+  PlannedChunk plan(const PoseState& pose, const BallState& ball, float goalDeg,
+                    float headingDeg, int latencyUs, bool fullPlanner);
+  uint64_t nextTrajId();
+
+ private:
+  AStar3D astar_;
+  HermiteSpline spline_;
+  VelocityProfile profiler_;
+  uint64_t trajId_ = 0;
+};
+
+}  // namespace ballalgo

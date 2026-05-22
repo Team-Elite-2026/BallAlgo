@@ -1,0 +1,55 @@
+#include "camera/CameraCapture.hpp"
+
+#include "config.hpp"
+
+#include <iostream>
+
+namespace ballalgo {
+
+struct CameraCapture::Impl {
+  cv::VideoCapture cap;
+};
+
+CameraCapture::CameraCapture() : impl_(std::make_unique<Impl>()) {}
+CameraCapture::~CameraCapture() { close(); }
+
+bool CameraCapture::open() {
+#if defined(BALLALGO_HAS_LIBCAMERA)
+  const char* device = "/dev/video0";
+#else
+  const char* device = "0";
+#endif
+  impl_->cap.open(device, cv::CAP_V4L2);
+  if (!impl_->cap.isOpened()) {
+    impl_->cap.open(device);
+  }
+  if (!impl_->cap.isOpened()) {
+    std::cerr << "[CAM] Open failed — blank stub frames\n";
+    return true;
+  }
+  impl_->cap.set(cv::CAP_PROP_FRAME_WIDTH, config::kFrameWidth);
+  impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config::kFrameHeight);
+  impl_->cap.set(cv::CAP_PROP_FPS, config::kCameraFps);
+  impl_->cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+#if defined(BALLALGO_HAS_LIBCAMERA)
+  std::cout << "[CAM] V4L2 via libcamera stack " << config::kFrameWidth << "x" << config::kFrameHeight
+            << "\n";
+#else
+  std::cout << "[CAM] Stub/dev capture\n";
+#endif
+  return true;
+}
+
+bool CameraCapture::grab(cv::Mat& bgrOut) {
+  if (impl_->cap.isOpened()) {
+    return impl_->cap.read(bgrOut) && !bgrOut.empty();
+  }
+  bgrOut = cv::Mat(config::kFrameHeight, config::kFrameWidth, CV_8UC3, cv::Scalar(30, 30, 30));
+  return true;
+}
+
+void CameraCapture::close() {
+  if (impl_->cap.isOpened()) impl_->cap.release();
+}
+
+}  // namespace ballalgo
