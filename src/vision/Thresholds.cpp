@@ -11,6 +11,11 @@ namespace ballalgo {
 
 namespace {
 
+void ignoreValueChannel(cv::Scalar& lower, cv::Scalar& upper) {
+  lower[2] = 0;
+  upper[2] = 255;
+}
+
 bool parseHsvArray(const std::string& json, const std::string& key, cv::Scalar& lower, cv::Scalar& upper) {
   std::regex blockRe("\"" + key + "\"\\s*:\\s*\\{([^}]*)\\}");
   std::smatch m;
@@ -55,6 +60,11 @@ bool loadThresholds(const std::string& path, ThresholdsData& out) {
     out.ball.upper = cv::Scalar(25, 255, 255);
     out.yellowGoal = out.blueGoal = out.ball;
     out.xoffset = out.yoffset = 0;
+    if (config::kIgnoreHsvValue) {
+      ignoreValueChannel(out.ball.lower, out.ball.upper);
+      ignoreValueChannel(out.yellowGoal.lower, out.yellowGoal.upper);
+      ignoreValueChannel(out.blueGoal.lower, out.blueGoal.upper);
+    }
     return false;
   }
   std::stringstream ss;
@@ -75,6 +85,11 @@ bool loadThresholds(const std::string& path, ThresholdsData& out) {
     out.hasMask = true;
     out.maskCenter = cv::Point(std::stoi(mm[1]), std::stoi(mm[2]));
     out.maskAxes = cv::Size(std::stoi(mm[3]), std::stoi(mm[4]));
+  }
+  if (config::kIgnoreHsvValue) {
+    ignoreValueChannel(out.ball.lower, out.ball.upper);
+    ignoreValueChannel(out.yellowGoal.lower, out.yellowGoal.upper);
+    ignoreValueChannel(out.blueGoal.lower, out.blueGoal.upper);
   }
   return true;
 }

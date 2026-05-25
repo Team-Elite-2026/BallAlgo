@@ -31,6 +31,17 @@ bool CameraCapture::open() {
   impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config::kFrameHeight);
   impl_->cap.set(cv::CAP_PROP_FPS, config::kCameraFps);
   impl_->cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+  // Best-effort manual tuning to match the lidar branch's runtime camera setup.
+  impl_->cap.set(cv::CAP_PROP_AUTO_EXPOSURE, 1.0);
+  impl_->cap.set(cv::CAP_PROP_EXPOSURE, config::kExposureUs);
+  impl_->cap.set(cv::CAP_PROP_GAIN, config::kCameraGain);
+  impl_->cap.set(cv::CAP_PROP_BRIGHTNESS, config::kCameraBrightness);
+  impl_->cap.set(cv::CAP_PROP_CONTRAST, config::kCameraContrast);
+  impl_->cap.set(cv::CAP_PROP_SATURATION, config::kCameraSaturation);
+  impl_->cap.set(cv::CAP_PROP_AUTO_WB, 0.0);
+  impl_->cap.set(cv::CAP_PROP_WB_TEMPERATURE, config::kCameraWhiteBalance);
+  impl_->cap.set(cv::CAP_PROP_AUTOFOCUS, 0.0);
+  impl_->cap.set(cv::CAP_PROP_FOCUS, config::kCameraFocus);
 #if defined(BALLALGO_HAS_LIBCAMERA)
   std::cout << "[CAM] V4L2 via libcamera stack " << config::kFrameWidth << "x" << config::kFrameHeight
             << "\n";

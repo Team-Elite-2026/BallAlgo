@@ -14,14 +14,20 @@ inline constexpr int kLidarBaud = 230400;
 inline constexpr int kLidarPwmGpio = 12;
 inline constexpr bool kLidarPwmHoldLow = true;
 
-inline constexpr float kFieldWidthMm = 3600.f;
-inline constexpr float kFieldHeightMm = 2400.f;
+inline constexpr float kFieldWidthMm = 1820.f;
+inline constexpr float kFieldHeightMm = 2930.f;
 inline constexpr float kLidarYawOffsetDeg = 0.f;
 
 inline constexpr int kFrameWidth = 655;
 inline constexpr int kFrameHeight = 600;
 inline constexpr int kCameraFps = 120;
 inline constexpr int kExposureUs = 10000;
+inline constexpr int kCameraFocus = 108;
+inline constexpr int kCameraWhiteBalance = 4000;
+inline constexpr int kCameraBrightness = 0;
+inline constexpr int kCameraContrast = 1;
+inline constexpr int kCameraSaturation = 1;
+inline constexpr int kCameraGain = 0;
 
 inline constexpr const char* kThresholdsJson = "thresholds.json";
 
@@ -30,6 +36,9 @@ inline constexpr int kSectorAngleDeg = 30;
 inline constexpr int kMinAreaPix = 5;
 inline constexpr bool kUseMorph = true;
 inline constexpr int kMorphIters = 1;
+inline constexpr int kBallCloseIters = 1;
+inline constexpr int kBallDilateIters = 10;
+inline constexpr bool kIgnoreHsvValue = true;
 inline constexpr bool kStopOnFirstHit = true;
 inline constexpr float kVelAlpha = 0.7f;
 inline constexpr float kVelMaxPx = 40.f;
@@ -37,7 +46,7 @@ inline constexpr int kLookaheadMin = 1;
 inline constexpr int kLookaheadMax = 3;
 inline constexpr float kLookaheadSpeedThresh = 12.f;
 
-inline constexpr int kLidarPointsWindow = 8;
+inline constexpr int kLidarPointsWindow = 720;
 
 inline constexpr float kPoseKfProcessPosVar = 50.f;
 inline constexpr float kPoseKfProcessVelVar = 200.f;

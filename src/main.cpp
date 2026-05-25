@@ -12,6 +12,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include <chrono>
+#include <cmath>
 #include <deque>
 #include <iostream>
 #include <sstream>
@@ -24,6 +25,10 @@ static std::string formatPerception(int ballAng, int ballDist, int blue, int yel
   ss << ballAng << 'b' << ballDist << 'a' << blue << 'c' << yellow << 'd' << lx << 'e' << ly
      << 'f' << bvx << 'g' << bvy << 'i';
   return ss.str();
+}
+
+static int fieldMmToCenteredCm(float positionMm, float axisLimitMm) {
+  return static_cast<int>(std::lround((positionMm - 0.5f * axisLimitMm) * 0.1f));
 }
 
 int main(int argc, char** argv) {
@@ -40,6 +45,11 @@ int main(int argc, char** argv) {
   SectorTracker tracker;
   cv::Mat frame;
   if (camera.grab(frame)) tracker.buildRoi(frame.size(), thr);
+  cv::Mat roiMask;
+  if (thr.hasMask && !frame.empty()) {
+    roiMask = cv::Mat::zeros(frame.size(), CV_8UC1);
+    cv::ellipse(roiMask, thr.maskCenter, thr.maskAxes, 0, 0, 360, 255, -1);
+  }
 
   GpioLidar gpio;
 #ifdef BALLALGO_ENABLE_LIDAR
@@ -74,9 +84,26 @@ int main(int argc, char** argv) {
     cv::inRange(hsv, thr.ball.lower, thr.ball.upper, binBall);
     cv::inRange(hsv, thr.yellowGoal.lower, thr.yellowGoal.upper, binY);
     cv::inRange(hsv, thr.blueGoal.lower, thr.blueGoal.upper, binB);
+    if (!roiMask.empty()) {
+      cv::bitwise_and(binBall, roiMask, binBall);
+      cv::bitwise_and(binY, roiMask, binY);
+      cv::bitwise_and(binB, roiMask, binB);
+    }
     if (config::kUseMorph) {
       cv::Mat k = cv::getStructuringElement(cv::MORPH_RECT, {3, 3});
-      cv::morphologyEx(binBall, binBall, cv::MORPH_OPEN, k);
+      if (config::kBallCloseIters > 0) {
+        cv::morphologyEx(binBall, binBall, cv::MORPH_CLOSE, k, cv::Point(-1, -1),
+                         config::kBallCloseIters);
+      }
+      if (config::kBallDilateIters > 0) {
+        cv::dilate(binBall, binBall, k, cv::Point(-1, -1), config::kBallDilateIters);
+      }
+      if (config::kMorphIters > 0) {
+        cv::morphologyEx(binY, binY, cv::MORPH_OPEN, k, cv::Point(-1, -1), config::kMorphIters);
+        cv::morphologyEx(binY, binY, cv::MORPH_CLOSE, k, cv::Point(-1, -1), config::kMorphIters);
+        cv::morphologyEx(binB, binB, cv::MORPH_OPEN, k, cv::Point(-1, -1), config::kMorphIters);
+        cv::morphologyEx(binB, binB, cv::MORPH_CLOSE, k, cv::Point(-1, -1), config::kMorphIters);
+      }
     }
 
     auto ball = tracker.trackBall(binBall, thr.xoffset, thr.yoffset);
@@ -103,8 +130,10 @@ int main(int argc, char** argv) {
 
     auto ballState = motion.updateBall(ball.angleDeg, ball.distCal, ball.found, dt);
 
-    int lx = pose.valid ? static_cast<int>(pose.xMm) : config::kLostSentinel;
-    int ly = pose.valid ? static_cast<int>(pose.yMm) : config::kLostSentinel;
+    int lx = pose.valid ? fieldMmToCenteredCm(pose.xMm, config::kFieldWidthMm)
+                        : config::kLostSentinel;
+    int ly = pose.valid ? fieldMmToCenteredCm(pose.yMm, config::kFieldHeightMm)
+                        : config::kLostSentinel;
     float goalDeg = goals.yellowAngle;
     if (goalDeg < 0) goalDeg = goals.blueAngle;
 
