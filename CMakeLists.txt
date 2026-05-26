@@ -32,6 +32,7 @@ set(BALLALGO_SOURCES
   src/motion/StrikePose.cpp
   src/motion/Protocol.cpp
   src/motion/ClockSync.cpp
+  src/motion/ActionChunkPublisher.cpp
   src/motion/MotionPlanner.cpp
   src/motion/MotionPipeline.cpp
   src/io/RobotSerial.cpp

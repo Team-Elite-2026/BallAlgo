@@ -5,6 +5,7 @@
 #include "io/GpioLidar.hpp"
 #include "io/RobotSerial.hpp"
 #include "lidar/Ld19Reader.hpp"
+#include "motion/ActionChunkPublisher.hpp"
 #include "motion/MotionPipeline.hpp"
 #include "vision/SectorTracker.hpp"
 #include "vision/Thresholds.hpp"
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <deque>
 #include <iostream>
+#include <memory>
 #include <sstream>
 
 using namespace ballalgo;
@@ -65,6 +67,7 @@ int main(int argc, char** argv) {
   if (config::kEnableSerial) serial.open(config::kSerialPort, config::kSerialBaud);
 
   MotionPipeline motion;
+  ActionChunkPublisher actionChunkPublisher;
   std::deque<LidarPoint> lidarWindow;
   std::vector<uint8_t> rxBuf;
   float headingDeg = 0;
@@ -145,7 +148,7 @@ int main(int argc, char** argv) {
                                     ball.ballVyPx);
       serial.writeAscii(ascii);
       bool offense = ball.found || ballState.visible;
-      motion.tickPublish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense);
+      actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense);
     }
   }
 

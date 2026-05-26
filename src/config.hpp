@@ -74,7 +74,8 @@ inline constexpr int kAstarCellMm = 80;
 inline constexpr int kAstarHeadingBins = 8;
 inline constexpr float kReplanHz = 15.f;
 
-inline constexpr bool kMotionV2 = true;
+inline constexpr bool kEnableActionChunks = false;
+inline constexpr bool kEnablePlannerCompare = false;
 
 inline constexpr int kLostSentinel = -5;
 
