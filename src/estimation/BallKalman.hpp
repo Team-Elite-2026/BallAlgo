@@ -17,7 +17,7 @@ class BallKalman {
   void reset();
 
  private:
-  Eigen::Matrix4d x_ = Eigen::Matrix4d::Zero();
+  Eigen::Vector4d x_ = Eigen::Vector4d::Zero();
   Eigen::Matrix4d P_ = Eigen::Matrix4d::Identity();
   bool init_ = false;
   bool visible_ = false;
