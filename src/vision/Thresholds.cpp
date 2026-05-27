@@ -20,34 +20,16 @@ bool parseHsvArray(const std::string& json, const std::string& key, cv::Scalar& 
   std::regex blockRe("\"" + key + "\"\\s*:\\s*\\{([^}]*)\\}");
   std::smatch m;
   if (!std::regex_search(json, m, blockRe)) return false;
-  std::string block = m[1].str();
-  auto extract = [&](const std::string& lk) {
-    std::regex r("\"" + lk + "\"\\s*:\\s*(\\d+)");
-    std::smatch mm;
-    return std::regex_search(block, mm, r) ? std::stoi(mm[1].str()) : -1;
-  };
-  int lh = extract("lower") >= 0 ? extract("H") : extract("h");
-  if (lh < 0) {
-    lh = extract("H");
-    int ls = extract("S"), lv = extract("V");
-    int uh = extract("upper") >= 0 ? -1 : -1;
-  }
-  int h0 = extract("H");
-  if (h0 < 0) h0 = extract("h");
-  int s0 = extract("S");
-  if (s0 < 0) s0 = extract("s");
-  int v0 = extract("V");
-  if (v0 < 0) v0 = extract("v");
+  const std::string block = m[1].str();
   std::regex lowerRe("\"lower\"\\s*:\\s*\\[\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\]");
   std::regex upperRe("\"upper\"\\s*:\\s*\\[\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\]");
   std::smatch lm, um;
-  if (std::regex_search(block, lm, lowerRe)) {
-    lower = cv::Scalar(std::stoi(lm[1]), std::stoi(lm[2]), std::stoi(lm[3]));
+  if (!std::regex_search(block, lm, lowerRe) || !std::regex_search(block, um, upperRe)) {
+    return false;
   }
-  if (std::regex_search(block, um, upperRe)) {
-    upper = cv::Scalar(std::stoi(um[1]), std::stoi(um[2]), std::stoi(um[3]));
-  }
-  return lower[0] >= 0 && upper[0] >= 0;
+  lower = cv::Scalar(std::stoi(lm[1]), std::stoi(lm[2]), std::stoi(lm[3]));
+  upper = cv::Scalar(std::stoi(um[1]), std::stoi(um[2]), std::stoi(um[3]));
+  return true;
 }
 
 }  // namespace

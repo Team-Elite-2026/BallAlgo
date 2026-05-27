@@ -9,6 +9,49 @@
 
 namespace ballalgo {
 
+namespace {
+
+speed_t baudToSpeed(int baud) {
+  switch (baud) {
+    case 9600:
+      return B9600;
+    case 19200:
+      return B19200;
+    case 38400:
+      return B38400;
+    case 57600:
+      return B57600;
+    case 115200:
+      return B115200;
+    case 230400:
+      return B230400;
+    case 460800:
+      return B460800;
+    case 921600:
+      return B921600;
+#ifdef B1000000
+    case 1000000:
+      return B1000000;
+#endif
+#ifdef B1500000
+    case 1500000:
+      return B1500000;
+#endif
+#ifdef B2000000
+    case 2000000:
+      return B2000000;
+#endif
+#ifdef B3000000
+    case 3000000:
+      return B3000000;
+#endif
+    default:
+      return B115200;
+  }
+}
+
+}  // namespace
+
 bool RobotSerial::open(const std::string& port, int baud) {
   fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd_ < 0) {
@@ -17,7 +60,7 @@ bool RobotSerial::open(const std::string& port, int baud) {
   }
   termios tty{};
   tcgetattr(fd_, &tty);
-  speed_t spd = B2000000;
+  const speed_t spd = baudToSpeed(baud);
   cfsetospeed(&tty, spd);
   cfsetispeed(&tty, spd);
   tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
@@ -26,8 +69,7 @@ bool RobotSerial::open(const std::string& port, int baud) {
   tty.c_cc[VMIN] = 0;
   tty.c_cc[VTIME] = 0;
   tcsetattr(fd_, TCSANOW, &tty);
-  (void)baud;
-  std::cout << "[SERIAL] " << port << "\n";
+  std::cout << "[SERIAL] " << port << " @ " << baud << "\n";
   return true;
 }
 

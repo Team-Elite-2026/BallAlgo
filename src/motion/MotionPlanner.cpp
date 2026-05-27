@@ -7,6 +7,16 @@
 
 namespace ballalgo {
 
+namespace {
+
+int headingToBin(float angleDeg, int bins) {
+  const float wrapped = std::fmod(std::fmod(angleDeg, 360.f) + 360.f, 360.f);
+  const float stepDeg = 360.f / static_cast<float>(bins);
+  return static_cast<int>(wrapped / stepDeg) % bins;
+}
+
+}  // namespace
+
 MotionPlanner::MotionPlanner()
     : astar_(config::kFieldWidthMm, config::kFieldHeightMm, config::kAstarCellMm,
              config::kAstarHeadingBins) {}
@@ -48,8 +58,8 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
   strikePoseBody(ball.xM, ball.yM, goalDeg, tx, ty);
   float gx, gy;
   ballFieldMm(pose.xMm, pose.yMm, tx, ty, headingDeg, gx, gy);
-  int st = static_cast<int>(headingDeg / (360.f / config::kAstarHeadingBins)) % config::kAstarHeadingBins;
-  int gt = static_cast<int>(goalDeg / (360.f / config::kAstarHeadingBins)) % config::kAstarHeadingBins;
+  int st = headingToBin(headingDeg, config::kAstarHeadingBins);
+  int gt = headingToBin(goalDeg, config::kAstarHeadingBins);
   std::vector<Waypoint3> wps;
   astar_.plan(pose.xMm, pose.yMm, st, gx, gy, gt, wps);
   auto path = spline_.fit(wps, goalDeg);

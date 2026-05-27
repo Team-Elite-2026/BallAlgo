@@ -2,7 +2,9 @@
 
 #include "motion/VelocityProfile.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace ballalgo {

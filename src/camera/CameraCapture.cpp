@@ -15,14 +15,17 @@ CameraCapture::~CameraCapture() { close(); }
 
 bool CameraCapture::open() {
 #if defined(BALLALGO_HAS_LIBCAMERA)
-  const char* device = "/dev/video0";
-#else
-  const char* device = "0";
-#endif
-  impl_->cap.open(device, cv::CAP_V4L2);
+  impl_->cap.open("/dev/video0", cv::CAP_V4L2);
   if (!impl_->cap.isOpened()) {
-    impl_->cap.open(device);
+    impl_->cap.open("/dev/video0");
   }
+#else
+  constexpr int kDefaultCameraIndex = 0;
+  impl_->cap.open(kDefaultCameraIndex, cv::CAP_V4L2);
+  if (!impl_->cap.isOpened()) {
+    impl_->cap.open(kDefaultCameraIndex);
+  }
+#endif
   if (!impl_->cap.isOpened()) {
     std::cerr << "[CAM] Open failed — blank stub frames\n";
     return true;
