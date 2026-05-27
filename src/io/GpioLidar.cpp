@@ -12,14 +12,43 @@ bool GpioLidar::init(int pwmGpioBcm) {
   gpio_ = pwmGpioBcm;
 #if defined(BALLALGO_HAS_GPIOD)
   cleanup();
-  chip_ = gpiod_chip_open_by_name("gpiochip0");
+
+  chip_ = gpiod_chip_open("/dev/gpiochip0");
   if (!chip_) return false;
-  line_ = gpiod_chip_get_line(chip_, pwmGpioBcm);
-  if (!line_ || gpiod_line_request_output(line_, "ballalgo_lidar_pwm", 0) < 0) {
+
+  auto* requestConfig = gpiod_request_config_new();
+  auto* lineConfig = gpiod_line_config_new();
+  auto* lineSettings = gpiod_line_settings_new();
+  if (!requestConfig || !lineConfig || !lineSettings) {
+    if (lineSettings) gpiod_line_settings_free(lineSettings);
+    if (lineConfig) gpiod_line_config_free(lineConfig);
+    if (requestConfig) gpiod_request_config_free(requestConfig);
     cleanup();
     return false;
   }
-  lineFd_ = 1;
+
+  const unsigned int offset = static_cast<unsigned int>(pwmGpioBcm);
+  gpiod_request_config_set_consumer(requestConfig, "ballalgo_lidar_pwm");
+  if (gpiod_line_settings_set_direction(lineSettings, GPIOD_LINE_DIRECTION_OUTPUT) < 0 ||
+      gpiod_line_settings_set_output_value(lineSettings, GPIOD_LINE_VALUE_INACTIVE) < 0 ||
+      gpiod_line_config_add_line_settings(lineConfig, &offset, 1, lineSettings) < 0) {
+    gpiod_line_settings_free(lineSettings);
+    gpiod_line_config_free(lineConfig);
+    gpiod_request_config_free(requestConfig);
+    cleanup();
+    return false;
+  }
+
+  request_ = gpiod_chip_request_lines(chip_, requestConfig, lineConfig);
+  gpiod_line_settings_free(lineSettings);
+  gpiod_line_config_free(lineConfig);
+  gpiod_request_config_free(requestConfig);
+  if (!request_) {
+    cleanup();
+    return false;
+  }
+
+  lineFd_ = gpiod_line_request_get_fd(request_);
   std::cout << "[GPIO] LD19 PWM pin " << pwmGpioBcm << " LOW\n";
   return true;
 #else
@@ -31,9 +60,9 @@ bool GpioLidar::init(int pwmGpioBcm) {
 
 void GpioLidar::cleanup() {
 #if defined(BALLALGO_HAS_GPIOD)
-  if (line_) {
-    gpiod_line_release(line_);
-    line_ = nullptr;
+  if (request_) {
+    gpiod_line_request_release(request_);
+    request_ = nullptr;
   }
   if (chip_) {
     gpiod_chip_close(chip_);
