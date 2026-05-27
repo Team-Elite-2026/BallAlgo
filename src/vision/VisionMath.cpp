@@ -24,6 +24,14 @@ void polarToBodyXY(double angleDeg, double distM, double& xM, double& yM) {
   yM = distM * std::sin(rad);
 }
 
+void polarToBodyXY(double angleDeg, double distM, float& xM, float& yM) {
+  double x = 0.0;
+  double y = 0.0;
+  polarToBodyXY(angleDeg, distM, x, y);
+  xM = static_cast<float>(x);
+  yM = static_cast<float>(y);
+}
+
 void fieldVelToBody(float vxMmS, float vyMmS, float headingDeg, float& vxB, float& vyB) {
   const double h = headingDeg * M_PI / 180.0;
   const double c = std::cos(h), s = std::sin(h);

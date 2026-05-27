@@ -53,6 +53,8 @@ BallState BallKalman::state() const {
 void BallKalman::reset() {
   init_ = false;
   visible_ = false;
+  x_.setZero();
+  P_ = Eigen::Matrix4d::Identity();
 }
 
 }  // namespace ballalgo

@@ -77,6 +77,7 @@ std::vector<ProfileSample> VelocityProfile::build(const std::vector<PathSample>&
 std::vector<MotionAction> VelocityProfile::discretize(const std::vector<ProfileSample>& prof,
                                                       const std::vector<PathSample>& path,
                                                       float headingDeg, int dtMs, int maxActions) {
+  (void)path;
   std::vector<MotionAction> actions;
   if (prof.empty()) {
     actions.push_back({});

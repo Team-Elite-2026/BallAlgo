@@ -8,10 +8,11 @@
 namespace ballalgo {
 
 void strikePoseBody(float bx, float by, float goalDeg, float& tx, float& ty) {
-  float ux, uy;
+  double ux = 0.0;
+  double uy = 0.0;
   polarToBodyXY(goalDeg, 1.0, ux, uy);
-  tx = bx - config::kStrikeOffsetM * ux;
-  ty = by - config::kStrikeOffsetM * uy;
+  tx = bx - static_cast<float>(config::kStrikeOffsetM * ux);
+  ty = by - static_cast<float>(config::kStrikeOffsetM * uy);
 }
 
 void ballFieldMm(float rx, float ry, float bx, float by, float headingDeg, float& fx, float& fy) {
