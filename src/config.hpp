@@ -15,7 +15,7 @@ inline constexpr int kLidarPwmGpio = 12;
 inline constexpr bool kLidarPwmHoldLow = true;
 
 inline constexpr float kFieldWidthMm = 1820.f;
-inline constexpr float kFieldHeightMm = 2930.f;
+inline constexpr float kFieldHeightMm = 2430.f;
 inline constexpr float kLidarYawOffsetDeg = 0.f;
 
 inline constexpr int kFrameWidth = 655;
