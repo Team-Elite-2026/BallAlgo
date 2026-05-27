@@ -37,7 +37,7 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
   chunk.startTimePi = nowPiUs() + latencyUs + config::kSerialLatencyMarginUs;
 
   if (!ball.visible) {
-    MotionAction z;
+    MotionAction z{};
     chunk.actions.assign(config::kChunkMaxActions, z);
     return chunk;
   }
@@ -45,7 +45,7 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
   if (!fullPlanner || !pose.valid) {
     float dist = std::hypot(ball.xM, ball.yM);
     float sp = std::min(0.3f, dist * 0.5f);
-    MotionAction a;
+    MotionAction a{};
     if (dist > 1e-3f) {
       a.vx = sp * ball.xM / dist;
       a.vy = sp * ball.yM / dist;
