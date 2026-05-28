@@ -42,16 +42,26 @@ int main(int argc, char** argv) {
   loadThresholds(config::kThresholdsJson, thr);
 
   CameraCapture camera;
-  camera.open();
+  if (!camera.open()) {
+    std::cerr << "ballalgo failed to open camera\n";
+    return 1;
+  }
 
   SectorTracker tracker;
   cv::Mat frame;
-  if (camera.grab(frame)) tracker.buildRoi(frame.size(), thr);
   cv::Mat roiMask;
-  if (thr.hasMask && !frame.empty()) {
-    roiMask = cv::Mat::zeros(frame.size(), CV_8UC1);
-    cv::ellipse(roiMask, thr.maskCenter, thr.maskAxes, 0, 0, 360, 255, -1);
-  }
+  bool roiBuilt = false;
+  auto buildRoi = [&]() {
+    tracker.buildRoi(frame.size(), thr);
+    roiBuilt = true;
+    if (thr.hasMask) {
+      roiMask = cv::Mat::zeros(frame.size(), CV_8UC1);
+      cv::ellipse(roiMask, thr.maskCenter, thr.maskAxes, 0, 0, 360, 255, -1);
+    } else {
+      roiMask.release();
+    }
+  };
+  if (camera.grab(frame)) buildRoi();
 
   GpioLidar gpio;
 #ifdef BALLALGO_ENABLE_LIDAR
@@ -80,6 +90,7 @@ int main(int argc, char** argv) {
     lastTime = now;
 
     if (!camera.grab(frame)) continue;
+    if (!roiBuilt) buildRoi();
 
     cv::Mat hsv;
     cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);

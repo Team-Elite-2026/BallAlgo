@@ -7,6 +7,7 @@ namespace ballalgo {
 
 void PoseKalman::predict(double dtS) {
   if (!init_ || dtS <= 0) return;
+  ageSinceMeasurementS_ += dtS;
   Eigen::Matrix4d F = Eigen::Matrix4d::Identity();
   F(0, 2) = dtS;
   F(1, 3) = dtS;
@@ -35,12 +36,13 @@ void PoseKalman::update(const PoseEstimate& meas, float headingDeg) {
       x_ = x_ + K * y;
       P_ = (Eigen::Matrix4d::Identity() - K * H) * P_;
     }
+    ageSinceMeasurementS_ = 0;
   }
 }
 
 PoseState PoseKalman::state(float headingDeg) const {
   PoseState s;
-  s.valid = init_;
+  s.valid = init_ && ageSinceMeasurementS_ <= config::kPoseMaxStaleS;
   if (!init_) return s;
   s.xMm = static_cast<float>(x_(0));
   s.yMm = static_cast<float>(x_(1));
@@ -52,6 +54,7 @@ PoseState PoseKalman::state(float headingDeg) const {
 
 void PoseKalman::reset() {
   init_ = false;
+  ageSinceMeasurementS_ = 0;
   x_.setZero();
   P_ = Eigen::Matrix4d::Identity() * 1e3;
 }

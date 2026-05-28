@@ -22,7 +22,7 @@ class MotionPlanner {
  public:
   MotionPlanner();
   PlannedChunk plan(const PoseState& pose, const BallState& ball, float goalDeg,
-                    float headingDeg, int latencyUs, bool fullPlanner);
+                    float headingDeg, bool fullPlanner);
   uint64_t nextTrajId();
 
  private:

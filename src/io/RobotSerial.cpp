@@ -2,6 +2,7 @@
 #include "io/SerialBaud.hpp"
 
 #include <fcntl.h>
+#include <errno.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -51,14 +52,30 @@ ssize_t RobotSerial::readSome(std::vector<uint8_t>& out) {
   return n;
 }
 
-bool RobotSerial::write(const std::vector<uint8_t>& data) {
+bool RobotSerial::writeAll(const uint8_t* data, size_t len) {
   if (fd_ < 0) return false;
-  ssize_t w = ::write(fd_, data.data(), data.size());
-  return w == static_cast<ssize_t>(data.size());
+  size_t written = 0;
+  while (written < len) {
+    ssize_t chunk = ::write(fd_, data + written, len - written);
+    if (chunk > 0) {
+      written += static_cast<size_t>(chunk);
+      continue;
+    }
+    if (chunk < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+      ::usleep(100);
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+bool RobotSerial::write(const std::vector<uint8_t>& data) {
+  return writeAll(data.data(), data.size());
 }
 
 bool RobotSerial::writeAscii(const std::string& s) {
-  return write(std::vector<uint8_t>(s.begin(), s.end()));
+  return writeAll(reinterpret_cast<const uint8_t*>(s.data()), s.size());
 }
 
 void RobotSerial::pollHeading(float& headingDeg) {

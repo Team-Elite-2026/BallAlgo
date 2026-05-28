@@ -18,6 +18,8 @@ class RobotSerial {
   void pollHeading(float& headingDeg);
 
  private:
+  bool writeAll(const uint8_t* data, size_t len);
+
   int fd_ = -1;
   std::string headingBuf_;
 };

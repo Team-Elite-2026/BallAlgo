@@ -10,6 +10,29 @@
 
 namespace ballalgo {
 
+namespace {
+
+int wrapBinDistance(int from, int to, int bins) {
+  const int diff = std::abs(to - from);
+  return std::min(diff, bins - diff);
+}
+
+int headingBinFromRadians(float radians, int bins) {
+  const float angleDeg = radians * 180.f / static_cast<float>(M_PI);
+  const float wrapped = std::fmod(std::fmod(angleDeg, 360.f) + 360.f, 360.f);
+  const float stepDeg = 360.f / static_cast<float>(bins);
+  return static_cast<int>(wrapped / stepDeg) % bins;
+}
+
+float rotationCost(int from, int to, int bins) {
+  constexpr float kQuarterTurnCostS = 0.08f;
+  const int quarterTurnBins = std::max(1, bins / 4);
+  return kQuarterTurnCostS * static_cast<float>(wrapBinDistance(from, to, bins)) /
+         static_cast<float>(quarterTurnBins);
+}
+
+}  // namespace
+
 AStar3D::AStar3D(float fieldW, float fieldH, int cellMm, int headingBins)
     : fieldW_(fieldW), fieldH_(fieldH), cellMm_(cellMm), hBins_(headingBins) {
   cols_ = static_cast<int>(fieldW / cellMm) + 1;
@@ -21,11 +44,10 @@ int AStar3D::index(int ix, int iy, int it) const {
 }
 
 float AStar3D::heuristic(int ix, int iy, int it, int gx, int gy, int gt) const {
-  (void)it;
-  (void)gt;
   float dx = (gx - ix) * cellMm_;
   float dy = (gy - iy) * cellMm_;
-  return std::hypot(dx, dy) / 1000.f / std::max(config::kVMaxX, config::kVMaxY);
+  return std::hypot(dx, dy) / 1000.f / std::max(config::kVMaxX, config::kVMaxY) +
+         rotationCost(it, gt, hBins_);
 }
 
 bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gtheta,
@@ -62,6 +84,20 @@ bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gthet
     int iy = (cur / cols_) % rows_;
     int it = cur / (cols_ * rows_);
     float wx0 = ix * cellMm_, wy0 = iy * cellMm_;
+
+    for (int turn : {-1, 1}) {
+      int nit = (it + turn + hBins_) % hBins_;
+      int nb = index(ix, iy, nit);
+      if (closed_[nb]) continue;
+      float tg = gScore_[cur] + rotationCost(it, nit, hBins_);
+      if (tg < gScore_[nb]) {
+        gScore_[nb] = tg;
+        parent_[nb] = cur;
+        float f = tg + heuristic(ix, iy, nit, gix, giy, gt);
+        open.push({f, nb});
+      }
+    }
+
     for (int k = 0; k < 8; ++k) {
       int nix = ix + dx[k], niy = iy + dy[k];
       if (nix < 0 || niy < 0 || nix >= cols_ || niy >= rows_) continue;
@@ -69,8 +105,8 @@ bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gthet
       float phi = std::atan2(wy1 - wy0, wx1 - wx0);
       float dist = std::hypot(wx1 - wx0, wy1 - wy0) / 1000.f;
       float vlim = motion::vMaxDir(phi, config::kVMaxX, config::kVMaxY);
-      float step = dist / std::max(vlim, 0.05f) + config::kKCurve * 0.f;
-      int nit = it;
+      int nit = headingBinFromRadians(phi, hBins_);
+      float step = dist / std::max(vlim, 0.05f) + rotationCost(it, nit, hBins_);
       int nb = index(nix, niy, nit);
       if (closed_[nb]) continue;
       float tg = gScore_[cur] + step;

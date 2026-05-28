@@ -4,6 +4,7 @@
 #include "motion/StrikePose.hpp"
 
 #include <chrono>
+#include <cmath>
 
 namespace ballalgo {
 
@@ -13,6 +14,10 @@ int headingToBin(float angleDeg, int bins) {
   const float wrapped = std::fmod(std::fmod(angleDeg, 360.f) + 360.f, 360.f);
   const float stepDeg = 360.f / static_cast<float>(bins);
   return static_cast<int>(wrapped / stepDeg) % bins;
+}
+
+float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
+  return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
 }
 
 }  // namespace
@@ -30,15 +35,38 @@ static uint64_t nowPiUs() {
 }
 
 PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, float goalDeg,
-                               float headingDeg, int latencyUs, bool fullPlanner) {
+                                 float headingDeg, bool fullPlanner) {
   PlannedChunk chunk;
   chunk.trajectoryId = nextTrajId();
   chunk.dtMs = config::kChunkDtMs;
-  chunk.startTimePi = nowPiUs() + latencyUs + config::kSerialLatencyMarginUs;
+  chunk.startTimePi = nowPiUs() + config::kSerialLatencyMarginUs;
+
+  auto buildChunkToTarget = [&](float gx, float gy, float goalHeadingDeg) {
+    int st = headingToBin(headingDeg, config::kAstarHeadingBins);
+    int gt = headingToBin(goalHeadingDeg, config::kAstarHeadingBins);
+    std::vector<Waypoint3> wps;
+    astar_.plan(pose.xMm, pose.yMm, st, gx, gy, gt, wps);
+    auto path = spline_.fit(wps, goalHeadingDeg);
+    float vStart = 0;
+    if (path.size() >= 2) {
+      float phi0 = std::atan2(path[1].yMm - path[0].yMm, path[1].xMm - path[0].xMm);
+      const float vxField = pose.vxMmS / 1000.f;
+      const float vyField = pose.vyMmS / 1000.f;
+      vStart = vxField * std::cos(phi0) + vyField * std::sin(phi0);
+    }
+    auto prof = profiler_.build(path, std::max(0.f, vStart));
+    chunk.actions =
+        profiler_.discretize(prof, path, headingDeg, chunk.dtMs, config::kChunkMaxActions);
+  };
 
   if (!ball.visible) {
-    MotionAction z{};
-    chunk.actions.assign(config::kChunkMaxActions, z);
+    if (fullPlanner && pose.valid) {
+      buildChunkToTarget(config::kFieldWidthMm * 0.5f, config::kFieldHeightMm * 0.5f, headingDeg);
+    }
+    if (chunk.actions.empty()) {
+      MotionAction z{};
+      chunk.actions.assign(config::kChunkMaxActions, z);
+    }
     return chunk;
   }
 
@@ -56,20 +84,14 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
 
   float tx, ty;
   strikePoseBody(ball.xM, ball.yM, goalDeg, tx, ty);
-  float gx, gy;
-  ballFieldMm(pose.xMm, pose.yMm, tx, ty, headingDeg, gx, gy);
-  int st = headingToBin(headingDeg, config::kAstarHeadingBins);
-  int gt = headingToBin(goalDeg, config::kAstarHeadingBins);
-  std::vector<Waypoint3> wps;
-  astar_.plan(pose.xMm, pose.yMm, st, gx, gy, gt, wps);
-  auto path = spline_.fit(wps, goalDeg);
-  float vStart = 0;
-  if (path.size() >= 2) {
-    float phi0 = std::atan2(path[1].yMm - path[0].yMm, path[1].xMm - path[0].xMm);
-    vStart = pose.vxBody * std::cos(phi0) + pose.vyBody * std::sin(phi0);
-  }
-  auto prof = profiler_.build(path, std::max(0.f, vStart));
-  chunk.actions = profiler_.discretize(prof, path, headingDeg, chunk.dtMs, config::kChunkMaxActions);
+  float goalXMm = 0;
+  float goalYMm = 0;
+  float ballXMm = 0;
+  float ballYMm = 0;
+  ballFieldMm(pose.xMm, pose.yMm, tx, ty, headingDeg, goalXMm, goalYMm);
+  ballFieldMm(pose.xMm, pose.yMm, ball.xM, ball.yM, headingDeg, ballXMm, ballYMm);
+  buildChunkToTarget(goalXMm, goalYMm,
+                     headingBetweenPointsDeg(goalXMm, goalYMm, ballXMm, ballYMm));
   return chunk;
 }
 

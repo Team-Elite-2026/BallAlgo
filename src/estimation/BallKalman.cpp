@@ -6,6 +6,7 @@ namespace ballalgo {
 
 void BallKalman::predict(double dtS) {
   if (!init_ || dtS <= 0) return;
+  ageSinceMeasurementS_ += dtS;
   Eigen::Matrix4d F = Eigen::Matrix4d::Identity();
   F(0, 2) = dtS;
   F(1, 3) = dtS;
@@ -17,10 +18,7 @@ void BallKalman::predict(double dtS) {
 }
 
 void BallKalman::update(double xM, double yM, bool found) {
-  if (!found) {
-    visible_ = init_;
-    return;
-  }
+  if (!found) return;
   if (!init_) {
     x_ << xM, yM, 0, 0;
     P_ = Eigen::Matrix4d::Identity();
@@ -36,12 +34,12 @@ void BallKalman::update(double xM, double yM, bool found) {
     x_ = x_ + K * y;
     P_ = (Eigen::Matrix4d::Identity() - K * H) * P_;
   }
-  visible_ = true;
+  ageSinceMeasurementS_ = 0;
 }
 
 BallState BallKalman::state() const {
   BallState s;
-  s.visible = visible_ && init_;
+  s.visible = init_ && ageSinceMeasurementS_ <= config::kBallMaxStaleS;
   if (!init_) return s;
   s.xM = static_cast<float>(x_(0));
   s.yM = static_cast<float>(x_(1));
@@ -52,7 +50,7 @@ BallState BallKalman::state() const {
 
 void BallKalman::reset() {
   init_ = false;
-  visible_ = false;
+  ageSinceMeasurementS_ = 0;
   x_.setZero();
   P_ = Eigen::Matrix4d::Identity();
 }

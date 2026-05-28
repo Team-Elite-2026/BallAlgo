@@ -27,8 +27,13 @@ bool CameraCapture::open() {
   }
 #endif
   if (!impl_->cap.isOpened()) {
-    std::cerr << "[CAM] Open failed — blank stub frames\n";
+#if defined(BALLALGO_STUB_BUILD)
+    std::cerr << "[CAM] Open failed, using stub frames\n";
     return true;
+#else
+    std::cerr << "[CAM] Open failed\n";
+    return false;
+#endif
   }
   impl_->cap.set(cv::CAP_PROP_FRAME_WIDTH, config::kFrameWidth);
   impl_->cap.set(cv::CAP_PROP_FRAME_HEIGHT, config::kFrameHeight);
@@ -58,8 +63,13 @@ bool CameraCapture::grab(cv::Mat& bgrOut) {
   if (impl_->cap.isOpened()) {
     return impl_->cap.read(bgrOut) && !bgrOut.empty();
   }
+#if defined(BALLALGO_STUB_BUILD)
   bgrOut = cv::Mat(config::kFrameHeight, config::kFrameWidth, CV_8UC3, cv::Scalar(30, 30, 30));
   return true;
+#else
+  bgrOut.release();
+  return false;
+#endif
 }
 
 void CameraCapture::close() {

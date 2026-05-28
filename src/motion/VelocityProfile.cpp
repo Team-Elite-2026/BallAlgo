@@ -48,7 +48,9 @@ std::vector<ProfileSample> VelocityProfile::build(const std::vector<PathSample>&
       float dy2 = path[i - 1].yMm - path[i - 2].yMm;
       float cross = std::fabs(dx1 * dy2 - dy1 * dx2);
       float denom = std::hypot(dx1, dy1) * std::hypot(dx2, dy2) * std::hypot(dx1 + dx2, dy1 + dy2);
-      if (denom > 1e-3f) prof[i].kappa = cross / (denom + 1e-9f);
+      // Geometry is in millimeters; convert curvature from 1/mm to 1/m so
+      // the lateral-acceleration speed cap stays dimensionally correct.
+      if (denom > 1e-3f) prof[i].kappa = 1000.f * cross / (denom + 1e-9f);
     }
     float vcurve = (prof[i].kappa > 1e-6f)
                        ? std::sqrt(config::kAMaxLateral / prof[i].kappa)

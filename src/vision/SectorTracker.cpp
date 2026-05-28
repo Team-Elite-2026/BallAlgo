@@ -3,6 +3,7 @@
 #include "config.hpp"
 
 #include <opencv2/imgproc.hpp>
+#include <cmath>
 
 namespace ballalgo {
 
@@ -35,6 +36,10 @@ void SectorTracker::buildRoi(const cv::Size& frameSize, const ThresholdsData& th
     sectorMasks_.push_back(wedge);
   }
   firstFrame_ = false;
+  lastPos_.reset();
+  lastSector_.reset();
+  velEmaX_ = 0;
+  velEmaY_ = 0;
 }
 
 std::optional<cv::Point> SectorTracker::findLargestContour(const cv::Mat& bin, int minArea) const {

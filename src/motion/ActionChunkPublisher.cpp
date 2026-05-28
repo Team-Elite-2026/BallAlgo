@@ -18,7 +18,7 @@ bool ActionChunkPublisher::publish(RobotSerial& serial, std::vector<uint8_t>& rx
   if (t - lastPublish_ < 1.0 / config::kChunkPublishHz) return true;
   lastPublish_ = t;
   bool full = pose.valid;
-  auto chunk = planner_.plan(pose, ball, goalDeg, headingDeg, clock_.latencyUs(), full);
+  auto chunk = planner_.plan(pose, ball, goalDeg, headingDeg, full);
   auto pkt = packActionChunk(chunk.trajectoryId, chunk.startTimePi, chunk.dtMs, chunk.actions,
                              static_cast<int>(chunk.actions.size()), pose.vxBody, pose.vyBody,
                              pose.valid);

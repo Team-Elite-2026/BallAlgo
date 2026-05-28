@@ -24,6 +24,7 @@ class PoseKalman {
   Eigen::Vector4d x_ = Eigen::Vector4d::Zero();
   Eigen::Matrix4d P_ = Eigen::Matrix4d::Identity() * 1e3;
   bool init_ = false;
+  double ageSinceMeasurementS_ = 0;
 };
 
 }  // namespace ballalgo

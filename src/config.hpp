@@ -10,7 +10,7 @@ inline constexpr int kSerialBaud = 2000000;
 inline constexpr bool kEnableSerial = true;
 
 inline constexpr const char* kLidarPort = "/dev/ttyAMA4";
-inline constexpr int kLjidarBaud = 230400;
+inline constexpr int kLidarBaud = 230400;
 inline constexpr int kLidarPwmGpio = 12;
 inline constexpr bool kLidarPwmHoldLow = true;
 
@@ -51,12 +51,14 @@ inline constexpr int kLidarPointsWindow = 720;
 inline constexpr float kPoseKfProcessPosVar = 50.f;
 inline constexpr float kPoseKfProcessVelVar = 200.f;
 inline constexpr float kPoseKfMeasPosVar = 400.f;
+inline constexpr double kPoseMaxStaleS = 0.18;
 
 inline constexpr float kBallDistToM = 0.001f;
 inline constexpr float kBallKfMeasVar = 0.02f;
 inline constexpr float kBallKfProcessPosVar = 0.5f;
 inline constexpr float kBallKfProcessVelVar = 2.f;
 inline constexpr float kStrikeOffsetM = 0.12f;
+inline constexpr double kBallMaxStaleS = 0.22;
 
 inline constexpr int kChunkDtMs = 4;
 inline constexpr int kChunkMaxActions = 50;
