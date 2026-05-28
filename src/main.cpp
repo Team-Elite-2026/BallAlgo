@@ -12,6 +12,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include <cstdio>
 #include <chrono>
 #include <cmath>
 #include <deque>
@@ -88,15 +89,29 @@ int main(int argc, char** argv) {
   std::vector<uint8_t> rxBuf;
   float headingDeg = 0;
   double debugAccumS = 0.0;
+  unsigned long loopCount = 0;
+  unsigned long frameGrabFailures = 0;
 
   auto lastTime = std::chrono::steady_clock::now();
 
   while (true) {
+    ++loopCount;
     auto now = std::chrono::steady_clock::now();
     double dt = std::chrono::duration<double>(now - lastTime).count();
     lastTime = now;
 
-    if (!camera.grab(frame)) continue;
+    if (!camera.grab(frame)) {
+      ++frameGrabFailures;
+      debugAccumS += dt;
+      if (debugAccumS >= kDebugReportPeriodS) {
+        debugAccumS = 0.0;
+        std::fprintf(stderr,
+                     "[DBG] loop=%lu grab=fail failCount=%lu heading=%.2f lidarWindow=%zu\n",
+                     loopCount, frameGrabFailures, headingDeg, lidarWindow.size());
+        std::fflush(stderr);
+      }
+      continue;
+    }
     if (!roiBuilt) buildRoi();
 
     cv::Mat hsv;
@@ -172,17 +187,14 @@ int main(int argc, char** argv) {
     debugAccumS += dt;
     if (debugAccumS >= kDebugReportPeriodS) {
       debugAccumS = 0.0;
-      std::cout << "[DBG] heading=" << headingDeg
-                << " ballFound=" << ball.found
-                << " ballAng=" << ball.angleDeg
-                << " ballDist=" << ball.distCal
-                << " blue=" << goals.blueAngle
-                << " yellow=" << goals.yellowAngle
-                << " lidarWindow=" << lidarWindow.size()
-                << " poseValid=" << pose.valid
-                << " lx=" << lx
-                << " ly=" << ly
-                << "\n";
+      std::fprintf(stderr,
+                   "[DBG] loop=%lu grab=ok failCount=%lu heading=%.2f ballFound=%d "
+                   "ballAng=%.2f ballDist=%.2f blue=%.2f yellow=%.2f lidarWindow=%zu "
+                   "poseValid=%d lx=%d ly=%d\n",
+                   loopCount, frameGrabFailures, headingDeg, ball.found ? 1 : 0, ball.angleDeg,
+                   ball.distCal, goals.blueAngle, goals.yellowAngle, lidarWindow.size(),
+                   pose.valid ? 1 : 0, lx, ly);
+      std::fflush(stderr);
     }
   }
 
