@@ -21,6 +21,10 @@
 
 using namespace ballalgo;
 
+namespace {
+
+constexpr double kDebugReportPeriodS = 1.0;
+
 static std::string formatPerception(int ballAng, int ballDist, int blue, int yellow, int lx,
                                     int ly, int bvx, int bvy) {
   std::ostringstream ss;
@@ -32,6 +36,8 @@ static std::string formatPerception(int ballAng, int ballDist, int blue, int yel
 static int fieldMmToCenteredCm(float positionMm, float axisLimitMm) {
   return static_cast<int>(std::lround((positionMm - 0.5f * axisLimitMm) * 0.1f));
 }
+
+}  // namespace
 
 int main(int argc, char** argv) {
   (void)argc;
@@ -81,6 +87,7 @@ int main(int argc, char** argv) {
   std::deque<LidarPoint> lidarWindow;
   std::vector<uint8_t> rxBuf;
   float headingDeg = 0;
+  double debugAccumS = 0.0;
 
   auto lastTime = std::chrono::steady_clock::now();
 
@@ -160,6 +167,22 @@ int main(int argc, char** argv) {
       serial.writeAscii(ascii);
       bool offense = ball.found || ballState.visible;
       actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense);
+    }
+
+    debugAccumS += dt;
+    if (debugAccumS >= kDebugReportPeriodS) {
+      debugAccumS = 0.0;
+      std::cout << "[DBG] heading=" << headingDeg
+                << " ballFound=" << ball.found
+                << " ballAng=" << ball.angleDeg
+                << " ballDist=" << ball.distCal
+                << " blue=" << goals.blueAngle
+                << " yellow=" << goals.yellowAngle
+                << " lidarWindow=" << lidarWindow.size()
+                << " poseValid=" << pose.valid
+                << " lx=" << lx
+                << " ly=" << ly
+                << "\n";
     }
   }
 
