@@ -10,7 +10,7 @@ inline constexpr int kSerialBaud = 2000000;
 inline constexpr bool kEnableSerial = true;
 
 inline constexpr const char* kLidarPort = "/dev/ttyAMA4";
-inline constexpr int kLidarBaud = 230400;
+inline constexpr int kLjidarBaud = 230400;
 inline constexpr int kLidarPwmGpio = 12;
 inline constexpr bool kLidarPwmHoldLow = true;
 

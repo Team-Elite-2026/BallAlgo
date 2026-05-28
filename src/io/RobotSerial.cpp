@@ -1,4 +1,5 @@
 #include "io/RobotSerial.hpp"
+#include "io/SerialBaud.hpp"
 
 #include <fcntl.h>
 #include <termios.h>
@@ -9,49 +10,6 @@
 
 namespace ballalgo {
 
-namespace {
-
-speed_t baudToSpeed(int baud) {
-  switch (baud) {
-    case 9600:
-      return B9600;
-    case 19200:
-      return B19200;
-    case 38400:
-      return B38400;
-    case 57600:
-      return B57600;
-    case 115200:
-      return B115200;
-    case 230400:
-      return B230400;
-    case 460800:
-      return B460800;
-    case 921600:
-      return B921600;
-#ifdef B1000000
-    case 1000000:
-      return B1000000;
-#endif
-#ifdef B1500000
-    case 1500000:
-      return B1500000;
-#endif
-#ifdef B2000000
-    case 2000000:
-      return B2000000;
-#endif
-#ifdef B3000000
-    case 3000000:
-      return B3000000;
-#endif
-    default:
-      return B115200;
-  }
-}
-
-}  // namespace
-
 bool RobotSerial::open(const std::string& port, int baud) {
   fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd_ < 0) {
@@ -60,9 +18,14 @@ bool RobotSerial::open(const std::string& port, int baud) {
   }
   termios tty{};
   tcgetattr(fd_, &tty);
-  const speed_t spd = baudToSpeed(baud);
-  cfsetospeed(&tty, spd);
-  cfsetispeed(&tty, spd);
+  const auto spd = baudToSpeed(baud);
+  if (!spd) {
+    std::cerr << "[SERIAL] unsupported baud rate " << baud << " for " << port << "\n";
+    close();
+    return false;
+  }
+  cfsetospeed(&tty, *spd);
+  cfsetispeed(&tty, *spd);
   tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
   tty.c_cflag |= CLOCAL | CREAD;
   tty.c_lflag = tty.c_oflag = tty.c_iflag = 0;
