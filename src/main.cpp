@@ -15,10 +15,12 @@
 #include <cstdio>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <deque>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <string>
 
 using namespace ballalgo;
 
@@ -38,12 +40,85 @@ static int fieldMmToCenteredCm(float positionMm, float axisLimitMm) {
   return static_cast<int>(std::lround((positionMm - 0.5f * axisLimitMm) * 0.1f));
 }
 
+static float centeredCmToFieldMm(float centeredCm, float axisLimitMm) {
+  return centeredCm * 10.f + 0.5f * axisLimitMm;
+}
+
+struct RuntimeOptions {
+  bool commandGoalEnabled = false;
+  CommandedPoseGoal commandGoal;
+  bool commandGoalUsesCenteredCm = false;
+};
+
+bool parseFloatArg(const char* text, float& value) {
+  if (text == nullptr) return false;
+  char* end = nullptr;
+  value = std::strtof(text, &end);
+  return end != text && end != nullptr && *end == '\0';
+}
+
+bool parseArgs(int argc, char** argv, RuntimeOptions& options) {
+  for (int i = 1; i < argc; ++i) {
+    std::string arg = argv[i];
+    if (arg == "--command-goal") {
+      if (i + 3 >= argc) return false;
+      if (!parseFloatArg(argv[i + 1], options.commandGoal.xMm) ||
+          !parseFloatArg(argv[i + 2], options.commandGoal.yMm) ||
+          !parseFloatArg(argv[i + 3], options.commandGoal.headingDeg)) {
+        return false;
+      }
+      options.commandGoalEnabled = true;
+      i += 3;
+      continue;
+    }
+    if (arg == "--command-goal-centered-cm") {
+      float xCm = 0;
+      float yCm = 0;
+      if (i + 3 >= argc) return false;
+      if (!parseFloatArg(argv[i + 1], xCm) || !parseFloatArg(argv[i + 2], yCm) ||
+          !parseFloatArg(argv[i + 3], options.commandGoal.headingDeg)) {
+        return false;
+      }
+      options.commandGoal.xMm = centeredCmToFieldMm(xCm, config::kFieldWidthMm);
+      options.commandGoal.yMm = centeredCmToFieldMm(yCm, config::kFieldHeightMm);
+      options.commandGoalEnabled = true;
+      options.commandGoalUsesCenteredCm = true;
+      i += 3;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+void printUsage(const char* argv0) {
+  std::cerr << "Usage: " << argv0
+            << " [--command-goal x_mm y_mm heading_deg]"
+            << " [--command-goal-centered-cm x_cm y_cm heading_deg]\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-  (void)argc;
-  (void)argv;
+  RuntimeOptions options;
+  if (!parseArgs(argc, argv, options)) {
+    printUsage(argv[0]);
+    return 2;
+  }
   std::cout << "ballalgo C++ starting\n";
+  if (options.commandGoalEnabled) {
+    std::cout << "command-goal mode enabled"
+              << (options.commandGoalUsesCenteredCm ? " [centered-cm input]" : " [field-mm input]")
+              << ": target=("
+              << fieldMmToCenteredCm(options.commandGoal.xMm, config::kFieldWidthMm) << ", "
+              << fieldMmToCenteredCm(options.commandGoal.yMm, config::kFieldHeightMm)
+              << ") centered-cm, field=(" << options.commandGoal.xMm << ", "
+              << options.commandGoal.yMm << ") mm heading=" << options.commandGoal.headingDeg
+              << " deg\n";
+    if (!config::kEnableActionChunks) {
+      std::cout << "warning: config::kEnableActionChunks is false, so no motion chunks will be sent\n";
+    }
+  }
 
   ThresholdsData thr;
   loadThresholds(config::kThresholdsJson, thr);
@@ -181,7 +256,10 @@ int main(int argc, char** argv) {
                                     ball.ballVyPx);
       serial.writeAscii(ascii);
       bool offense = ball.found || ballState.visible;
-      actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense);
+      const CommandedPoseGoal* commandedGoal =
+          options.commandGoalEnabled ? &options.commandGoal : nullptr;
+      actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense,
+                                   commandedGoal);
     }
 
     debugAccumS += dt;
@@ -190,10 +268,16 @@ int main(int argc, char** argv) {
       std::fprintf(stderr,
                    "[DBG] loop=%lu grab=ok failCount=%lu heading=%.2f ballFound=%d "
                    "ballAng=%.2f ballDist=%.2f blue=%.2f yellow=%.2f lidarWindow=%zu "
-                   "poseValid=%d lx=%d ly=%d\n",
+                   "poseValid=%d lx=%d ly=%d commandGoal=%d targetX=%.0f targetY=%.0f "
+                   "targetLX=%d targetLY=%d "
+                   "targetHeading=%.1f\n",
                    loopCount, frameGrabFailures, headingDeg, ball.found ? 1 : 0, ball.angleDeg,
                    ball.distCal, goals.blueAngle, goals.yellowAngle, lidarWindow.size(),
-                   pose.valid ? 1 : 0, lx, ly);
+                   pose.valid ? 1 : 0, lx, ly, options.commandGoalEnabled ? 1 : 0,
+                   options.commandGoal.xMm, options.commandGoal.yMm,
+                   fieldMmToCenteredCm(options.commandGoal.xMm, config::kFieldWidthMm),
+                   fieldMmToCenteredCm(options.commandGoal.yMm, config::kFieldHeightMm),
+                   options.commandGoal.headingDeg);
       std::fflush(stderr);
     }
   }

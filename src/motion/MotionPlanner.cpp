@@ -20,6 +20,18 @@ float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
   return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
 }
 
+float wrapAngleDeg(float angleDeg) {
+  float wrapped = std::fmod(angleDeg + 180.f, 360.f);
+  if (wrapped < 0) wrapped += 360.f;
+  return wrapped - 180.f;
+}
+
+void fillStopChunkIfEmpty(PlannedChunk& chunk) {
+  if (!chunk.actions.empty()) return;
+  MotionAction stop{};
+  chunk.actions.assign(config::kChunkMaxActions, stop);
+}
+
 }  // namespace
 
 MotionPlanner::MotionPlanner()
@@ -63,10 +75,7 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
     if (fullPlanner && pose.valid) {
       buildChunkToTarget(config::kFieldWidthMm * 0.5f, config::kFieldHeightMm * 0.5f, headingDeg);
     }
-    if (chunk.actions.empty()) {
-      MotionAction z{};
-      chunk.actions.assign(config::kChunkMaxActions, z);
-    }
+    fillStopChunkIfEmpty(chunk);
     return chunk;
   }
 
@@ -92,6 +101,46 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
   ballFieldMm(pose.xMm, pose.yMm, ball.xM, ball.yM, headingDeg, ballXMm, ballYMm);
   buildChunkToTarget(goalXMm, goalYMm,
                      headingBetweenPointsDeg(goalXMm, goalYMm, ballXMm, ballYMm));
+  fillStopChunkIfEmpty(chunk);
+  return chunk;
+}
+
+PlannedChunk MotionPlanner::planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
+                                       float headingDeg) {
+  PlannedChunk chunk;
+  chunk.trajectoryId = nextTrajId();
+  chunk.dtMs = config::kChunkDtMs;
+  chunk.startTimePi = nowPiUs() + config::kSerialLatencyMarginUs;
+
+  if (!pose.valid) {
+    fillStopChunkIfEmpty(chunk);
+    return chunk;
+  }
+
+  const float posErrMm = std::hypot(goal.xMm - pose.xMm, goal.yMm - pose.yMm);
+  const float headingErrDeg = std::fabs(wrapAngleDeg(goal.headingDeg - headingDeg));
+  if (posErrMm <= config::kCommandGoalPositionToleranceMm &&
+      headingErrDeg <= config::kCommandGoalHeadingToleranceDeg) {
+    fillStopChunkIfEmpty(chunk);
+    return chunk;
+  }
+
+  int st = headingToBin(headingDeg, config::kAstarHeadingBins);
+  int gt = headingToBin(goal.headingDeg, config::kAstarHeadingBins);
+  std::vector<Waypoint3> wps;
+  astar_.plan(pose.xMm, pose.yMm, st, goal.xMm, goal.yMm, gt, wps);
+  auto path = spline_.fit(wps, goal.headingDeg);
+  float vStart = 0;
+  if (path.size() >= 2) {
+    float phi0 = std::atan2(path[1].yMm - path[0].yMm, path[1].xMm - path[0].xMm);
+    const float vxField = pose.vxMmS / 1000.f;
+    const float vyField = pose.vyMmS / 1000.f;
+    vStart = vxField * std::cos(phi0) + vyField * std::sin(phi0);
+  }
+  auto prof = profiler_.build(path, std::max(0.f, vStart));
+  chunk.actions =
+      profiler_.discretize(prof, path, headingDeg, chunk.dtMs, config::kChunkMaxActions);
+  fillStopChunkIfEmpty(chunk);
   return chunk;
 }
 

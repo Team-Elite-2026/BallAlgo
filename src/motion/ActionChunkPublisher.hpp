@@ -13,7 +13,8 @@ namespace ballalgo {
 class ActionChunkPublisher {
  public:
   bool publish(RobotSerial& serial, std::vector<uint8_t>& rx, const PoseState& pose,
-               const BallState& ball, float goalDeg, float headingDeg, bool offenseActive);
+               const BallState& ball, float goalDeg, float headingDeg, bool offenseActive,
+               const CommandedPoseGoal* commandedGoal = nullptr);
 
  private:
   ClockSync clock_;

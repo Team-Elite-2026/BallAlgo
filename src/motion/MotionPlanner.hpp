@@ -18,11 +18,19 @@ struct PlannedChunk {
   std::vector<MotionAction> actions;
 };
 
+struct CommandedPoseGoal {
+  float xMm = 0;
+  float yMm = 0;
+  float headingDeg = 0;
+};
+
 class MotionPlanner {
  public:
   MotionPlanner();
   PlannedChunk plan(const PoseState& pose, const BallState& ball, float goalDeg,
                     float headingDeg, bool fullPlanner);
+  PlannedChunk planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
+                          float headingDeg);
   uint64_t nextTrajId();
 
  private:

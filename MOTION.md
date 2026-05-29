@@ -20,6 +20,10 @@ cmake --build build -j
 - UART: `/dev/serial0` @ 2M — ASCII perception + binary `ActionChunk` (magic `0xCEFAEDFE`)
 - LiDAR: `/dev/ttyAMA4` @ 230400, GPIO12 PWM held LOW
 - Config: [`src/config.hpp`](src/config.hpp), thresholds: [`thresholds.json`](thresholds.json)
+- Commanded goal test: `./build/ballalgo --command-goal <x_mm> <y_mm> <heading_deg>`
+- Commanded goal test in debug/display coordinates: `./build/ballalgo --command-goal-centered-cm <lx_cm> <ly_cm> <heading_deg>`
+  - Uses the live localized pose and publishes planner chunks toward the requested field pose.
+  - Requires `config::kEnableActionChunks = true` and a connected controller on `/dev/serial0`.
 
 ## Architecture
 

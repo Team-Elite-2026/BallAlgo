@@ -75,6 +75,8 @@ inline constexpr float kJMaxTangential = 4.0f;
 inline constexpr int kAstarCellMm = 80;
 inline constexpr int kAstarHeadingBins = 8;
 inline constexpr float kReplanHz = 15.f;
+inline constexpr float kCommandGoalPositionToleranceMm = 60.f;
+inline constexpr float kCommandGoalHeadingToleranceDeg = 12.f;
 
 inline constexpr bool kEnableActionChunks = false;
 inline constexpr bool kEnablePlannerCompare = false;
