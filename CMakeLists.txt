@@ -4,17 +4,13 @@ project(ballalgo CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(BALLALGO_STUB_BUILD "Build without libcamera/libgpiod (dev/CI)" ON)
 option(BALLALGO_ENABLE_LIDAR "Enable LD19 lidar" ON)
 
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
-
-if(NOT BALLALGO_STUB_BUILD)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(LIBCAMERA REQUIRED libcamera)
-  pkg_check_modules(LIBGPiod libgpiod)
-endif()
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBCAMERA REQUIRED libcamera)
+pkg_check_modules(LIBGPiod libgpiod)
 
 set(BALLALGO_SOURCES
   src/main.cpp
@@ -43,17 +39,12 @@ add_executable(ballalgo ${BALLALGO_SOURCES})
 target_include_directories(ballalgo PRIVATE src ${OpenCV_INCLUDE_DIRS})
 
 target_link_libraries(ballalgo PRIVATE ${OpenCV_LIBS} Eigen3::Eigen)
-
-if(BALLALGO_STUB_BUILD)
-  target_compile_definitions(ballalgo PRIVATE BALLALGO_STUB_BUILD=1)
-else()
-  target_compile_definitions(ballalgo PRIVATE BALLALGO_HAS_LIBCAMERA=1)
-  target_include_directories(ballalgo PRIVATE ${LIBCAMERA_INCLUDE_DIRS})
-  target_link_libraries(ballalgo PRIVATE ${LIBCAMERA_LIBRARIES})
-  if(LIBGPiod_FOUND)
-    target_compile_definitions(ballalgo PRIVATE BALLALGO_HAS_GPIOD=1)
-    target_link_libraries(ballalgo PRIVATE ${LIBGPiod_LIBRARIES})
-  endif()
+target_compile_definitions(ballalgo PRIVATE BALLALGO_HAS_LIBCAMERA=1)
+target_include_directories(ballalgo PRIVATE ${LIBCAMERA_INCLUDE_DIRS})
+target_link_libraries(ballalgo PRIVATE ${LIBCAMERA_LIBRARIES})
+if(LIBGPiod_FOUND)
+  target_compile_definitions(ballalgo PRIVATE BALLALGO_HAS_GPIOD=1)
+  target_link_libraries(ballalgo PRIVATE ${LIBGPiod_LIBRARIES})
 endif()
 
 if(BALLALGO_ENABLE_LIDAR)
