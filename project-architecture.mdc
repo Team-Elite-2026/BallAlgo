@@ -1,0 +1,57 @@
+---
+description: RoboCup Junior Soccer Open robot — Pi CM5 (BallAlgo) vs Teensy 4.1 (Offense2026)
+alwaysApply: true
+---
+
+# Project Architecture
+
+This repo is a **dual-MCU** stack for a **RoboCup Junior Soccer Open League** robot. Know which side owns hardware before changing code.
+
+## Robot platform
+
+- **Competition:** RoboCup Junior Soccer Open League
+- **Form factor:** 18 cm diameter circle; ball **intake at the front**
+- **Coordinate system:** **0° = front** (forward), **90° = right** — use this convention for headings, angles, and motion math across Pi and Teensy code
+
+## Hardware
+
+| Component | Notes |
+|-----------|--------|
+| **4 drive motors** | Placed at **35° from the sides** (holonomic / angled wheel layout) |
+| **Compass** | Heading reference (Teensy) |
+| **Camera** | Ball / field vision (Pi) |
+| **Line sensors** | Field line detection (Teensy) |
+| **Light gate** | Intake ball detection (Teensy) |
+| **LD19 LiDAR** | Obstacle / ranging (Pi) |
+
+## BallAlgo — Raspberry Pi CM5
+
+- **Path:** `BallAlgo/`
+- **Role:** Vision (camera), LD19 LiDAR, and higher-level perception/processing.
+- **Production entry:** C++ binary `ballalgo` — build via `BallAlgo/CMakeLists.txt`, sources in `BallAlgo/src/`, config in `src/config.hpp`. See `BallAlgo/MOTION.md`.
+- **Bench tools (Python, not competition):** `BallAlgo/tools/` (`hsv_picker.py`, `lidar_visual.py`, `py_lidar_bench/`).
+- **LiDAR docs:** `BallAlgo/LD19.md` — protocol, wiring, and LD19 behavior. Read this before changing lidar code.
+- **Pi ↔ Teensy:** UART over `/dev/serial0` (baud/ports in `src/config.hpp`).
+
+## Offense2026 — Teensy 4.1
+
+- **Path:** `Offense2026/` (PlatformIO, `env:teensy41`)
+- **Role:** Real-time control of **motors, line sensors, compass, switches, movement, defense/orbit**, and other major actuators/sensors.
+- **Entry:** `Offense2026/src/main.cpp`
+
+## Division of responsibility
+
+| Subsystem | Pi (BallAlgo) | Teensy (Offense2026) |
+|-----------|---------------|----------------------|
+| Camera / ball tracking | Yes | — |
+| LD19 LiDAR | Yes | — |
+| Drive, orbit, defense, line follow | — | Yes |
+| Motors & low-level sensors | — | Yes |
+
+The Pi sends perception/results to the Teensy over **UART**; do not duplicate motor/sensor control on the Pi unless intentionally changing that architecture.
+
+## When editing
+
+- **Lidar / camera / serial protocol:** start in `BallAlgo/` and `LD19.md`.
+- **Motion, PID, hardware drivers:** start in `Offense2026/src/`.
+- Keep UART message formats compatible on **both** sides if you change the link.

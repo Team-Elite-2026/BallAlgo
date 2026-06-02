@@ -1,0 +1,7 @@
+/home/aniket/BallAlgo/build/CMakeFiles/ballalgo.dir
+/home/aniket/BallAlgo/build/CMakeFiles/edit_cache.dir
+/home/aniket/BallAlgo/build/CMakeFiles/rebuild_cache.dir
+/home/aniket/BallAlgo/build/CMakeFiles/list_install_components.dir
+/home/aniket/BallAlgo/build/CMakeFiles/install.dir
+/home/aniket/BallAlgo/build/CMakeFiles/install/local.dir
+/home/aniket/BallAlgo/build/CMakeFiles/install/strip.dir
