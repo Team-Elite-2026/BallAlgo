@@ -1,5 +1,7 @@
-"""Shared helpers for BallAlgo planner testing artifacts and plots."""
+"""Compatibility re-exports for the BallAlgo sim package."""
 
-from .artifact import PlannerArtifact, load_artifact
+from .artifact import SimulationArtifact, load_artifact
 
-__all__ = ["PlannerArtifact", "load_artifact"]
+PlannerArtifact = SimulationArtifact
+
+__all__ = ["PlannerArtifact", "SimulationArtifact", "load_artifact"]
