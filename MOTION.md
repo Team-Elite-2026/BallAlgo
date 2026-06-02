@@ -40,3 +40,7 @@ cmake --build build -j
 ## Bench tools
 
 See [`tools/README.md`](tools/README.md).
+
+## Planner Testing
+
+For offline planner and motion-stack simulation, see [`testing/README.md`](testing/README.md).

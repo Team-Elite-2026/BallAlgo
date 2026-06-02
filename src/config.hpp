@@ -65,10 +65,14 @@ inline constexpr int kChunkMaxActions = 50;
 inline constexpr float kChunkPublishHz = 60.f;
 inline constexpr int kSerialLatencyMarginUs = 2000;
 
+//velocity
 inline constexpr float kVMaxX = 0.8f;
 inline constexpr float kVMaxY = 0.6f;
+
+//max accel
 inline constexpr float kAMaxX = 1.2f;
 inline constexpr float kAMaxY = 1.0f;
+
 inline constexpr float kAMaxLateral = 0.8f;
 inline constexpr float kKCurve = 0.15f;
 inline constexpr float kJMaxTangential = 4.0f;
@@ -76,7 +80,7 @@ inline constexpr int kAstarCellMm = 80;
 inline constexpr int kAstarHeadingBins = 8;
 inline constexpr float kReplanHz = 15.f;
 inline constexpr float kCommandGoalPositionToleranceMm = 60.f;
-inline constexpr float kCommandGoalHeadingToleranceDeg = 12.f;
+inline constexpr float kCommandGoalHeadingToleranceDeg = 5.f;
 
 inline constexpr bool kEnableActionChunks = false;
 inline constexpr bool kEnablePlannerCompare = false;

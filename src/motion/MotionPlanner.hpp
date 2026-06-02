@@ -24,6 +24,19 @@ struct CommandedPoseGoal {
   float headingDeg = 0;
 };
 
+struct CommandedPosePlanDebug {
+  PoseState startPose;
+  CommandedPoseGoal goal;
+  float startHeadingDeg = 0;
+  float posErrMm = 0;
+  float headingErrDeg = 0;
+  bool withinTolerance = false;
+  PlannedChunk chunk;
+  std::vector<Waypoint3> waypoints;
+  std::vector<PathSample> path;
+  std::vector<ProfileSample> profile;
+};
+
 class MotionPlanner {
  public:
   MotionPlanner();
@@ -31,6 +44,8 @@ class MotionPlanner {
                     float headingDeg, bool fullPlanner);
   PlannedChunk planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
                           float headingDeg);
+  CommandedPosePlanDebug debugPlanToPose(const PoseState& pose, const CommandedPoseGoal& goal,
+                                         float headingDeg);
   uint64_t nextTrajId();
 
  private:

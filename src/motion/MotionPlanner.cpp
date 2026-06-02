@@ -107,41 +107,52 @@ PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, f
 
 PlannedChunk MotionPlanner::planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
                                        float headingDeg) {
-  PlannedChunk chunk;
-  chunk.trajectoryId = nextTrajId();
-  chunk.dtMs = config::kChunkDtMs;
-  chunk.startTimePi = nowPiUs() + config::kSerialLatencyMarginUs;
+  return debugPlanToPose(pose, goal, headingDeg).chunk;
+}
+
+CommandedPosePlanDebug MotionPlanner::debugPlanToPose(const PoseState& pose,
+                                                      const CommandedPoseGoal& goal,
+                                                      float headingDeg) {
+  CommandedPosePlanDebug debug;
+  debug.startPose = pose;
+  debug.goal = goal;
+  debug.startHeadingDeg = headingDeg;
+  debug.chunk.trajectoryId = nextTrajId();
+  debug.chunk.dtMs = config::kChunkDtMs;
+  debug.chunk.startTimePi = nowPiUs() + config::kSerialLatencyMarginUs;
 
   if (!pose.valid) {
-    fillStopChunkIfEmpty(chunk);
-    return chunk;
+    fillStopChunkIfEmpty(debug.chunk);
+    return debug;
   }
 
-  const float posErrMm = std::hypot(goal.xMm - pose.xMm, goal.yMm - pose.yMm);
-  const float headingErrDeg = std::fabs(wrapAngleDeg(goal.headingDeg - headingDeg));
-  if (posErrMm <= config::kCommandGoalPositionToleranceMm &&
-      headingErrDeg <= config::kCommandGoalHeadingToleranceDeg) {
-    fillStopChunkIfEmpty(chunk);
-    return chunk;
+  debug.posErrMm = std::hypot(goal.xMm - pose.xMm, goal.yMm - pose.yMm);
+  debug.headingErrDeg = std::fabs(wrapAngleDeg(goal.headingDeg - headingDeg));
+  debug.withinTolerance =
+      debug.posErrMm <= config::kCommandGoalPositionToleranceMm &&
+      debug.headingErrDeg <= config::kCommandGoalHeadingToleranceDeg;
+  if (debug.withinTolerance) {
+    fillStopChunkIfEmpty(debug.chunk);
+    return debug;
   }
 
   int st = headingToBin(headingDeg, config::kAstarHeadingBins);
   int gt = headingToBin(goal.headingDeg, config::kAstarHeadingBins);
-  std::vector<Waypoint3> wps;
-  astar_.plan(pose.xMm, pose.yMm, st, goal.xMm, goal.yMm, gt, wps);
-  auto path = spline_.fit(wps, goal.headingDeg);
+  astar_.plan(pose.xMm, pose.yMm, st, goal.xMm, goal.yMm, gt, debug.waypoints);
+  debug.path = spline_.fit(debug.waypoints, goal.headingDeg);
   float vStart = 0;
-  if (path.size() >= 2) {
-    float phi0 = std::atan2(path[1].yMm - path[0].yMm, path[1].xMm - path[0].xMm);
+  if (debug.path.size() >= 2) {
+    float phi0 = std::atan2(debug.path[1].yMm - debug.path[0].yMm,
+                            debug.path[1].xMm - debug.path[0].xMm);
     const float vxField = pose.vxMmS / 1000.f;
     const float vyField = pose.vyMmS / 1000.f;
     vStart = vxField * std::cos(phi0) + vyField * std::sin(phi0);
   }
-  auto prof = profiler_.build(path, std::max(0.f, vStart));
-  chunk.actions =
-      profiler_.discretize(prof, path, headingDeg, chunk.dtMs, config::kChunkMaxActions);
-  fillStopChunkIfEmpty(chunk);
-  return chunk;
+  debug.profile = profiler_.build(debug.path, std::max(0.f, vStart));
+  debug.chunk.actions = profiler_.discretize(debug.profile, debug.path, headingDeg,
+                                             debug.chunk.dtMs, config::kChunkMaxActions);
+  fillStopChunkIfEmpty(debug.chunk);
+  return debug;
 }
 
 }  // namespace ballalgo
