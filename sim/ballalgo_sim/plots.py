@@ -50,7 +50,8 @@ def plot_field_overview(
 
     if artifact.mode == "production_ball_plan":
         goal_x, goal_y = artifact.goal_target_cm()
-        ax.scatter([goal_x], [goal_y], color="#d62728", s=80, marker="*", label="goal target")
+        goal_color = "#d4a800" if artifact.goal_identity() == "yellow" else "#1f77b4"
+        ax.scatter([goal_x], [goal_y], color=goal_color, s=80, marker="*", label="goal target")
         ball_x, ball_y = artifact.ball_field_cm()
         ball_vx, ball_vy = artifact.ball_velocity_cm_s()
         ax.scatter([ball_x], [ball_y], color="#ff9896", s=50, label="ball")

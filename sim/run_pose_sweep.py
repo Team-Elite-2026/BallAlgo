@@ -58,17 +58,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ball-y-cm", type=float)
     parser.add_argument("--ball-vx-cm-s", type=float, default=0.0)
     parser.add_argument("--ball-vy-cm-s", type=float, default=0.0)
+    parser.add_argument("--goal", choices=["blue", "yellow"])
     parser.add_argument("--goal-target-x-cm", type=float)
     parser.add_argument("--goal-target-y-cm", type=float)
     return parser
 
 
 def require_production_args(args: argparse.Namespace) -> None:
-    missing = [
-        name
-        for name in ("ball_x_cm", "ball_y_cm", "goal_target_x_cm", "goal_target_y_cm")
-        if getattr(args, name) is None
-    ]
+    missing = [name for name in ("ball_x_cm", "ball_y_cm") if getattr(args, name) is None]
+    if args.goal is None and (args.goal_target_x_cm is None or args.goal_target_y_cm is None):
+        missing.append("goal")
     if missing:
         raise SystemExit(f"production_ball_plan requires: {', '.join('--' + name.replace('_', '-') for name in missing)}")
 
@@ -131,12 +130,19 @@ def main() -> int:
                         str(args.ball_vx_cm_s),
                         "--ball-vy-cm-s",
                         str(args.ball_vy_cm_s),
-                        "--goal-target-x-cm",
-                        str(args.goal_target_x_cm),
-                        "--goal-target-y-cm",
-                        str(args.goal_target_y_cm),
                     ]
                 )
+                if args.goal is not None:
+                    command.extend(["--goal", args.goal])
+                else:
+                    command.extend(
+                        [
+                            "--goal-target-x-cm",
+                            str(args.goal_target_x_cm),
+                            "--goal-target-y-cm",
+                            str(args.goal_target_y_cm),
+                        ]
+                    )
             else:
                 command.extend(
                     [

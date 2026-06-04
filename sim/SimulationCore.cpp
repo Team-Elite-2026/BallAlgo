@@ -15,6 +15,25 @@ namespace ballalgo::sim {
 
 namespace {
 
+constexpr double kSimWhiteLineFieldWidthCm = 158.0;
+constexpr double kSimGoalDepthCm = 7.4;
+
+double hardcodedGoalCenterXCm(GoalIdentity goalIdentity) {
+  // The goal target is the center of the 60 cm-wide goal mouth. The goal sits
+  // just outside the 158 cm white-line field width, so the target lies half a
+  // goal depth beyond the field edge.
+  const double centerOffsetCm = (kSimWhiteLineFieldWidthCm * 0.5) + (kSimGoalDepthCm * 0.5);
+  switch (goalIdentity) {
+    case GoalIdentity::Blue:
+      return -centerOffsetCm;
+    case GoalIdentity::Yellow:
+      return centerOffsetCm;
+    case GoalIdentity::Unspecified:
+      return 0.0;
+  }
+  return 0.0;
+}
+
 PoseState buildStartPose(const InputOptions& options) {
   PoseState startPose;
   startPose.valid = true;
@@ -46,6 +65,13 @@ FieldBallState buildFieldBallState(const InputOptions& options) {
 
 GoalFieldTarget buildGoalTarget(const InputOptions& options) {
   GoalFieldTarget goalTarget;
+  if (options.goalIdentity != GoalIdentity::Unspecified) {
+    goalTarget.xMm =
+        centeredCmToFieldMm(hardcodedGoalCenterXCm(options.goalIdentity), config::kFieldWidthMm);
+    // The goal mouth is centered on the field midline.
+    goalTarget.yMm = centeredCmToFieldMm(0.0, config::kFieldHeightMm);
+    return goalTarget;
+  }
   goalTarget.xMm = centeredCmToFieldMm(options.goalTargetXCm, config::kFieldWidthMm);
   goalTarget.yMm = centeredCmToFieldMm(options.goalTargetYCm, config::kFieldHeightMm);
   return goalTarget;

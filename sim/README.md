@@ -43,8 +43,7 @@ cd BallAlgo
   --ball-y-cm 0 \
   --ball-vx-cm-s 0 \
   --ball-vy-cm-s 0 \
-  --goal-target-x-cm 0 \
-  --goal-target-y-cm 110 \
+  --goal yellow \
   --output sim/artifacts/production_case.json \
   --label production_case
 ```
@@ -52,7 +51,8 @@ cd BallAlgo
 Important notes:
 
 - ball inputs are field-frame centered-cm and centered-cm/s
-- the goal target is a field point, not a heading
+- `--goal blue|yellow` resolves to a hardcoded goal centered on the field midline
+- the simulator uses a 158 cm white-line field width and a 7.4 cm goal depth for this goal placement
 - replanning cadence defaults to `config::kChunkPublishHz`
 - only the chunk slice that would execute before the next publish is applied
 
@@ -114,6 +114,55 @@ The chunk plot shows:
 - body-frame acceleration commands
 - angular command channels
 
+## Animation
+
+Render a saveable animation:
+
+```bash
+cd BallAlgo/sim
+python3 render_animation.py artifacts/production_case.json --output artifacts/production_case.gif
+```
+
+Supported outputs:
+
+- `.gif` via Pillow
+- `.mp4` via `ffmpeg`
+
+The animation includes:
+
+- a top-down field view
+- robot trail and current heading
+- current field-velocity and acceleration arrows
+- the moving ball
+- synchronized robot velocity and acceleration graphs
+
+## One-Shot Workflow
+
+Run the simulator and automatically save the standard plots and animation:
+
+```bash
+cd BallAlgo/sim
+python3 run_simulation.py -- \
+  --mode production_ball_plan \
+  --start-x-cm 40 \
+  --start-y-cm -60 \
+  --start-heading-deg 0 \
+  --ball-x-cm 0 \
+  --ball-y-cm 0 \
+  --ball-vx-cm-s 0 \
+  --ball-vy-cm-s 0 \
+  --goal yellow \
+  --output artifacts/production_case.json \
+  --label production_case
+```
+
+This writes:
+
+- the JSON artifact
+- a plan overview PNG
+- a chunk-signal PNG
+- an animation GIF by default
+
 ## Sweeps
 
 Production ball planner sweep:
@@ -125,8 +174,7 @@ python3 run_pose_sweep.py \
   --mode production_ball_plan \
   --ball-x-cm 0 \
   --ball-y-cm 0 \
-  --goal-target-x-cm 0 \
-  --goal-target-y-cm 110 \
+  --goal yellow \
   --start-x-min-cm -60 \
   --start-x-max-cm 60 \
   --start-y-min-cm -100 \

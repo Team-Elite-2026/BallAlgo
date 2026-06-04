@@ -13,6 +13,18 @@ namespace ballalgo::sim {
 
 namespace {
 
+const char* goalIdentityName(GoalIdentity goalIdentity) {
+  switch (goalIdentity) {
+    case GoalIdentity::Blue:
+      return "blue";
+    case GoalIdentity::Yellow:
+      return "yellow";
+    case GoalIdentity::Unspecified:
+      return "unspecified";
+  }
+  return "unspecified";
+}
+
 void ensureOutputParentExists(const std::filesystem::path& outputPath) {
   const auto parent = outputPath.parent_path();
   if (!parent.empty()) std::filesystem::create_directories(parent);
@@ -335,9 +347,15 @@ void writeArtifact(const std::filesystem::path& outputPath, const InputOptions& 
   out << "      \"y_mm\": " << poseGoal.yMm << "\n";
   out << "    },\n";
   out << "    \"goal_target\": {\n";
-  out << "      \"specified\": " << (options.goalTargetSpecified ? "true" : "false") << ",\n";
-  out << "      \"x_cm\": " << options.goalTargetXCm << ",\n";
-  out << "      \"y_cm\": " << options.goalTargetYCm << ",\n";
+  out << "      \"specified\": "
+      << ((options.goalTargetSpecified || options.goalIdentity != GoalIdentity::Unspecified)
+              ? "true"
+              : "false")
+      << ",\n";
+  out << "      \"goal_identity\": \"" << goalIdentityName(options.goalIdentity) << "\",\n";
+  out << "      \"x_cm\": " << fieldMmToCenteredCm(goalTarget.xMm, config::kFieldWidthMm) << ",\n";
+  out << "      \"y_cm\": " << fieldMmToCenteredCm(goalTarget.yMm, config::kFieldHeightMm)
+      << ",\n";
   out << "      \"x_mm\": " << goalTarget.xMm << ",\n";
   out << "      \"y_mm\": " << goalTarget.yMm << "\n";
   out << "    },\n";

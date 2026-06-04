@@ -10,6 +10,8 @@ namespace ballalgo::sim {
 
 enum class SimulationMode { ProductionBallPlan, PoseTarget, SingleChunk };
 
+enum class GoalIdentity { Unspecified, Blue, Yellow };
+
 struct InputOptions {
   float startXCm = 0;
   float startYCm = 0;
@@ -35,6 +37,7 @@ struct InputOptions {
   bool goalTargetYSpecified = false;
   float goalTargetXCm = 0;
   float goalTargetYCm = 0;
+  GoalIdentity goalIdentity = GoalIdentity::Unspecified;
   std::string outputPath;
   std::string label = "ballalgo_sim";
   SimulationMode mode = SimulationMode::ProductionBallPlan;

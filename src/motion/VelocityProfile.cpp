@@ -112,6 +112,11 @@ std::vector<MotionAction> VelocityProfile::discretize(const std::vector<ProfileS
     }
   }
   MotionAction hold = actions.empty() ? MotionAction{} : actions.back();
+  // Hold terminal velocity without repeating the last segment's acceleration
+  // spike into padded trailing actions.
+  hold.ax = 0;
+  hold.ay = 0;
+  hold.alpha = 0;
   while (static_cast<int>(actions.size()) < maxActions) actions.push_back(hold);
   return actions;
 }

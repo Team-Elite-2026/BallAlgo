@@ -46,6 +46,20 @@ bool parseModeArg(const char* text, SimulationMode& mode) {
   return false;
 }
 
+bool parseGoalIdentityArg(const char* text, GoalIdentity& goalIdentity) {
+  if (text == nullptr) return false;
+  const std::string value = text;
+  if (value == "blue" || value == "Blue") {
+    goalIdentity = GoalIdentity::Blue;
+    return true;
+  }
+  if (value == "yellow" || value == "Yellow") {
+    goalIdentity = GoalIdentity::Yellow;
+    return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 bool parseArgs(const std::vector<std::string>& args, InputOptions& options) {
@@ -71,6 +85,11 @@ bool parseArgs(const std::vector<std::string>& args, InputOptions& options) {
       if (index + 1 >= args.size()) return false;
       ++index;
       return parseModeArg(args[index].c_str(), mode);
+    };
+    auto requireGoalIdentity = [&](GoalIdentity& goalIdentity) {
+      if (index + 1 >= args.size()) return false;
+      ++index;
+      return parseGoalIdentityArg(args[index].c_str(), goalIdentity);
     };
 
     if (arg == "--start-x-cm") {
@@ -133,6 +152,10 @@ bool parseArgs(const std::vector<std::string>& args, InputOptions& options) {
       options.ballSpecified = true;
       continue;
     }
+    if (arg == "--goal") {
+      if (!requireGoalIdentity(options.goalIdentity)) return false;
+      continue;
+    }
     if (arg == "--goal-target-x-cm") {
       if (!requireFloat(options.goalTargetXCm)) return false;
       options.goalTargetSpecified = true;
@@ -185,8 +208,9 @@ bool validateOptions(const InputOptions& options, std::ostream& err) {
       err << "error: production_ball_plan requires --ball-x-cm/--ball-y-cm inputs\n";
       return false;
     }
-    if (!options.goalTargetXSpecified || !options.goalTargetYSpecified) {
-      err << "error: production_ball_plan requires --goal-target-x-cm and --goal-target-y-cm\n";
+    if (options.goalIdentity == GoalIdentity::Unspecified &&
+        (!options.goalTargetXSpecified || !options.goalTargetYSpecified)) {
+      err << "error: production_ball_plan requires --goal blue|yellow\n";
       return false;
     }
     return true;
@@ -210,7 +234,7 @@ void printUsage(const char* argv0, std::ostream& err) {
       << "Production route mode:\n"
       << "  --ball-x-cm <value> --ball-y-cm <value>\n"
       << "  [--ball-vx-cm-s <value>] [--ball-vy-cm-s <value>]\n"
-      << "  --goal-target-x-cm <value> --goal-target-y-cm <value>\n"
+      << "  --goal <blue|yellow>\n"
       << "\n"
       << "Pose-target modes:\n"
       << "  --goal-x-cm <value> --goal-y-cm <value> --goal-heading-deg <value>\n";

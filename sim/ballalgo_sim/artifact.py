@@ -80,7 +80,18 @@ class SimulationArtifact:
 
     def goal_target_cm(self) -> tuple[float, float]:
         goal_target = self.input.get("goal_target", {})
-        return float(goal_target.get("x_cm", 0.0)), float(goal_target.get("y_cm", 0.0))
+        if "x_cm" in goal_target and "y_cm" in goal_target:
+            return float(goal_target["x_cm"]), float(goal_target["y_cm"])
+        x_mm = float(goal_target.get("x_mm", 0.0))
+        y_mm = float(goal_target.get("y_mm", 0.0))
+        return (
+            x_mm * 0.1 - float(self.field["width_mm"]) * 0.05,
+            y_mm * 0.1 - float(self.field["height_mm"]) * 0.05,
+        )
+
+    def goal_identity(self) -> str:
+        goal_target = self.input.get("goal_target", {})
+        return str(goal_target.get("goal_identity", "unspecified"))
 
     def ball_field_cm(self) -> tuple[float, float]:
         ball = self.input["ball"]
