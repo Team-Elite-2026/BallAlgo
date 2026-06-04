@@ -108,20 +108,35 @@ void addString(std::ostringstream& out, JsonObjectState& state, const char* key,
 
 FoxgloveTelemetryPublisher::FoxgloveTelemetryPublisher(const std::string& configPath)
     : config_(FoxgloveConfig::loadFromFile(configPath)), socketPath_(config_.socketPath) {
-  if (config_.enabled) openSocket();
+  if (config_.enabled) connectSocket();
 }
 
 FoxgloveTelemetryPublisher::~FoxgloveTelemetryPublisher() {
-  if (socketFd_ >= 0) ::close(socketFd_);
+  closeSocket();
 }
 
-bool FoxgloveTelemetryPublisher::openSocket() {
-  socketFd_ = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+void FoxgloveTelemetryPublisher::closeSocket() {
+  if (socketFd_ >= 0) {
+    ::close(socketFd_);
+    socketFd_ = -1;
+  }
+}
+
+bool FoxgloveTelemetryPublisher::connectSocket() {
+  closeSocket();
+  socketFd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
   if (socketFd_ < 0) return false;
 
   int flags = ::fcntl(socketFd_, F_GETFL, 0);
   if (flags >= 0) ::fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
-  return true;
+
+  sockaddr_un addr{};
+  addr.sun_family = AF_UNIX;
+  std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", socketPath_.c_str());
+  if (::connect(socketFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) return true;
+
+  closeSocket();
+  return false;
 }
 
 bool FoxgloveTelemetryPublisher::due(double hz, uint64_t nowNsValue, uint64_t& lastNs) const {
@@ -136,21 +151,27 @@ bool FoxgloveTelemetryPublisher::due(double hz, uint64_t nowNsValue, uint64_t& l
   return true;
 }
 
-void FoxgloveTelemetryPublisher::sendDatagram(const std::string& payload) {
-  if (socketFd_ < 0 || payload.empty()) return;
+void FoxgloveTelemetryPublisher::sendFrame(const std::string& payload) {
+  if (payload.empty()) return;
+  if (socketFd_ < 0 && !connectSocket()) return;
 
-  sockaddr_un addr{};
-  addr.sun_family = AF_UNIX;
-  std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", socketPath_.c_str());
+  const std::string framed = payload + "\n";
+  const ssize_t sent = ::send(socketFd_, framed.data(), framed.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
+  if (sent == static_cast<ssize_t>(framed.size())) return;
 
-  const ssize_t sent = ::sendto(socketFd_, payload.data(), payload.size(), MSG_DONTWAIT,
-                                reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
-  if (sent >= 0) return;
-
-  if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOENT ||
-      errno == ECONNREFUSED) {
+  if (sent < 0 &&
+      (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOENT ||
+       errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
+    closeSocket();
     return;
   }
+
+  if (sent >= 0 && sent < static_cast<ssize_t>(framed.size())) {
+    closeSocket();
+    return;
+  }
+
+  closeSocket();
 }
 
 void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
@@ -360,7 +381,7 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   }
 
   out << '}';
-  sendDatagram(out.str());
+  sendFrame(out.str());
 }
 
 }  // namespace ballalgo

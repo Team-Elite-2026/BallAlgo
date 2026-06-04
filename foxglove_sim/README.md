@@ -216,8 +216,7 @@ stream is stable.
 
 ### Runtime side
 
-- `BallAlgo` emits structured debug snapshots over a **nonblocking Unix datagram
-  socket**
+- `BallAlgo` emits structured debug snapshots over a **local Unix socket**
 - no Foxglove SDK dependency is added to the C++ runtime
 - the runtime can drop visualization snapshots instead of blocking the control
   loop
@@ -300,6 +299,50 @@ When `record_mcap = true`, recordings are written under the configured
 `record_dir` with a timestamp-based session label.
 
 Open those `.mcap` files directly in Foxglove for replay.
+
+## Testing Without The Pi
+
+You can exercise the full Foxglove sidecar locally with deterministic fake data
+that uses the **same Unix socket payload format and framing** as the real `BallAlgo`
+runtime.
+
+### Fake runtime only
+
+If the sidecar is already running, publish fake telemetry into it:
+
+```bash
+python3 foxglove_sim/fake_runtime.py --scenario replan_demo
+```
+
+Useful scenarios:
+
+- `replan_demo`: moving robot, moving ball, curved planner path
+- `orbit_ball`: robot circles the ball with a strike target
+- `straight_line`: simpler path + motion for panel setup/debugging
+- `idle`: static robot/ball snapshot
+
+### One-command local demo
+
+This launches the sidecar and the fake runtime together:
+
+```bash
+python3 foxglove_sim/run_fake_foxglove_demo.py --scenario replan_demo
+```
+
+If your default `python3` does not have `foxglove-sdk` installed, point the
+launcher at a different interpreter for the sidecar:
+
+```bash
+python3 foxglove_sim/run_fake_foxglove_demo.py \
+  --scenario replan_demo \
+  --sidecar-python /path/to/python-with-foxglove-sdk
+```
+
+Then connect Foxglove to:
+
+```text
+ws://127.0.0.1:8765
+```
 
 ## Recommended 2D Field View
 

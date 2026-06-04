@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
+import select
 import signal
 import socket
 import subprocess
@@ -20,30 +20,29 @@ try:
     from foxglove import Channel, Schema
     from foxglove.channels import LogChannel, PoseInFrameChannel, SceneUpdateChannel
     from foxglove.messages import (
-        ArrowPrimitive,
-        Color,
-        LinePrimitive,
         Log,
         LogLevel,
-        Point3,
         Pose,
         PoseInFrame,
         Quaternion,
-        SceneEntity,
         SceneUpdate,
-        SpherePrimitive,
-        TextPrimitive,
         Timestamp,
         Vector3,
+    )
+    from scene_builder import (
+        build_live_scene_entities,
+        build_path_scene_entities,
+        build_static_scene_entities,
     )
 except ImportError:  # pragma: no cover - keeps the file importable before SDK install
     foxglove = None
     Channel = Schema = object
     LogChannel = PoseInFrameChannel = SceneUpdateChannel = object
-    ArrowPrimitive = Color = LinePrimitive = Log = LogLevel = object
-    Point3 = Pose = PoseInFrame = Quaternion = object
-    SceneEntity = SceneUpdate = SpherePrimitive = TextPrimitive = object
+    Log = LogLevel = object
+    Pose = PoseInFrame = Quaternion = object
+    SceneUpdate = object
     Timestamp = Vector3 = object
+    build_live_scene_entities = build_path_scene_entities = build_static_scene_entities = None
 
 
 LOG_LEVELS = {
@@ -74,38 +73,6 @@ def _pose_from_mm(x_mm: float, y_mm: float, heading_deg: float) -> Any:
     )
 
 
-def _point_from_mm(x_mm: float, y_mm: float) -> Any:
-    return Point3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=0.0)
-
-
-def _arrow_from_components(x_mm: float, y_mm: float, vx_m_s: float, vy_m_s: float, color: Any) -> Any:
-    magnitude = math.hypot(vx_m_s, vy_m_s)
-    if magnitude < 1e-6:
-        return None
-    yaw_deg = math.degrees(math.atan2(vy_m_s, vx_m_s))
-    return ArrowPrimitive(
-        pose=Pose(
-            position=Vector3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=0.0),
-            orientation=_yaw_to_quaternion(yaw_deg),
-        ),
-        shaft_length=magnitude,
-        shaft_diameter=0.012,
-        head_length=0.04,
-        head_diameter=0.025,
-        color=color,
-    )
-
-
-def _heading_arrow(x_mm: float, y_mm: float, heading_deg: float, length_m: float, color: Any) -> Any:
-    return _arrow_from_components(
-        x_mm,
-        y_mm,
-        length_m * math.cos(math.radians(heading_deg)),
-        length_m * math.sin(math.radians(heading_deg)),
-        color,
-    )
-
-
 def _git_sha(repo_root: Path) -> str:
     try:
         return (
@@ -128,10 +95,12 @@ class BallAlgoFoxgloveSidecar:
         self.session_label = session_label or datetime.now(timezone.utc).strftime("ballalgo-%Y%m%d-%H%M%S")
         self.note = note
         self.running = True
-        self.socket: socket.socket | None = None
+        self.server_socket: socket.socket | None = None
+        self.client_socket: socket.socket | None = None
+        self.client_buffer = bytearray()
         self.server: Any | None = None
         self.recording_path: Path | None = None
-        self.static_scene_published = False
+        self.last_static_scene_ns = 0
         self.channels: dict[str, Any] = {}
 
     def _require_sdk(self) -> None:
@@ -199,17 +168,61 @@ class BallAlgoFoxgloveSidecar:
     def _make_recording_path(self) -> Path:
         record_dir = (self.repo_root / self.cfg.record_dir).resolve()
         record_dir.mkdir(parents=True, exist_ok=True)
-        return record_dir / f"{self.session_label}.mcap"
+        candidate = record_dir / f"{self.session_label}.mcap"
+        if not candidate.exists():
+            return candidate
+        suffix = 1
+        while True:
+            candidate = record_dir / f"{self.session_label}-{suffix}.mcap"
+            if not candidate.exists():
+                return candidate
+            suffix += 1
 
     def _bind_socket(self) -> None:
         path = Path(self.cfg.socket_path)
         if path.exists():
             path.unlink()
         path.parent.mkdir(parents=True, exist_ok=True)
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.bind(str(path))
-        sock.settimeout(0.25)
-        self.socket = sock
+        sock.listen(1)
+        sock.setblocking(False)
+        self.server_socket = sock
+
+    def _close_client(self) -> None:
+        if self.client_socket is not None:
+            self.client_socket.close()
+            self.client_socket = None
+        self.client_buffer.clear()
+
+    def _accept_client_if_ready(self) -> None:
+        if self.server_socket is None:
+            return
+        readable, _, _ = select.select([self.server_socket], [], [], 0.0)
+        if not readable:
+            return
+        client, _addr = self.server_socket.accept()
+        client.setblocking(False)
+        self._close_client()
+        self.client_socket = client
+
+    def _recv_snapshot_if_ready(self) -> dict[str, Any] | None:
+        if self.client_socket is None:
+            return None
+        readable, _, _ = select.select([self.client_socket], [], [], 0.25)
+        if not readable:
+            return None
+        chunk = self.client_socket.recv(1 << 20)
+        if not chunk:
+            self._close_client()
+            return None
+        self.client_buffer.extend(chunk)
+        newline_index = self.client_buffer.find(b"\n")
+        if newline_index < 0:
+            return None
+        payload = bytes(self.client_buffer[:newline_index])
+        del self.client_buffer[: newline_index + 1]
+        return json.loads(payload.decode("utf-8"))
 
     def _publish_session_info(self) -> None:
         message = {
@@ -224,163 +237,17 @@ class BallAlgoFoxgloveSidecar:
         self.channels["/session/info"].log(message)
 
     def _publish_static_scene(self, field: dict[str, Any], timestamp_ns: int) -> None:
-        if self.static_scene_published:
+        if self.last_static_scene_ns and timestamp_ns - self.last_static_scene_ns < 2_000_000_000:
             return
 
-        width_m = float(field["width_mm"]) / 1000.0
-        height_m = float(field["height_mm"]) / 1000.0
-        half_w = width_m * 0.5
-        half_h = height_m * 0.5
         ts = _timestamp_from_ns(timestamp_ns)
-
-        border_points = [
-            Point3(x=-half_w, y=-half_h, z=0.0),
-            Point3(x=half_w, y=-half_h, z=0.0),
-            Point3(x=half_w, y=half_h, z=0.0),
-            Point3(x=-half_w, y=half_h, z=0.0),
-            Point3(x=-half_w, y=-half_h, z=0.0),
-        ]
-        center_line = [
-            Point3(x=0.0, y=-half_h, z=0.0),
-            Point3(x=0.0, y=half_h, z=0.0),
-        ]
-
-        scene = SceneUpdate(
-            entities=[
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=field["frame_id"],
-                    id="field-border",
-                    lines=[
-                        LinePrimitive(
-                            thickness=0.02,
-                            scale_invariant=False,
-                            points=border_points,
-                            color=Color(r=1.0, g=1.0, b=1.0, a=1.0),
-                        )
-                    ],
-                ),
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=field["frame_id"],
-                    id="field-center-line",
-                    lines=[
-                        LinePrimitive(
-                            thickness=0.01,
-                            scale_invariant=False,
-                            points=center_line,
-                            color=Color(r=0.8, g=0.8, b=0.8, a=1.0),
-                        )
-                    ],
-                ),
-            ]
-        )
+        scene = SceneUpdate(entities=build_static_scene_entities(field, ts))
         self.channels["/field/scene/static"].log(scene)
-        self.static_scene_published = True
+        self.last_static_scene_ns = timestamp_ns
 
     def _publish_live_scene(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
-        field = snapshot["field"]
-        pose = snapshot.get("pose")
-        ball = snapshot.get("ball")
-        planner = snapshot.get("planner_path")
         ts = _timestamp_from_ns(timestamp_ns)
-        frame_id = field["frame_id"]
-        entities = []
-
-        if pose and pose.get("valid"):
-            robot_x_mm = pose["x_mm"]
-            robot_y_mm = pose["y_mm"]
-            robot_heading_deg = pose["heading_deg"]
-
-            heading_arrow = _heading_arrow(
-                robot_x_mm,
-                robot_y_mm,
-                robot_heading_deg,
-                0.18,
-                Color(r=0.1, g=0.65, b=1.0, a=1.0),
-            )
-            velocity_arrow = None
-            robot_twist = snapshot.get("robot_twist")
-            if robot_twist is not None:
-                velocity_arrow = _arrow_from_components(
-                    robot_x_mm,
-                    robot_y_mm,
-                    robot_twist.get("vx_field_m_s", 0.0),
-                    robot_twist.get("vy_field_m_s", 0.0),
-                    Color(r=0.2, g=1.0, b=0.45, a=0.95),
-                )
-
-            entities.append(
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=frame_id,
-                    id="robot-state",
-                    spheres=[
-                        SpherePrimitive(
-                            pose=_pose_from_mm(robot_x_mm, robot_y_mm, 0.0),
-                            size=Vector3(x=0.12, y=0.12, z=0.02),
-                            color=Color(r=0.1, g=0.65, b=1.0, a=0.95),
-                        )
-                    ],
-                    arrows=[arrow for arrow in (heading_arrow, velocity_arrow) if arrow is not None],
-                    texts=[
-                        TextPrimitive(
-                            pose=Pose(
-                                position=Vector3(x=robot_x_mm / 1000.0, y=robot_y_mm / 1000.0, z=0.04),
-                                orientation=_yaw_to_quaternion(0.0),
-                            ),
-                            text=f"robot {robot_heading_deg:.0f} deg",
-                            font_size=16.0,
-                            scale_invariant=True,
-                            billboard=True,
-                            color=Color(r=1.0, g=1.0, b=1.0, a=1.0),
-                        )
-                    ],
-                )
-            )
-
-        if ball and ball.get("field_visible"):
-            entities.append(
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=frame_id,
-                    id="ball-state",
-                    spheres=[
-                        SpherePrimitive(
-                            pose=_pose_from_mm(ball["field_x_mm"], ball["field_y_mm"], 0.0),
-                            size=Vector3(x=0.05, y=0.05, z=0.02),
-                            color=Color(r=1.0, g=0.55, b=0.1, a=1.0),
-                        )
-                    ],
-                )
-            )
-
-        if planner and planner.get("target_x_mm") is not None:
-            entities.append(
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=frame_id,
-                    id="planner-target-label",
-                    texts=[
-                        TextPrimitive(
-                            pose=Pose(
-                                position=Vector3(
-                                    x=planner["target_x_mm"] / 1000.0,
-                                    y=planner["target_y_mm"] / 1000.0,
-                                    z=0.03,
-                                ),
-                                orientation=_yaw_to_quaternion(0.0),
-                            ),
-                            text="target",
-                            font_size=14.0,
-                            scale_invariant=True,
-                            billboard=True,
-                            color=Color(r=1.0, g=0.3, b=0.15, a=1.0),
-                        )
-                    ],
-                )
-            )
-
+        entities = build_live_scene_entities(snapshot, ts)
         if entities:
             self.channels["/field/scene/live"].log(SceneUpdate(entities=entities))
 
@@ -409,75 +276,10 @@ class BallAlgoFoxgloveSidecar:
         )
 
     def _publish_path(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
-        planner = snapshot.get("planner_path")
-        if not planner:
-            return
-        points = [_point_from_mm(point["x_mm"], point["y_mm"]) for point in planner.get("points", [])]
-        entities = []
         ts = _timestamp_from_ns(timestamp_ns)
-        frame_id = snapshot["field"]["frame_id"]
-
-        if points:
-            entities.append(
-                SceneEntity(
-                    timestamp=ts,
-                    frame_id=frame_id,
-                    id="planner-path",
-                    lines=[
-                        LinePrimitive(
-                            thickness=0.03,
-                            scale_invariant=False,
-                            points=points,
-                            color=Color(r=0.1, g=0.8, b=0.3, a=1.0),
-                        )
-                    ],
-                )
-            )
-
-        target_pose = _pose_from_mm(
-            planner["target_x_mm"], planner["target_y_mm"], planner["target_heading_deg"]
-        )
-        target_arrow = _arrow_from_components(
-            planner["target_x_mm"],
-            planner["target_y_mm"],
-            0.18 * math.cos(math.radians(planner["target_heading_deg"])),
-            0.18 * math.sin(math.radians(planner["target_heading_deg"])),
-            Color(r=1.0, g=0.2, b=0.1, a=1.0),
-        )
-        entities.append(
-            SceneEntity(
-                timestamp=ts,
-                frame_id=frame_id,
-                id="planner-target",
-                spheres=[
-                    SpherePrimitive(
-                        pose=target_pose,
-                        size=Vector3(x=0.05, y=0.05, z=0.05),
-                        color=Color(r=1.0, g=0.2, b=0.1, a=0.95),
-                    )
-                ],
-                arrows=[target_arrow] if target_arrow is not None else [],
-                texts=[
-                    TextPrimitive(
-                        pose=Pose(
-                            position=Vector3(
-                                x=planner["target_x_mm"] / 1000.0,
-                                y=planner["target_y_mm"] / 1000.0,
-                                z=0.06,
-                            ),
-                            orientation=_yaw_to_quaternion(0.0),
-                        ),
-                        text=f"traj {planner['trajectory_id']}",
-                        font_size=18.0,
-                        scale_invariant=True,
-                        billboard=True,
-                        color=Color(r=1.0, g=1.0, b=1.0, a=1.0),
-                    )
-                ],
-            )
-        )
-
-        self.channels["/planner/scene/path"].log(SceneUpdate(entities=entities))
+        entities = build_path_scene_entities(snapshot, ts)
+        if entities:
+            self.channels["/planner/scene/path"].log(SceneUpdate(entities=entities))
 
     def _publish_numeric(self, snapshot: dict[str, Any]) -> None:
         if self.cfg.stream_velocity:
@@ -549,17 +351,16 @@ class BallAlgoFoxgloveSidecar:
             )
 
             try:
-                assert self.socket is not None
                 while self.running:
-                    try:
-                        data, _addr = self.socket.recvfrom(1 << 20)
-                    except socket.timeout:
+                    self._accept_client_if_ready()
+                    snapshot = self._recv_snapshot_if_ready()
+                    if snapshot is None:
                         continue
-                    snapshot = json.loads(data.decode("utf-8"))
                     self._handle_snapshot(snapshot)
             finally:
-                if self.socket is not None:
-                    self.socket.close()
+                self._close_client()
+                if self.server_socket is not None:
+                    self.server_socket.close()
                 socket_path = Path(self.cfg.socket_path)
                 if socket_path.exists():
                     socket_path.unlink()

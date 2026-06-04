@@ -1,3 +1,5 @@
 *.mp4
 build-test
 *.pyc
+env/
+foxglove_sim/recordings/

@@ -44,15 +44,15 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
         panel="3D panel (2D mode)",
         nominal_hz=15.0,
         producer="planner",
-        purpose="Visualize A* waypoints, spline path, executed trace, and target pose.",
+        purpose="Visualize generated splines/trajectories and the active target pose on the flat field scene.",
     ),
     FoxgloveTopic(
         name="/robot/pose",
         schema="foxglove.PoseInFrame",
-        panel="3D panel (2D mode)",
+        panel="Raw Messages or debug panel",
         nominal_hz=30.0,
         producer="pose estimator",
-        purpose="Robot position/orientation in the field frame for live state display.",
+        purpose="Keep a raw robot pose topic available for logging and inspection; the 2D field view should use /field/scene/live.",
     ),
     FoxgloveTopic(
         name="/robot/twist",
@@ -81,10 +81,10 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
     FoxgloveTopic(
         name="/ball/pose",
         schema="foxglove.PoseInFrame",
-        panel="3D panel (2D mode)",
+        panel="Raw Messages or debug panel",
         nominal_hz=30.0,
         producer="ball tracker",
-        purpose="Ball position in the field frame.",
+        purpose="Keep a raw ball pose topic available for logging and inspection; the 2D field view should use /field/scene/live.",
     ),
     FoxgloveTopic(
         name="/ball/twist",

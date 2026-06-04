@@ -32,9 +32,10 @@ class FoxgloveTelemetryPublisher {
   void publish(const FoxgloveTelemetryFrame& frame);
 
  private:
-  bool openSocket();
+  bool connectSocket();
+  void closeSocket();
   bool due(double hz, uint64_t nowNs, uint64_t& lastNs) const;
-  void sendDatagram(const std::string& payload);
+  void sendFrame(const std::string& payload);
 
   FoxgloveConfig config_;
   int socketFd_ = -1;
