@@ -106,6 +106,24 @@ void addString(std::ostringstream& out, JsonObjectState& state, const char* key,
   out << '"' << escapeJson(value) << '"';
 }
 
+std::string base64Encode(const uint8_t* data, size_t size) {
+  static const char kChars[] =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve(((size + 2) / 3) * 4);
+  for (size_t i = 0; i < size; i += 3) {
+    const uint32_t n =
+        (static_cast<uint32_t>(data[i]) << 16) |
+        (i + 1 < size ? static_cast<uint32_t>(data[i + 1]) << 8 : 0u) |
+        (i + 2 < size ? static_cast<uint32_t>(data[i + 2]) : 0u);
+    out += kChars[(n >> 18) & 63];
+    out += kChars[(n >> 12) & 63];
+    out += (i + 1 < size) ? kChars[(n >> 6) & 63] : '=';
+    out += (i + 2 < size) ? kChars[n & 63] : '=';
+  }
+  return out;
+}
+
 }  // namespace
 
 FoxgloveTelemetryPublisher::FoxgloveTelemetryPublisher(const std::string& configPath)
@@ -191,8 +209,11 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
                         frame.planner.trajectoryId != lastPathTrajectoryId_ &&
                         due(config_.pathsHz, timestampNs, lastPathNs_);
   const bool sendLog = config_.streamLogs && due(config_.logsHz, timestampNs, lastLogNs_);
+  const bool sendCamera = config_.streamCamera &&
+                          !frame.cameraJpegBytes.empty() &&
+                          due(config_.cameraHz, timestampNs, lastCameraNs_);
 
-  if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendLog) return;
+  if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendLog && !sendCamera) return;
 
   if (sendPath) lastPathTrajectoryId_ = frame.planner.trajectoryId;
 
@@ -381,6 +402,25 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
                   std::string(frame.pose.valid ? "true" : "false") + " ball_visible=" +
                   std::string(frame.ball.visible ? "true" : "false") + " failures=" +
                   std::to_string(frame.frameGrabFailures));
+    out << '}';
+  }
+
+  if (sendCamera) {
+    addFieldPrefix(out, root, "camera");
+    out << '{';
+    JsonObjectState state;
+    addString(out, state, "format", "jpeg");
+    addString(out, state, "frame_id", "camera");
+    addString(out, state, "data_b64",
+              base64Encode(frame.cameraJpegBytes.data(), frame.cameraJpegBytes.size()));
+    // Ball pixel annotation for the image overlay
+    addFieldPrefix(out, state, "ball_px");
+    out << '{';
+    JsonObjectState bpx;
+    addBool(out, bpx, "found", frame.ballPxFound);
+    addNumber(out, bpx, "cx", frame.ballPxCx);
+    addNumber(out, bpx, "cy", frame.ballPxCy);
+    out << '}';
     out << '}';
   }
 

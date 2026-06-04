@@ -22,6 +22,7 @@ struct FoxgloveConfig {
   double ballHz = 30.0;
   double velocityHz = 30.0;
   double logsHz = 1.0;
+  double cameraHz = 10.0;
 
   std::string socketPath = "/tmp/ballalgo_foxglove.sock";
   std::string websocketHost = "0.0.0.0";

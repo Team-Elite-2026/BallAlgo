@@ -275,6 +275,20 @@ int main(int argc, char** argv) {
     telemetry.visionBallAngleDeg = ball.angleDeg;
     telemetry.visionBallDistance = ball.distCal;
     telemetry.planner = actionChunkPublisher.latestDebugSnapshot();
+    if (foxglove.config().streamCamera && !frame.empty()) {
+      cv::imencode(".jpg", frame, telemetry.cameraJpegBytes,
+                   {cv::IMWRITE_JPEG_QUALITY, 70});
+      telemetry.ballPxFound = ball.found;
+      if (ball.found && ball.distPx > 0) {
+        // Invert angleAndDistance: angleDeg = atan2(midx,midy)*180/π+180
+        // so midx = distPx*sin(θ), midy = distPx*cos(θ), then add offsets.
+        const double theta = (ball.angleDeg - 180.0) * M_PI / 180.0;
+        telemetry.ballPxCx =
+            static_cast<int>(std::round(ball.distPx * std::sin(theta) + thr.xoffset));
+        telemetry.ballPxCy =
+            static_cast<int>(std::round(ball.distPx * std::cos(theta) + thr.yoffset));
+      }
+    }
     foxglove.publish(telemetry);
 
     debugAccumS += dt;

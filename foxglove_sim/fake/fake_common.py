@@ -1,8 +1,14 @@
+"""Shared utilities for fake runtime scenarios."""
 from __future__ import annotations
 
 import json
 import math
+import sys
+from pathlib import Path
 from typing import Any
+
+# Make the parent foxglove_sim/ directory importable (field_geometry, config, etc.)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from field_geometry import DEFAULT_FIELD_HEIGHT_MM, DEFAULT_FIELD_WIDTH_MM
 
@@ -13,7 +19,6 @@ FRAME_ID = "field"
 
 def now_timestamp_ns() -> int:
     import time
-
     return time.time_ns()
 
 
@@ -26,6 +31,7 @@ def point_heading_deg(x0: float, y0: float, x1: float, y1: float) -> float:
 
 
 def centered_cm_to_mm(x_cm: float, y_cm: float) -> tuple[float, float]:
+    """Convert center-relative cm to bottom-left-origin mm (matching LidarLocalizer output)."""
     return x_cm * 10.0 + FIELD_WIDTH_MM * 0.5, y_cm * 10.0 + FIELD_HEIGHT_MM * 0.5
 
 

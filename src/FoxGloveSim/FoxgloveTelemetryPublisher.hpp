@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ballalgo {
 
@@ -20,6 +21,12 @@ struct FoxgloveTelemetryFrame {
   double visionBallAngleDeg = -5.0;
   double visionBallDistance = -5.0;
   PlannerDebugSnapshot planner;
+
+  // Camera — populated in main.cpp only when streamCamera is enabled.
+  std::vector<uint8_t> cameraJpegBytes;
+  bool ballPxFound = false;
+  int ballPxCx = 0;
+  int ballPxCy = 0;
 };
 
 class FoxgloveTelemetryPublisher {
@@ -47,6 +54,7 @@ class FoxgloveTelemetryPublisher {
   uint64_t lastVelocityNs_ = 0;
   uint64_t lastPathNs_ = 0;
   uint64_t lastLogNs_ = 0;
+  uint64_t lastCameraNs_ = 0;
 
   bool havePrevRobotVel_ = false;
   float prevRobotVxBody_ = 0;

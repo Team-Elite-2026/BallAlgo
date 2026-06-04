@@ -1,13 +1,29 @@
+"""BallAlgo Foxglove live-debugging sidecar.
+
+Architecture
+------------
+The C++ binary (ballalgo) connects to a Unix socket and streams newline-delimited
+JSON snapshots at up to 60 Hz.  This process receives those snapshots, routes each
+field to the appropriate Foxglove channel, and broadcasts everything over a
+WebSocket server that Foxglove Studio connects to (optionally also recording MCAP).
+
+Channel design — two patterns:
+  DirectChannel  — snapshot key → channel, zero transformation, table-driven.
+                   Adding a new plottable signal is a one-liner in DIRECT_CHANNELS.
+  Custom publish — pose/ball/path/camera need coordinate transforms or binary
+                   encoding, so they get their own _publish_* method.
+"""
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import select
 import signal
 import socket
 import subprocess
 from contextlib import ExitStack, nullcontext
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,8 +35,14 @@ from schema_catalog import SCHEMAS
 try:
     import foxglove
     from foxglove import Channel, Schema
-    from foxglove.channels import LogChannel, PoseInFrameChannel, SceneUpdateChannel
+    from foxglove.channels import (
+        CompressedImageChannel,
+        LogChannel,
+        PoseInFrameChannel,
+        SceneUpdateChannel,
+    )
     from foxglove.messages import (
+        Color,
         Log,
         LogLevel,
         Pose,
@@ -36,14 +58,26 @@ try:
         build_static_scene_entities,
         yaw_to_quaternion,
     )
-except ImportError:  # pragma: no cover - keeps the file importable before SDK install
+    # ImageAnnotations support is optional — gracefully absent in older SDK builds.
+    try:
+        from foxglove.channels import ImageAnnotationsChannel
+        from foxglove.messages import CircleAnnotation, ImageAnnotations, Point2
+        _HAS_IMAGE_ANNOTATIONS = True
+    except ImportError:
+        ImageAnnotationsChannel = None
+        CircleAnnotation = ImageAnnotations = Point2 = None
+        _HAS_IMAGE_ANNOTATIONS = False
+
+except ImportError:  # pragma: no cover
     foxglove = None
     Channel = Schema = object
-    LogChannel = PoseInFrameChannel = SceneUpdateChannel = object
+    CompressedImageChannel = LogChannel = PoseInFrameChannel = SceneUpdateChannel = object
+    ImageAnnotationsChannel = None
     Log = LogLevel = object
-    Pose = PoseInFrame = Quaternion = object
-    SceneUpdate = object
-    Timestamp = Vector3 = object
+    Color = Pose = PoseInFrame = Quaternion = object
+    SceneUpdate = Timestamp = Vector3 = object
+    CircleAnnotation = ImageAnnotations = Point2 = None
+    _HAS_IMAGE_ANNOTATIONS = False
     build_live_scene_entities = build_path_scene_entities = build_static_scene_entities = None
     yaw_to_quaternion = None
 
@@ -58,10 +92,40 @@ LOG_LEVELS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# DirectChannel — table-driven pass-through publishing
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class DirectChannel:
+    """Maps a snapshot key directly to a Foxglove channel with no transformation.
+
+    To add a new plottable signal:
+      1. Add its schema to schema_catalog.py.
+      2. Add a DirectChannel entry to DIRECT_CHANNELS below.
+      3. Make sure the C++ publisher (or _enrich_snapshot) emits that key.
+    """
+    topic: str
+    snapshot_key: str
+    config_attr: str   # FoxgloveConfig boolean attribute that gates publishing
+    schema_name: str   # key in schema_catalog.SCHEMAS
+
+
+DIRECT_CHANNELS: tuple[DirectChannel, ...] = (
+    DirectChannel("/robot/twist",   "robot_twist",   "stream_velocity", "ballalgo.RobotLinearVelocity"),
+    DirectChannel("/robot/accel",   "robot_accel",   "stream_velocity", "ballalgo.RobotLinearAcceleration"),
+    DirectChannel("/robot/angular", "robot_angular", "stream_velocity", "ballalgo.RobotAngularKinematics"),
+    DirectChannel("/ball/twist",    "ball_twist",    "stream_velocity", "ballalgo.BallVelocity"),
+    DirectChannel("/ball/range",    "ball_range",    "stream_ball",     "ballalgo.BallRange"),
+)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def _timestamp_from_ns(timestamp_ns: int) -> Any:
-    sec = timestamp_ns // 1_000_000_000
-    nsec = timestamp_ns % 1_000_000_000
-    return Timestamp(sec=sec, nsec=nsec)
+    return Timestamp(sec=timestamp_ns // 1_000_000_000, nsec=timestamp_ns % 1_000_000_000)
 
 
 def _pose_from_mm(x_mm: float, y_mm: float, heading_deg: float) -> Any:
@@ -73,17 +137,18 @@ def _pose_from_mm(x_mm: float, y_mm: float, heading_deg: float) -> Any:
 
 def _git_sha(repo_root: Path) -> str:
     try:
-        return (
-            subprocess.check_output(
-                ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
-                stderr=subprocess.DEVNULL,
-                text=True,
-            )
-            .strip()
-        )
+        return subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
     except Exception:
         return ""
 
+
+# ---------------------------------------------------------------------------
+# Sidecar
+# ---------------------------------------------------------------------------
 
 class BallAlgoFoxgloveSidecar:
     def __init__(self, repo_root: Path, config_path: Path, session_label: str | None, note: str):
@@ -101,11 +166,15 @@ class BallAlgoFoxgloveSidecar:
         self.last_static_scene_ns = 0
         self.channels: dict[str, Any] = {}
 
+    # ------------------------------------------------------------------
+    # Setup helpers
+    # ------------------------------------------------------------------
+
     def _require_sdk(self) -> None:
         if foxglove is None:
             raise RuntimeError(
-                "foxglove-sdk is not installed. Install it with `pip install foxglove-sdk` or "
-                "use the repo's foxglove_sim/requirements.txt."
+                "foxglove-sdk is not installed. "
+                "Run: pip install foxglove-sdk  (or use foxglove_sim/requirements.txt)"
             )
 
     def _warn_unimplemented_streams(self) -> None:
@@ -113,71 +182,50 @@ class BallAlgoFoxgloveSidecar:
             name
             for flag, name in (
                 (self.cfg.stream_lidar, "stream_lidar"),
-                (self.cfg.stream_camera, "stream_camera"),
                 (self.cfg.stream_annotations, "stream_annotations"),
             )
             if flag
         ]
         if unimplemented:
             print(
-                f"Warning: these stream flags are enabled in config but not yet implemented "
-                f"in the sidecar: {', '.join(unimplemented)}"
+                f"Warning: stream flags enabled but not yet implemented in sidecar: "
+                f"{', '.join(unimplemented)}"
             )
 
     def _init_channels(self) -> None:
+        # Scene / pose channels (typed)
         self.channels = {
-            "/field/scene/static": SceneUpdateChannel("/field/scene/static"),
-            "/field/scene/live": SceneUpdateChannel("/field/scene/live"),
-            "/planner/scene/path": SceneUpdateChannel("/planner/scene/path"),
-            "/robot/pose": PoseInFrameChannel("/robot/pose"),
-            "/ball/pose": PoseInFrameChannel("/ball/pose"),
-            "/debug/log": LogChannel("/debug/log"),
+            "/field/scene/static":  SceneUpdateChannel("/field/scene/static"),
+            "/field/scene/live":    SceneUpdateChannel("/field/scene/live"),
+            "/planner/scene/path":  SceneUpdateChannel("/planner/scene/path"),
+            "/robot/pose":          PoseInFrameChannel("/robot/pose"),
+            "/ball/pose":           PoseInFrameChannel("/ball/pose"),
+            "/debug/log":           LogChannel("/debug/log"),
             "/session/info": Channel(
                 topic="/session/info",
                 message_encoding="json",
-                schema=Schema(
-                    name="ballalgo.SessionInfo",
-                    encoding="jsonschema",
-                    data=SCHEMAS["ballalgo.SessionInfo"],
-                ),
-            ),
-            "/robot/twist": Channel(
-                topic="/robot/twist",
-                message_encoding="json",
-                schema=Schema(
-                    name="ballalgo.RobotLinearVelocity",
-                    encoding="jsonschema",
-                    data=SCHEMAS["ballalgo.RobotLinearVelocity"],
-                ),
-            ),
-            "/robot/accel": Channel(
-                topic="/robot/accel",
-                message_encoding="json",
-                schema=Schema(
-                    name="ballalgo.RobotLinearAcceleration",
-                    encoding="jsonschema",
-                    data=SCHEMAS["ballalgo.RobotLinearAcceleration"],
-                ),
-            ),
-            "/robot/angular": Channel(
-                topic="/robot/angular",
-                message_encoding="json",
-                schema=Schema(
-                    name="ballalgo.RobotAngularKinematics",
-                    encoding="jsonschema",
-                    data=SCHEMAS["ballalgo.RobotAngularKinematics"],
-                ),
-            ),
-            "/ball/twist": Channel(
-                topic="/ball/twist",
-                message_encoding="json",
-                schema=Schema(
-                    name="ballalgo.BallVelocity",
-                    encoding="jsonschema",
-                    data=SCHEMAS["ballalgo.BallVelocity"],
-                ),
+                schema=Schema(name="ballalgo.SessionInfo", encoding="jsonschema",
+                              data=SCHEMAS["ballalgo.SessionInfo"]),
             ),
         }
+        # Camera channels (typed)
+        self.channels["/camera/front/image"] = CompressedImageChannel("/camera/front/image")
+        if _HAS_IMAGE_ANNOTATIONS:
+            self.channels["/camera/front/annotations"] = ImageAnnotationsChannel(
+                "/camera/front/annotations"
+            )
+        # Direct (JSON schema) channels — built from the table
+        for ch in DIRECT_CHANNELS:
+            self.channels[ch.topic] = Channel(
+                topic=ch.topic,
+                message_encoding="json",
+                schema=Schema(name=ch.schema_name, encoding="jsonschema",
+                              data=SCHEMAS[ch.schema_name]),
+            )
+
+    # ------------------------------------------------------------------
+    # Socket I/O
+    # ------------------------------------------------------------------
 
     def _make_recording_path(self) -> Path:
         record_dir = (self.repo_root / self.cfg.record_dir).resolve()
@@ -213,15 +261,14 @@ class BallAlgoFoxgloveSidecar:
         if self.server_socket is None:
             return
         readable, _, _ = select.select([self.server_socket], [], [], 0.0)
-        if not readable:
-            return
-        client, _addr = self.server_socket.accept()
-        client.setblocking(False)
-        self._close_client()
-        self.client_socket = client
+        if readable:
+            client, _addr = self.server_socket.accept()
+            client.setblocking(False)
+            self._close_client()
+            self.client_socket = client
 
     def _drain_snapshots(self) -> list[dict[str, Any]]:
-        """Read all complete newline-framed JSON snapshots from the socket buffer."""
+        """Read and parse every complete newline-framed JSON snapshot in the buffer."""
         if self.client_socket is None:
             return []
         readable, _, _ = select.select([self.client_socket], [], [], 0.25)
@@ -232,19 +279,38 @@ class BallAlgoFoxgloveSidecar:
             self._close_client()
             return []
         self.client_buffer.extend(chunk)
-
         snapshots: list[dict[str, Any]] = []
         while True:
             newline_index = self.client_buffer.find(b"\n")
             if newline_index < 0:
                 break
             payload = bytes(self.client_buffer[:newline_index])
-            del self.client_buffer[: newline_index + 1]
+            del self.client_buffer[:newline_index + 1]
             snapshots.append(json.loads(payload.decode("utf-8")))
         return snapshots
 
+    # ------------------------------------------------------------------
+    # Snapshot enrichment — derive computed keys for direct channels
+    # ------------------------------------------------------------------
+
+    def _enrich_snapshot(self, snapshot: dict[str, Any]) -> None:
+        """Add derived sub-keys so DirectChannel can log them without custom code."""
+        ball = snapshot.get("ball")
+        if ball and ball.get("visible"):
+            snapshot["ball_range"] = {
+                "visible": ball["visible"],
+                "angle_deg": ball.get("vision_angle_deg", 0.0),
+                "dist_cal_m": ball.get("vision_dist_cal", 0.0),
+                "body_x_m": ball.get("body_x_m", 0.0),
+                "body_y_m": ball.get("body_y_m", 0.0),
+            }
+
+    # ------------------------------------------------------------------
+    # Publish methods
+    # ------------------------------------------------------------------
+
     def _publish_session_info(self) -> None:
-        message = {
+        self.channels["/session/info"].log({
             "session_label": self.session_label,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "git_sha": _git_sha(self.repo_root),
@@ -252,16 +318,15 @@ class BallAlgoFoxgloveSidecar:
             "recording_path": str(self.recording_path) if self.recording_path else "",
             "note": self.note,
             "config": asdict(self.cfg),
-        }
-        self.channels["/session/info"].log(message)
+        })
 
     def _publish_static_scene(self, field: dict[str, Any], timestamp_ns: int) -> None:
         if self.last_static_scene_ns and timestamp_ns - self.last_static_scene_ns < 2_000_000_000:
             return
-
         ts = _timestamp_from_ns(timestamp_ns)
-        scene = SceneUpdate(entities=build_static_scene_entities(field, ts))
-        self.channels["/field/scene/static"].log(scene)
+        self.channels["/field/scene/static"].log(
+            SceneUpdate(entities=build_static_scene_entities(field, ts))
+        )
         self.last_static_scene_ns = timestamp_ns
 
     def _publish_live_scene(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
@@ -276,13 +341,11 @@ class BallAlgoFoxgloveSidecar:
             return
         field = FieldGeometry.from_snapshot(snapshot["field"])
         cx_mm, cy_mm = center_field_mm(pose["x_mm"], pose["y_mm"], field)
-        self.channels["/robot/pose"].log(
-            PoseInFrame(
-                timestamp=_timestamp_from_ns(timestamp_ns),
-                frame_id=snapshot["field"]["frame_id"],
-                pose=_pose_from_mm(cx_mm, cy_mm, pose["heading_deg"]),
-            )
-        )
+        self.channels["/robot/pose"].log(PoseInFrame(
+            timestamp=_timestamp_from_ns(timestamp_ns),
+            frame_id=snapshot["field"]["frame_id"],
+            pose=_pose_from_mm(cx_mm, cy_mm, pose["heading_deg"]),
+        ))
 
     def _publish_ball(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         ball = snapshot.get("ball")
@@ -290,13 +353,11 @@ class BallAlgoFoxgloveSidecar:
             return
         field = FieldGeometry.from_snapshot(snapshot["field"])
         cx_mm, cy_mm = center_field_mm(ball["field_x_mm"], ball["field_y_mm"], field)
-        self.channels["/ball/pose"].log(
-            PoseInFrame(
-                timestamp=_timestamp_from_ns(timestamp_ns),
-                frame_id=snapshot["field"]["frame_id"],
-                pose=_pose_from_mm(cx_mm, cy_mm, 0.0),
-            )
-        )
+        self.channels["/ball/pose"].log(PoseInFrame(
+            timestamp=_timestamp_from_ns(timestamp_ns),
+            frame_id=snapshot["field"]["frame_id"],
+            pose=_pose_from_mm(cx_mm, cy_mm, 0.0),
+        ))
 
     def _publish_path(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         ts = _timestamp_from_ns(timestamp_ns)
@@ -304,33 +365,62 @@ class BallAlgoFoxgloveSidecar:
         if entities:
             self.channels["/planner/scene/path"].log(SceneUpdate(entities=entities))
 
-    def _publish_numeric(self, snapshot: dict[str, Any]) -> None:
-        if self.cfg.stream_velocity:
-            for topic, key in (
-                ("/robot/twist", "robot_twist"),
-                ("/robot/accel", "robot_accel"),
-                ("/robot/angular", "robot_angular"),
-                ("/ball/twist", "ball_twist"),
-            ):
-                message = snapshot.get(key)
-                if message:
-                    self.channels[topic].log(message)
+    def _publish_direct_channels(self, snapshot: dict[str, Any]) -> None:
+        """Publish all table-driven pass-through channels in one loop."""
+        for ch in DIRECT_CHANNELS:
+            if not getattr(self.cfg, ch.config_attr, False):
+                continue
+            message = snapshot.get(ch.snapshot_key)
+            if message:
+                self.channels[ch.topic].log(message)
 
     def _publish_log(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         payload = snapshot.get("log")
         if not payload:
             return
-        self.channels["/debug/log"].log(
-            Log(
-                timestamp=_timestamp_from_ns(timestamp_ns),
-                level=LOG_LEVELS.get(int(payload.get("level", 2)), LOG_LEVELS[2]),
-                name=str(payload.get("name", "ballalgo")),
-                message=str(payload.get("message", "")),
-            )
-        )
+        self.channels["/debug/log"].log(Log(
+            timestamp=_timestamp_from_ns(timestamp_ns),
+            level=LOG_LEVELS.get(int(payload.get("level", 2)), LOG_LEVELS[2]),
+            name=str(payload.get("name", "ballalgo")),
+            message=str(payload.get("message", "")),
+        ))
+
+    def _publish_camera(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
+        camera = snapshot.get("camera")
+        if not camera or not camera.get("data_b64"):
+            return
+        ts = _timestamp_from_ns(timestamp_ns)
+        from foxglove.messages import CompressedImage
+        self.channels["/camera/front/image"].log(CompressedImage(
+            timestamp=ts,
+            frame_id=camera.get("frame_id", "camera"),
+            format=camera.get("format", "jpeg"),
+            data=base64.b64decode(camera["data_b64"]),
+        ))
+        if not _HAS_IMAGE_ANNOTATIONS:
+            return
+        ball_px = camera.get("ball_px")
+        if ball_px and ball_px.get("found"):
+            self.channels["/camera/front/annotations"].log(ImageAnnotations(
+                timestamp=ts,
+                circles=[CircleAnnotation(
+                    timestamp=ts,
+                    position=Point2(x=float(ball_px["cx"]), y=float(ball_px["cy"])),
+                    diameter=40.0,   # visual size in pixels; adjust to taste
+                    thickness=2.5,
+                    outline_color=Color(r=1.0, g=0.55, b=0.1, a=1.0),
+                    fill_color=Color(r=1.0, g=0.55, b=0.1, a=0.25),
+                )],
+            ))
+
+    # ------------------------------------------------------------------
+    # Main snapshot handler
+    # ------------------------------------------------------------------
 
     def _handle_snapshot(self, snapshot: dict[str, Any]) -> None:
+        self._enrich_snapshot(snapshot)
         timestamp_ns = int(snapshot["timestamp_ns"])
+
         self._publish_static_scene(snapshot["field"], timestamp_ns)
         if self.cfg.stream_pose or self.cfg.stream_ball:
             self._publish_live_scene(snapshot, timestamp_ns)
@@ -340,9 +430,15 @@ class BallAlgoFoxgloveSidecar:
             self._publish_ball(snapshot, timestamp_ns)
         if self.cfg.stream_paths:
             self._publish_path(snapshot, timestamp_ns)
-        self._publish_numeric(snapshot)
+        self._publish_direct_channels(snapshot)
         if self.cfg.stream_logs:
             self._publish_log(snapshot, timestamp_ns)
+        if self.cfg.stream_camera:
+            self._publish_camera(snapshot, timestamp_ns)
+
+    # ------------------------------------------------------------------
+    # Entry point
+    # ------------------------------------------------------------------
 
     def stop(self, *_args: object) -> None:
         self.running = False
@@ -365,10 +461,11 @@ class BallAlgoFoxgloveSidecar:
             else:
                 stack.enter_context(nullcontext())
 
-            if self.cfg.websocket_enabled:
-                self.server = foxglove.start_server(host=self.cfg.websocket_host, port=self.cfg.websocket_port)
-            else:
-                self.server = None
+            self.server = (
+                foxglove.start_server(host=self.cfg.websocket_host, port=self.cfg.websocket_port)
+                if self.cfg.websocket_enabled
+                else None
+            )
             self._init_channels()
             self._bind_socket()
             self._publish_session_info()
@@ -378,7 +475,7 @@ class BallAlgoFoxgloveSidecar:
                 if self.cfg.websocket_enabled
                 else "websocket disabled"
             )
-            print(f"Foxglove sidecar listening on {websocket_desc} and unix://{self.cfg.socket_path}")
+            print(f"Foxglove sidecar  websocket={websocket_desc}  socket={self.cfg.socket_path}")
 
             try:
                 while self.running:
@@ -394,15 +491,18 @@ class BallAlgoFoxgloveSidecar:
                     socket_path.unlink()
 
 
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="BallAlgo Foxglove live-debugging sidecar")
-    parser.add_argument(
-        "--config",
-        default="foxglove_sim/foxglove.conf",
-        help="Path to the shared Foxglove config file.",
-    )
-    parser.add_argument("--session-label", default="", help="Optional recording/session label override.")
-    parser.add_argument("--note", default="", help="Optional operator note stored in session metadata.")
+    parser.add_argument("--config", default="foxglove_sim/foxglove.conf",
+                        help="Path to the shared Foxglove config file.")
+    parser.add_argument("--session-label", default="",
+                        help="Optional recording/session label override.")
+    parser.add_argument("--note", default="",
+                        help="Optional operator note stored in session metadata.")
     return parser.parse_args()
 
 
@@ -412,13 +512,12 @@ def main() -> int:
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = (repo_root / config_path).resolve()
-    sidecar = BallAlgoFoxgloveSidecar(
+    BallAlgoFoxgloveSidecar(
         repo_root=repo_root,
         config_path=config_path,
         session_label=args.session_label or None,
         note=args.note,
-    )
-    sidecar.run()
+    ).run()
     return 0
 
 

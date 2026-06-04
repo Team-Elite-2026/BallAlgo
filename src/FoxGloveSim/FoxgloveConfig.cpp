@@ -110,6 +110,8 @@ FoxgloveConfig FoxgloveConfig::loadFromFile(const std::string& path) {
       parseInt(value, cfg.websocketPort);
     } else if (key == "record_dir") {
       cfg.recordDir = value;
+    } else if (key == "camera_hz") {
+      parseDouble(value, cfg.cameraHz);
     }
   }
 

@@ -58,6 +58,17 @@ SCHEMAS: dict[str, bytes] = {
             "speed_field_m_s": {"type": "number"},
         },
     ),
+    "ballalgo.BallRange": _json_schema(
+        "BallRange",
+        {
+            "visible": {"type": "boolean"},
+            "angle_deg": {"type": "number"},
+            "dist_cal_m": {"type": "number"},
+            "body_x_m": {"type": "number"},
+            "body_y_m": {"type": "number"},
+        },
+        required=["visible"],
+    ),
     "ballalgo.SessionInfo": _json_schema(
         "SessionInfo",
         {

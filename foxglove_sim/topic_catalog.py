@@ -95,6 +95,15 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
         purpose="Ball velocity telemetry for plotting and replay.",
     ),
     FoxgloveTopic(
+        name="/ball/range",
+        schema="ballalgo.BallRange",
+        panel="Plot panel",
+        nominal_hz=30.0,
+        producer="ball tracker",
+        purpose="Ball angle, calibrated distance, and body-frame position — "
+                "the primary graphable source for ball proximity and bearing.",
+    ),
+    FoxgloveTopic(
         name="/lidar/points",
         schema="foxglove.PointCloud",
         panel="3D panel (2D or 3D)",

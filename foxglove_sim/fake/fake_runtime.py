@@ -5,10 +5,14 @@ import errno
 import math
 import signal
 import socket
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+# Add parent foxglove_sim/ to path so config and field_geometry are importable.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import load_config
 from fake_common import (
