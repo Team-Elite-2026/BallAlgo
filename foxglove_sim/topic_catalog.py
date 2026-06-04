@@ -31,6 +31,14 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
         purpose="Publish static field geometry, goal geometry, and any always-on overlays once per session.",
     ),
     FoxgloveTopic(
+        name="/field/scene/live",
+        schema="foxglove.SceneUpdate",
+        panel="3D panel (2D mode)",
+        nominal_hz=30.0,
+        producer="foxglove sidecar",
+        purpose="Render flat 2D robot, heading arrow, ball marker, and live overlays on the field without Foxglove's default 3D pose model.",
+    ),
+    FoxgloveTopic(
         name="/planner/scene/path",
         schema="foxglove.SceneUpdate",
         panel="3D panel (2D mode)",

@@ -96,6 +96,16 @@ def _arrow_from_components(x_mm: float, y_mm: float, vx_m_s: float, vy_m_s: floa
     )
 
 
+def _heading_arrow(x_mm: float, y_mm: float, heading_deg: float, length_m: float, color: Any) -> Any:
+    return _arrow_from_components(
+        x_mm,
+        y_mm,
+        length_m * math.cos(math.radians(heading_deg)),
+        length_m * math.sin(math.radians(heading_deg)),
+        color,
+    )
+
+
 def _git_sha(repo_root: Path) -> str:
     try:
         return (
@@ -134,6 +144,7 @@ class BallAlgoFoxgloveSidecar:
     def _init_channels(self) -> None:
         self.channels = {
             "/field/scene/static": SceneUpdateChannel("/field/scene/static"),
+            "/field/scene/live": SceneUpdateChannel("/field/scene/live"),
             "/planner/scene/path": SceneUpdateChannel("/planner/scene/path"),
             "/robot/pose": PoseInFrameChannel("/robot/pose"),
             "/ball/pose": PoseInFrameChannel("/ball/pose"),
@@ -267,6 +278,112 @@ class BallAlgoFoxgloveSidecar:
         self.channels["/field/scene/static"].log(scene)
         self.static_scene_published = True
 
+    def _publish_live_scene(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
+        field = snapshot["field"]
+        pose = snapshot.get("pose")
+        ball = snapshot.get("ball")
+        planner = snapshot.get("planner_path")
+        ts = _timestamp_from_ns(timestamp_ns)
+        frame_id = field["frame_id"]
+        entities = []
+
+        if pose and pose.get("valid"):
+            robot_x_mm = pose["x_mm"]
+            robot_y_mm = pose["y_mm"]
+            robot_heading_deg = pose["heading_deg"]
+
+            heading_arrow = _heading_arrow(
+                robot_x_mm,
+                robot_y_mm,
+                robot_heading_deg,
+                0.18,
+                Color(r=0.1, g=0.65, b=1.0, a=1.0),
+            )
+            velocity_arrow = None
+            robot_twist = snapshot.get("robot_twist")
+            if robot_twist is not None:
+                velocity_arrow = _arrow_from_components(
+                    robot_x_mm,
+                    robot_y_mm,
+                    robot_twist.get("vx_field_m_s", 0.0),
+                    robot_twist.get("vy_field_m_s", 0.0),
+                    Color(r=0.2, g=1.0, b=0.45, a=0.95),
+                )
+
+            entities.append(
+                SceneEntity(
+                    timestamp=ts,
+                    frame_id=frame_id,
+                    id="robot-state",
+                    spheres=[
+                        SpherePrimitive(
+                            pose=_pose_from_mm(robot_x_mm, robot_y_mm, 0.0),
+                            size=Vector3(x=0.12, y=0.12, z=0.02),
+                            color=Color(r=0.1, g=0.65, b=1.0, a=0.95),
+                        )
+                    ],
+                    arrows=[arrow for arrow in (heading_arrow, velocity_arrow) if arrow is not None],
+                    texts=[
+                        TextPrimitive(
+                            pose=Pose(
+                                position=Vector3(x=robot_x_mm / 1000.0, y=robot_y_mm / 1000.0, z=0.04),
+                                orientation=_yaw_to_quaternion(0.0),
+                            ),
+                            text=f"robot {robot_heading_deg:.0f} deg",
+                            font_size=16.0,
+                            scale_invariant=True,
+                            billboard=True,
+                            color=Color(r=1.0, g=1.0, b=1.0, a=1.0),
+                        )
+                    ],
+                )
+            )
+
+        if ball and ball.get("field_visible"):
+            entities.append(
+                SceneEntity(
+                    timestamp=ts,
+                    frame_id=frame_id,
+                    id="ball-state",
+                    spheres=[
+                        SpherePrimitive(
+                            pose=_pose_from_mm(ball["field_x_mm"], ball["field_y_mm"], 0.0),
+                            size=Vector3(x=0.05, y=0.05, z=0.02),
+                            color=Color(r=1.0, g=0.55, b=0.1, a=1.0),
+                        )
+                    ],
+                )
+            )
+
+        if planner and planner.get("target_x_mm") is not None:
+            entities.append(
+                SceneEntity(
+                    timestamp=ts,
+                    frame_id=frame_id,
+                    id="planner-target-label",
+                    texts=[
+                        TextPrimitive(
+                            pose=Pose(
+                                position=Vector3(
+                                    x=planner["target_x_mm"] / 1000.0,
+                                    y=planner["target_y_mm"] / 1000.0,
+                                    z=0.03,
+                                ),
+                                orientation=_yaw_to_quaternion(0.0),
+                            ),
+                            text="target",
+                            font_size=14.0,
+                            scale_invariant=True,
+                            billboard=True,
+                            color=Color(r=1.0, g=0.3, b=0.15, a=1.0),
+                        )
+                    ],
+                )
+            )
+
+        if entities:
+            self.channels["/field/scene/live"].log(SceneUpdate(entities=entities))
+
     def _publish_pose(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         pose = snapshot.get("pose")
         if not pose or not pose.get("valid"):
@@ -390,6 +507,7 @@ class BallAlgoFoxgloveSidecar:
     def _handle_snapshot(self, snapshot: dict[str, Any]) -> None:
         timestamp_ns = int(snapshot["timestamp_ns"])
         self._publish_static_scene(snapshot["field"], timestamp_ns)
+        self._publish_live_scene(snapshot, timestamp_ns)
         if self.cfg.stream_pose:
             self._publish_pose(snapshot, timestamp_ns)
         if self.cfg.stream_ball:

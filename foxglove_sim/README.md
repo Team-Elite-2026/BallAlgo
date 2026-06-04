@@ -236,6 +236,7 @@ Implemented now:
 
 - `/session/info`
 - `/field/scene/static`
+- `/field/scene/live`
 - `/planner/scene/path`
 - `/robot/pose`
 - `/ball/pose`
@@ -299,6 +300,19 @@ When `record_mcap = true`, recordings are written under the configured
 `record_dir` with a timestamp-based session label.
 
 Open those `.mcap` files directly in Foxglove for replay.
+
+## Recommended 2D Field View
+
+For the field panel, use a **3D** panel switched into **2D mode**, and add only:
+
+- `/field/scene/static`
+- `/field/scene/live`
+- `/planner/scene/path`
+
+Do **not** rely on `/robot/pose` or `/ball/pose` for the main field panel if you
+want a clean soccer-style top-down view. Those raw pose topics are still useful
+for Raw Messages and debugging, but Foxglove may render them with a generic 3D
+pose marker that is not what we want for soccer.
 
 ## Folder Contents
 
