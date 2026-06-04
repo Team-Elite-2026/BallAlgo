@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+from config import load_config
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Launch the BallAlgo Foxglove sidecar and fake runtime demo.")
@@ -32,12 +34,27 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _wait_for_sidecar(sidecar: subprocess.Popen, socket_path: str, timeout_s: float = 3.0) -> bool:
+    """Poll until the sidecar's Unix socket file appears, or the process exits."""
+    sock = Path(socket_path)
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if sidecar.poll() is not None:
+            return False  # sidecar crashed
+        if sock.exists():
+            return True
+        time.sleep(0.05)
+    return sock.exists()
+
+
 def main() -> int:
     args = parse_args()
     repo_root = Path(__file__).resolve().parent.parent
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = (repo_root / config_path).resolve()
+
+    cfg = load_config(config_path)
 
     sidecar_cmd = [
         args.sidecar_python,
@@ -66,10 +83,9 @@ def main() -> int:
 
     sidecar = subprocess.Popen(sidecar_cmd, cwd=repo_root)
     try:
-        time.sleep(0.75)
-        sidecar_status = sidecar.poll()
-        if sidecar_status is not None:
-            return sidecar_status
+        if not _wait_for_sidecar(sidecar, cfg.socket_path):
+            print("Sidecar failed to start or timed out waiting for socket.")
+            return sidecar.returncode or 1
 
         fake = subprocess.run(fake_cmd, cwd=repo_root, check=False)
         return fake.returncode

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import select
 import signal
 import socket
@@ -14,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from config import FoxgloveConfig, load_config
+from field_geometry import FieldGeometry, center_field_mm
 from schema_catalog import SCHEMAS
 
 try:
@@ -34,6 +34,7 @@ try:
         build_live_scene_entities,
         build_path_scene_entities,
         build_static_scene_entities,
+        yaw_to_quaternion,
     )
 except ImportError:  # pragma: no cover - keeps the file importable before SDK install
     foxglove = None
@@ -44,6 +45,7 @@ except ImportError:  # pragma: no cover - keeps the file importable before SDK i
     SceneUpdate = object
     Timestamp = Vector3 = object
     build_live_scene_entities = build_path_scene_entities = build_static_scene_entities = None
+    yaw_to_quaternion = None
 
 
 LOG_LEVELS = {
@@ -62,15 +64,10 @@ def _timestamp_from_ns(timestamp_ns: int) -> Any:
     return Timestamp(sec=sec, nsec=nsec)
 
 
-def _yaw_to_quaternion(yaw_deg: float) -> Any:
-    half = math.radians(yaw_deg) * 0.5
-    return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
-
-
 def _pose_from_mm(x_mm: float, y_mm: float, heading_deg: float) -> Any:
     return Pose(
         position=Vector3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=0.0),
-        orientation=_yaw_to_quaternion(heading_deg),
+        orientation=yaw_to_quaternion(heading_deg),
     )
 
 
@@ -109,6 +106,22 @@ class BallAlgoFoxgloveSidecar:
             raise RuntimeError(
                 "foxglove-sdk is not installed. Install it with `pip install foxglove-sdk` or "
                 "use the repo's foxglove_sim/requirements.txt."
+            )
+
+    def _warn_unimplemented_streams(self) -> None:
+        unimplemented = [
+            name
+            for flag, name in (
+                (self.cfg.stream_lidar, "stream_lidar"),
+                (self.cfg.stream_camera, "stream_camera"),
+                (self.cfg.stream_annotations, "stream_annotations"),
+            )
+            if flag
+        ]
+        if unimplemented:
+            print(
+                f"Warning: these stream flags are enabled in config but not yet implemented "
+                f"in the sidecar: {', '.join(unimplemented)}"
             )
 
     def _init_channels(self) -> None:
@@ -207,23 +220,28 @@ class BallAlgoFoxgloveSidecar:
         self._close_client()
         self.client_socket = client
 
-    def _recv_snapshot_if_ready(self) -> dict[str, Any] | None:
+    def _drain_snapshots(self) -> list[dict[str, Any]]:
+        """Read all complete newline-framed JSON snapshots from the socket buffer."""
         if self.client_socket is None:
-            return None
+            return []
         readable, _, _ = select.select([self.client_socket], [], [], 0.25)
         if not readable:
-            return None
+            return []
         chunk = self.client_socket.recv(1 << 20)
         if not chunk:
             self._close_client()
-            return None
+            return []
         self.client_buffer.extend(chunk)
-        newline_index = self.client_buffer.find(b"\n")
-        if newline_index < 0:
-            return None
-        payload = bytes(self.client_buffer[:newline_index])
-        del self.client_buffer[: newline_index + 1]
-        return json.loads(payload.decode("utf-8"))
+
+        snapshots: list[dict[str, Any]] = []
+        while True:
+            newline_index = self.client_buffer.find(b"\n")
+            if newline_index < 0:
+                break
+            payload = bytes(self.client_buffer[:newline_index])
+            del self.client_buffer[: newline_index + 1]
+            snapshots.append(json.loads(payload.decode("utf-8")))
+        return snapshots
 
     def _publish_session_info(self) -> None:
         message = {
@@ -256,11 +274,13 @@ class BallAlgoFoxgloveSidecar:
         pose = snapshot.get("pose")
         if not pose or not pose.get("valid"):
             return
+        field = FieldGeometry.from_snapshot(snapshot["field"])
+        cx_mm, cy_mm = center_field_mm(pose["x_mm"], pose["y_mm"], field)
         self.channels["/robot/pose"].log(
             PoseInFrame(
                 timestamp=_timestamp_from_ns(timestamp_ns),
                 frame_id=snapshot["field"]["frame_id"],
-                pose=_pose_from_mm(pose["x_mm"], pose["y_mm"], pose["heading_deg"]),
+                pose=_pose_from_mm(cx_mm, cy_mm, pose["heading_deg"]),
             )
         )
 
@@ -268,11 +288,13 @@ class BallAlgoFoxgloveSidecar:
         ball = snapshot.get("ball")
         if not ball or not ball.get("field_visible"):
             return
+        field = FieldGeometry.from_snapshot(snapshot["field"])
+        cx_mm, cy_mm = center_field_mm(ball["field_x_mm"], ball["field_y_mm"], field)
         self.channels["/ball/pose"].log(
             PoseInFrame(
                 timestamp=_timestamp_from_ns(timestamp_ns),
                 frame_id=snapshot["field"]["frame_id"],
-                pose=_pose_from_mm(ball["field_x_mm"], ball["field_y_mm"], 0.0),
+                pose=_pose_from_mm(cx_mm, cy_mm, 0.0),
             )
         )
 
@@ -310,7 +332,8 @@ class BallAlgoFoxgloveSidecar:
     def _handle_snapshot(self, snapshot: dict[str, Any]) -> None:
         timestamp_ns = int(snapshot["timestamp_ns"])
         self._publish_static_scene(snapshot["field"], timestamp_ns)
-        self._publish_live_scene(snapshot, timestamp_ns)
+        if self.cfg.stream_pose or self.cfg.stream_ball:
+            self._publish_live_scene(snapshot, timestamp_ns)
         if self.cfg.stream_pose:
             self._publish_pose(snapshot, timestamp_ns)
         if self.cfg.stream_ball:
@@ -330,6 +353,7 @@ class BallAlgoFoxgloveSidecar:
             print("Foxglove streaming disabled in config.")
             return
 
+        self._warn_unimplemented_streams()
         signal.signal(signal.SIGINT, self.stop)
         signal.signal(signal.SIGTERM, self.stop)
 
@@ -359,10 +383,8 @@ class BallAlgoFoxgloveSidecar:
             try:
                 while self.running:
                     self._accept_client_if_ready()
-                    snapshot = self._recv_snapshot_if_ready()
-                    if snapshot is None:
-                        continue
-                    self._handle_snapshot(snapshot)
+                    for snapshot in self._drain_snapshots():
+                        self._handle_snapshot(snapshot)
             finally:
                 self._close_client()
                 if self.server_socket is not None:

@@ -1,6 +1,6 @@
 #include "camera/CameraCapture.hpp"
 #include "config.hpp"
-#include "debug/FoxgloveTelemetryPublisher.hpp"
+#include "FoxGloveSim/FoxgloveTelemetryPublisher.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
 #include "io/GpioLidar.hpp"

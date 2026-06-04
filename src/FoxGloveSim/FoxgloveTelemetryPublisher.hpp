@@ -1,6 +1,6 @@
 #pragma once
 
-#include "debug/FoxgloveConfig.hpp"
+#include "FoxGloveSim/FoxgloveConfig.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
 #include "motion/ActionChunkPublisher.hpp"
@@ -27,7 +27,8 @@ class FoxgloveTelemetryPublisher {
   explicit FoxgloveTelemetryPublisher(const std::string& configPath);
   ~FoxgloveTelemetryPublisher();
 
-  bool enabled() const { return config_.enabled && socketFd_ >= 0; }
+  // Returns true when configured enabled AND currently connected to the sidecar.
+  bool connected() const { return config_.enabled && socketFd_ >= 0; }
   const FoxgloveConfig& config() const { return config_; }
   void publish(const FoxgloveTelemetryFrame& frame);
 

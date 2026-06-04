@@ -1,4 +1,4 @@
-#include "debug/FoxgloveTelemetryPublisher.hpp"
+#include "FoxGloveSim/FoxgloveTelemetryPublisher.hpp"
 
 #include "config.hpp"
 #include "motion/StrikePose.hpp"
@@ -22,10 +22,12 @@ namespace {
 constexpr const char* kFrameId = "field";
 constexpr double kNsPerS = 1e9;
 
+// Uses system_clock (wall time) so MCAP timestamps match the Unix epoch
+// expected by Foxglove Studio's timeline.
 uint64_t nowNs() {
   return static_cast<uint64_t>(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
+          std::chrono::system_clock::now().time_since_epoch())
           .count());
 }
 
@@ -175,7 +177,9 @@ void FoxgloveTelemetryPublisher::sendFrame(const std::string& payload) {
 }
 
 void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
-  if (!enabled()) return;
+  // Gate on config only — socket state is managed by sendFrame so that
+  // reconnection is attempted on every publish after a disconnect.
+  if (!config_.enabled) return;
 
   const uint64_t timestampNs = nowNs();
   const bool sendPose = config_.streamPose && due(config_.poseHz, timestampNs, lastPoseNs_);

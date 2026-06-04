@@ -7,6 +7,7 @@ from field_geometry import (
     CENTER_CIRCLE_RADIUS_MM,
     FieldGeometry,
     border_loop_mm,
+    center_field_mm,
     center_line_mm,
     circle_polyline_mm,
     goal_loops_mm,
@@ -40,6 +41,11 @@ ROBOT_VELOCITY_COLOR = Color(r=0.2, g=1.0, b=0.45, a=0.95)
 BALL_COLOR = Color(r=1.0, g=0.55, b=0.1, a=1.0)
 PATH_COLOR = Color(r=0.1, g=0.8, b=0.3, a=1.0)
 TARGET_COLOR = Color(r=1.0, g=0.2, b=0.1, a=0.95)
+
+
+def yaw_to_quaternion(yaw_deg: float) -> Quaternion:
+    half = math.radians(yaw_deg) * 0.5
+    return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
 
 
 def build_static_scene_entities(field: dict[str, Any], timestamp: Timestamp) -> list[SceneEntity]:
@@ -89,23 +95,24 @@ def build_static_scene_entities(field: dict[str, Any], timestamp: Timestamp) -> 
 
 
 def build_live_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) -> list[SceneEntity]:
-    field = snapshot["field"]
+    field = FieldGeometry.from_snapshot(snapshot["field"])
     pose = snapshot.get("pose")
     ball = snapshot.get("ball")
     entities: list[SceneEntity] = []
 
     if pose and pose.get("valid"):
-        entities.append(_robot_entity(field["frame_id"], timestamp, snapshot))
+        entities.append(_robot_entity(field, timestamp, snapshot))
 
     if ball and ball.get("field_visible"):
+        cx_mm, cy_mm = center_field_mm(ball["field_x_mm"], ball["field_y_mm"], field)
         entities.append(
             SceneEntity(
                 timestamp=timestamp,
-                frame_id=field["frame_id"],
+                frame_id=field.frame_id,
                 id="ball-state",
                 spheres=[
                     SpherePrimitive(
-                        pose=_pose_from_mm(ball["field_x_mm"], ball["field_y_mm"], 0.0, z_m=0.015),
+                        pose=_pose_from_mm(cx_mm, cy_mm, 0.0, z_m=0.015),
                         size=Vector3(x=0.05, y=0.05, z=0.03),
                         color=BALL_COLOR,
                     )
@@ -121,11 +128,17 @@ def build_path_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
     if not planner:
         return []
 
+    field = FieldGeometry.from_snapshot(snapshot["field"])
     frame_id = snapshot["field"]["frame_id"]
-    points = [_point_from_mm(point["x_mm"], point["y_mm"], z_m=0.01) for point in planner.get("points", [])]
+
+    raw_points = planner.get("points", [])
+    scene_points = [
+        _point_from_mm(*center_field_mm(p["x_mm"], p["y_mm"], field), z_m=0.01)
+        for p in raw_points
+    ]
     entities: list[SceneEntity] = []
 
-    if points:
+    if scene_points:
         entities.append(
             SceneEntity(
                 timestamp=timestamp,
@@ -135,7 +148,7 @@ def build_path_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
                     LinePrimitive(
                         thickness=0.03,
                         scale_invariant=True,
-                        points=points,
+                        points=scene_points,
                         color=PATH_COLOR,
                     )
                 ],
@@ -143,8 +156,7 @@ def build_path_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
         )
 
     target_heading = planner["target_heading_deg"]
-    target_x_mm = planner["target_x_mm"]
-    target_y_mm = planner["target_y_mm"]
+    target_x_mm, target_y_mm = center_field_mm(planner["target_x_mm"], planner["target_y_mm"], field)
     target_arrow = _arrow_from_components(
         target_x_mm,
         target_y_mm,
@@ -171,10 +183,9 @@ def build_path_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
     return entities
 
 
-def _robot_entity(frame_id: str, timestamp: Timestamp, snapshot: dict[str, Any]) -> SceneEntity:
+def _robot_entity(field: FieldGeometry, timestamp: Timestamp, snapshot: dict[str, Any]) -> SceneEntity:
     pose = snapshot["pose"]
-    robot_x_mm = pose["x_mm"]
-    robot_y_mm = pose["y_mm"]
+    robot_x_mm, robot_y_mm = center_field_mm(pose["x_mm"], pose["y_mm"], field)
     robot_heading_deg = pose["heading_deg"]
 
     heading_arrow = _heading_arrow(
@@ -197,11 +208,12 @@ def _robot_entity(frame_id: str, timestamp: Timestamp, snapshot: dict[str, Any])
             z_m=0.012,
         )
 
+    # Nose dot is 55 mm in front of the robot body center.
     nose_x_mm = robot_x_mm + 55.0 * math.cos(math.radians(robot_heading_deg))
     nose_y_mm = robot_y_mm + 55.0 * math.sin(math.radians(robot_heading_deg))
     return SceneEntity(
         timestamp=timestamp,
-        frame_id=frame_id,
+        frame_id=field.frame_id,
         id="robot-state",
         spheres=[
             SpherePrimitive(
@@ -242,24 +254,15 @@ def _line_entity(
     )
 
 
-def _timestamped_pose(x_mm: float, y_mm: float, yaw_deg: float, z_m: float) -> Pose:
+def _pose_from_mm(x_mm: float, y_mm: float, yaw_deg: float, *, z_m: float = 0.0) -> Pose:
     return Pose(
         position=Vector3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=z_m),
-        orientation=_yaw_to_quaternion(yaw_deg),
+        orientation=yaw_to_quaternion(yaw_deg),
     )
-
-
-def _pose_from_mm(x_mm: float, y_mm: float, yaw_deg: float, *, z_m: float = 0.0) -> Pose:
-    return _timestamped_pose(x_mm, y_mm, yaw_deg, z_m)
 
 
 def _point_from_mm(x_mm: float, y_mm: float, *, z_m: float = 0.0) -> Point3:
     return Point3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=z_m)
-
-
-def _yaw_to_quaternion(yaw_deg: float) -> Quaternion:
-    half = math.radians(yaw_deg) * 0.5
-    return Quaternion(x=0.0, y=0.0, z=math.sin(half), w=math.cos(half))
 
 
 def _heading_arrow(
@@ -297,7 +300,7 @@ def _arrow_from_components(
     return ArrowPrimitive(
         pose=Pose(
             position=Vector3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=z_m),
-            orientation=_yaw_to_quaternion(yaw_deg),
+            orientation=yaw_to_quaternion(yaw_deg),
         ),
         shaft_length=magnitude,
         shaft_diameter=0.012,

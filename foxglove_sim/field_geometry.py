@@ -93,6 +93,12 @@ def penalty_box_loops_mm(field: FieldGeometry) -> dict[str, list[tuple[float, fl
     }
 
 
+def center_field_mm(x_mm: float, y_mm: float, field: FieldGeometry) -> tuple[float, float]:
+    """Convert bottom-left-origin field mm (as output by LidarLocalizer) to center-origin mm
+    for Foxglove rendering, where (0, 0) is the middle of the field."""
+    return x_mm - field.half_width_mm, y_mm - field.half_height_mm
+
+
 def goal_loops_mm(field: FieldGeometry) -> dict[str, list[tuple[float, float]]]:
     half_goal_height = GOAL_INNER_WIDTH_MM * 0.5
     return {

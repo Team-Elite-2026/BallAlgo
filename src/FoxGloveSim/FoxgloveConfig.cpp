@@ -1,4 +1,4 @@
-#include "debug/FoxgloveConfig.hpp"
+#include "FoxGloveSim/FoxgloveConfig.hpp"
 
 #include <algorithm>
 #include <cctype>

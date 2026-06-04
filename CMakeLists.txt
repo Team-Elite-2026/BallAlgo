@@ -44,8 +44,8 @@ pkg_check_modules(LIBGPiod libgpiod)
 
 set(BALLALGO_APP_SOURCES
   src/main.cpp
-  src/debug/FoxgloveConfig.cpp
-  src/debug/FoxgloveTelemetryPublisher.cpp
+  src/FoxGloveSim/FoxgloveConfig.cpp
+  src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp
   src/vision/Thresholds.cpp
   src/vision/SectorTracker.cpp
   src/vision/VisionMath.cpp
