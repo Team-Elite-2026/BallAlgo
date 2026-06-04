@@ -55,3 +55,5 @@ The Pi sends perception/results to the Teensy over **UART**; do not duplicate mo
 - **Lidar / camera / serial protocol:** start in `BallAlgo/` and `LD19.md`.
 - **Motion, PID, hardware drivers:** start in `Offense2026/src/`.
 - Keep UART message formats compatible on **both** sides if you change the link.
+- Velocity: cm/s; Acceleration: cm/s^2 - keep these standardized units
+- Heading: degrees, 0° = front, 90° = right — use this convention for all angle math.
