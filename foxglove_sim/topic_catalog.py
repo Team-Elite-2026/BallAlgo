@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class FoxgloveTopic:
+    name: str
+    schema: str
+    panel: str
+    nominal_hz: float | None
+    producer: str
+    purpose: str
+
+
+TOPICS: tuple[FoxgloveTopic, ...] = (
+    FoxgloveTopic(
+        name="/session/info",
+        schema="ballalgo.SessionInfo",
+        panel="Raw Messages panel",
+        nominal_hz=0.01,
+        producer="foxglove sidecar startup",
+        purpose="Record session metadata, config snapshot, and recording path for replay/debug traceability.",
+    ),
+    FoxgloveTopic(
+        name="/field/scene/static",
+        schema="foxglove.SceneUpdate",
+        panel="3D panel (2D mode)",
+        nominal_hz=0.1,
+        producer="startup/session init",
+        purpose="Publish static field geometry, goal geometry, and any always-on overlays once per session.",
+    ),
+    FoxgloveTopic(
+        name="/planner/scene/path",
+        schema="foxglove.SceneUpdate",
+        panel="3D panel (2D mode)",
+        nominal_hz=15.0,
+        producer="planner",
+        purpose="Visualize A* waypoints, spline path, executed trace, and target pose.",
+    ),
+    FoxgloveTopic(
+        name="/robot/pose",
+        schema="foxglove.PoseInFrame",
+        panel="3D panel (2D mode)",
+        nominal_hz=30.0,
+        producer="pose estimator",
+        purpose="Robot position/orientation in the field frame for live state display.",
+    ),
+    FoxgloveTopic(
+        name="/robot/twist",
+        schema="ballalgo.RobotLinearVelocity",
+        panel="Plot panel",
+        nominal_hz=30.0,
+        producer="motion stack",
+        purpose="Robot linear velocity components for plotting and replay debugging.",
+    ),
+    FoxgloveTopic(
+        name="/robot/accel",
+        schema="ballalgo.RobotLinearAcceleration",
+        panel="Plot panel",
+        nominal_hz=30.0,
+        producer="motion stack",
+        purpose="Robot linear acceleration components for plotting and replay debugging.",
+    ),
+    FoxgloveTopic(
+        name="/robot/angular",
+        schema="ballalgo.RobotAngularKinematics",
+        panel="Plot panel",
+        nominal_hz=30.0,
+        producer="motion stack",
+        purpose="Angular velocity and acceleration telemetry for the robot.",
+    ),
+    FoxgloveTopic(
+        name="/ball/pose",
+        schema="foxglove.PoseInFrame",
+        panel="3D panel (2D mode)",
+        nominal_hz=30.0,
+        producer="ball tracker",
+        purpose="Ball position in the field frame.",
+    ),
+    FoxgloveTopic(
+        name="/ball/twist",
+        schema="ballalgo.BallVelocity",
+        panel="Plot panel",
+        nominal_hz=30.0,
+        producer="ball tracker",
+        purpose="Ball velocity telemetry for plotting and replay.",
+    ),
+    FoxgloveTopic(
+        name="/lidar/points",
+        schema="foxglove.PointCloud",
+        panel="3D panel (2D or 3D)",
+        nominal_hz=10.0,
+        producer="LiDAR pipeline",
+        purpose="Visualize live or downsampled LiDAR returns.",
+    ),
+    FoxgloveTopic(
+        name="/lidar/localization/scene",
+        schema="foxglove.SceneUpdate",
+        panel="3D panel (2D mode)",
+        nominal_hz=10.0,
+        producer="LiDAR localizer",
+        purpose="Show extracted walls, landmarks, or localization hypotheses.",
+    ),
+    FoxgloveTopic(
+        name="/camera/front/image",
+        schema="foxglove.CompressedImage",
+        panel="Image panel",
+        nominal_hz=15.0,
+        producer="camera pipeline",
+        purpose="Live camera stream for debugging detections and scene understanding.",
+    ),
+    FoxgloveTopic(
+        name="/camera/front/annotations",
+        schema="foxglove.ImageAnnotations",
+        panel="Image panel",
+        nominal_hz=15.0,
+        producer="vision pipeline",
+        purpose="Bounding boxes, centroids, labels, and other 2D overlays for the camera stream.",
+    ),
+    FoxgloveTopic(
+        name="/debug/log",
+        schema="foxglove.Log",
+        panel="Log panel",
+        nominal_hz=None,
+        producer="all subsystems",
+        purpose="Human-readable planner, localization, and vision debug events.",
+    ),
+)
+
+TOPICS_BY_NAME = {topic.name: topic for topic in TOPICS}

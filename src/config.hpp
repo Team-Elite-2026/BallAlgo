@@ -84,6 +84,7 @@ inline constexpr float kCommandGoalHeadingToleranceDeg = 5.f;
 
 inline constexpr bool kEnableActionChunks = false;
 inline constexpr bool kEnablePlannerCompare = false;
+inline constexpr const char* kFoxgloveConfigPath = "foxglove_sim/foxglove.conf";
 
 inline constexpr int kLostSentinel = -5;
 

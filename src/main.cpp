@@ -1,5 +1,6 @@
 #include "camera/CameraCapture.hpp"
 #include "config.hpp"
+#include "debug/FoxgloveTelemetryPublisher.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
 #include "io/GpioLidar.hpp"
@@ -160,6 +161,7 @@ int main(int argc, char** argv) {
 
   MotionPipeline motion;
   ActionChunkPublisher actionChunkPublisher;
+  FoxgloveTelemetryPublisher foxglove(config::kFoxgloveConfigPath);
   std::deque<LidarPoint> lidarWindow;
   std::vector<uint8_t> rxBuf;
   float headingDeg = 0;
@@ -248,6 +250,10 @@ int main(int argc, char** argv) {
     float goalDeg = goals.yellowAngle;
     if (goalDeg < 0) goalDeg = goals.blueAngle;
 
+    bool offense = ball.found || ballState.visible;
+    const CommandedPoseGoal* commandedGoal =
+        options.commandGoalEnabled ? &options.commandGoal : nullptr;
+
     if (serial.isOpen()) {
       auto ascii = formatPerception(static_cast<int>(ball.angleDeg),
                                     static_cast<int>(ball.distCal),
@@ -255,12 +261,21 @@ int main(int argc, char** argv) {
                                     static_cast<int>(goals.yellowAngle), lx, ly, ball.ballVxPx,
                                     ball.ballVyPx);
       serial.writeAscii(ascii);
-      bool offense = ball.found || ballState.visible;
-      const CommandedPoseGoal* commandedGoal =
-          options.commandGoalEnabled ? &options.commandGoal : nullptr;
-      actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense,
-                                   commandedGoal);
     }
+    actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense,
+                                 commandedGoal);
+
+    FoxgloveTelemetryFrame telemetry;
+    telemetry.dtS = dt;
+    telemetry.loopCount = loopCount;
+    telemetry.frameGrabFailures = frameGrabFailures;
+    telemetry.headingDeg = headingDeg;
+    telemetry.pose = pose;
+    telemetry.ball = ballState;
+    telemetry.visionBallAngleDeg = ball.angleDeg;
+    telemetry.visionBallDistance = ball.distCal;
+    telemetry.planner = actionChunkPublisher.latestDebugSnapshot();
+    foxglove.publish(telemetry);
 
     debugAccumS += dt;
     if (debugAccumS >= kDebugReportPeriodS) {
