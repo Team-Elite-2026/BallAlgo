@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import select
 import signal
 import socket
@@ -340,15 +341,20 @@ class BallAlgoFoxgloveSidecar:
             else:
                 stack.enter_context(nullcontext())
 
-            self.server = foxglove.start_server(host=self.cfg.websocket_host, port=self.cfg.websocket_port)
+            if self.cfg.websocket_enabled:
+                self.server = foxglove.start_server(host=self.cfg.websocket_host, port=self.cfg.websocket_port)
+            else:
+                self.server = None
             self._init_channels()
             self._bind_socket()
             self._publish_session_info()
 
-            print(
-                f"Foxglove sidecar listening on ws://{self.cfg.websocket_host}:{self.cfg.websocket_port} "
-                f"and unix://{self.cfg.socket_path}"
+            websocket_desc = (
+                f"ws://{self.cfg.websocket_host}:{self.cfg.websocket_port}"
+                if self.cfg.websocket_enabled
+                else "websocket disabled"
             )
+            print(f"Foxglove sidecar listening on {websocket_desc} and unix://{self.cfg.socket_path}")
 
             try:
                 while self.running:

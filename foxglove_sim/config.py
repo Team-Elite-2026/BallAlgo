@@ -7,6 +7,7 @@ from pathlib import Path
 @dataclass(slots=True)
 class FoxgloveConfig:
     enabled: bool = True
+    websocket_enabled: bool = True
     record_mcap: bool = True
     stream_paths: bool = True
     stream_pose: bool = True
@@ -46,6 +47,7 @@ def load_config(path: str | Path) -> FoxgloveConfig:
 
     parsers = {
         "enabled": _parse_bool,
+        "websocket_enabled": _parse_bool,
         "record_mcap": _parse_bool,
         "stream_paths": _parse_bool,
         "stream_pose": _parse_bool,

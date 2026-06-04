@@ -251,6 +251,77 @@ Deferred placeholders remain in config/catalog for:
 - camera stream
 - image annotations
 
+## Recommended BallAlgo Foxglove Layout
+
+### Field panel
+
+Use one `3D` panel in top-down `2D` mode and drive it only from the scene topics:
+
+- `/field/scene/static`
+- `/field/scene/live`
+- `/planner/scene/path`
+
+Do not use `/robot/pose` or `/ball/pose` as visible layers in the field panel.
+Keep those raw topics for debugging, replay inspection, or message browsing.
+
+The intended field panel view is:
+
+- green field surface
+- white field border, center line, center circle, and penalty boxes
+- blue left goal and yellow right goal outlines
+- robot body marker
+- robot heading arrow
+- robot velocity arrow
+- ball marker
+- active spline / trajectory
+- target pose marker + target heading arrow
+
+### Plot panels
+
+Recommended plot bindings:
+
+#### Robot linear velocity
+
+- `/robot/twist.vx_body_m_s`
+- `/robot/twist.vy_body_m_s`
+- `/robot/twist.speed_body_m_s`
+
+Optional field-frame overlays:
+
+- `/robot/twist.vx_field_m_s`
+- `/robot/twist.vy_field_m_s`
+- `/robot/twist.speed_field_m_s`
+
+#### Robot linear acceleration
+
+- `/robot/accel.ax_body_m_s2`
+- `/robot/accel.ay_body_m_s2`
+- `/robot/accel.magnitude_body_m_s2`
+
+Optional field-frame overlays:
+
+- `/robot/accel.ax_field_m_s2`
+- `/robot/accel.ay_field_m_s2`
+- `/robot/accel.magnitude_field_m_s2`
+
+#### Robot angular kinematics
+
+- `/robot/angular.heading_deg`
+- `/robot/angular.omega_deg_s`
+- `/robot/angular.alpha_deg_s2`
+
+#### Ball velocity
+
+- `/ball/twist.vx_body_m_s`
+- `/ball/twist.vy_body_m_s`
+- `/ball/twist.speed_body_m_s`
+
+Optional field-frame overlays:
+
+- `/ball/twist.vx_field_m_s`
+- `/ball/twist.vy_field_m_s`
+- `/ball/twist.speed_field_m_s`
+
 ## Config
 
 Edit [foxglove.conf](./foxglove.conf) to turn streams on/off and change rates.

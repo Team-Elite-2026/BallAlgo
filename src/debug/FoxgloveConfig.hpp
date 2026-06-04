@@ -6,6 +6,7 @@ namespace ballalgo {
 
 struct FoxgloveConfig {
   bool enabled = true;
+  bool websocketEnabled = true;
   bool recordMcap = true;
   bool streamPaths = true;
   bool streamPose = true;

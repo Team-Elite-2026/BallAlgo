@@ -72,6 +72,8 @@ FoxgloveConfig FoxgloveConfig::loadFromFile(const std::string& path) {
 
     if (key == "enabled") {
       parseBool(value, cfg.enabled);
+    } else if (key == "websocket_enabled") {
+      parseBool(value, cfg.websocketEnabled);
     } else if (key == "record_mcap") {
       parseBool(value, cfg.recordMcap);
     } else if (key == "stream_paths") {

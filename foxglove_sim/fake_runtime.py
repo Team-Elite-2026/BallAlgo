@@ -36,6 +36,9 @@ class FakeRuntimePublisher:
         self.cfg = cfg
         self.running = True
         self.socket: socket.socket | None = None
+        self.generated_frames = 0
+        self.sent_frames = 0
+        self.connect_count = 0
 
     def _ensure_connected(self) -> bool:
         if self.socket is not None:
@@ -44,6 +47,7 @@ class FakeRuntimePublisher:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             sock.connect(self.cfg.socket_path)
             self.socket = sock
+            self.connect_count += 1
             return True
         except (FileNotFoundError, ConnectionRefusedError, OSError):
             if 'sock' in locals():
@@ -54,27 +58,29 @@ class FakeRuntimePublisher:
     def stop(self, *_args: object) -> None:
         self.running = False
 
-    def _send(self, payload: dict[str, Any]) -> None:
+    def _send(self, payload: dict[str, Any]) -> bool:
         if not self._ensure_connected():
-            return
+            return False
         try:
             assert self.socket is not None
             framed = encode_snapshot(payload) + b"\n"
             self.socket.sendall(framed)
-        except (BlockingIOError, FileNotFoundError, ConnectionRefusedError):
+            self.sent_frames += 1
+            return True
+        except (BlockingIOError, BrokenPipeError, FileNotFoundError, ConnectionRefusedError):
             if self.socket is not None:
                 self.socket.close()
                 self.socket = None
-            return
+            return False
         except OSError as exc:
             if exc.errno in {errno.ENOENT, errno.ECONNREFUSED, errno.ENOTCONN, errno.ENOBUFS}:
                 if self.socket is not None:
                     self.socket.close()
                     self.socket = None
-                return
+                return False
             raise
 
-    def run(self) -> None:
+    def run(self) -> bool:
         signal.signal(signal.SIGINT, self.stop)
         signal.signal(signal.SIGTERM, self.stop)
 
@@ -90,6 +96,7 @@ class FakeRuntimePublisher:
                 break
 
             snapshot = build_scenario_snapshot(self.cfg.scenario, elapsed_s, self.cfg.label)
+            self.generated_frames += 1
             self._send(snapshot)
 
             next_frame += frame_period_s
@@ -102,6 +109,12 @@ class FakeRuntimePublisher:
         if self.socket is not None:
             self.socket.close()
             self.socket = None
+
+        print(
+            f"Fake runtime scenario={self.cfg.scenario} generated={self.generated_frames} "
+            f"sent={self.sent_frames} connects={self.connect_count}"
+        )
+        return self.sent_frames > 0
 
 
 def build_scenario_snapshot(scenario: str, t_s: float, label: str) -> dict[str, Any]:
@@ -552,8 +565,7 @@ def main() -> int:
             label=args.label,
         )
     )
-    runtime.run()
-    return 0
+    return 0 if runtime.run() else 1
 
 
 if __name__ == "__main__":

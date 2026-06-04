@@ -15,6 +15,7 @@ from field_geometry import (
 from foxglove.messages import (
     ArrowPrimitive,
     Color,
+    CubePrimitive,
     LinePrimitive,
     Point3,
     Pose,
@@ -30,6 +31,7 @@ FIELD_LINE_COLOR = Color(r=1.0, g=1.0, b=1.0, a=1.0)
 FIELD_SECONDARY_COLOR = Color(r=0.78, g=0.82, b=0.84, a=1.0)
 LEFT_GOAL_COLOR = Color(r=0.25, g=0.45, b=1.0, a=1.0)
 RIGHT_GOAL_COLOR = Color(r=1.0, g=0.9, b=0.2, a=1.0)
+FIELD_SURFACE_COLOR = Color(r=0.1, g=0.42, b=0.2, a=0.96)
 
 ROBOT_BODY_COLOR = Color(r=0.1, g=0.65, b=1.0, a=0.95)
 ROBOT_NOSE_COLOR = Color(r=1.0, g=1.0, b=1.0, a=0.95)
@@ -43,6 +45,22 @@ TARGET_COLOR = Color(r=1.0, g=0.2, b=0.1, a=0.95)
 def build_static_scene_entities(field: dict[str, Any], timestamp: Timestamp) -> list[SceneEntity]:
     geometry = FieldGeometry.from_snapshot(field)
     entities = [
+        SceneEntity(
+            timestamp=timestamp,
+            frame_id=geometry.frame_id,
+            id="field-surface",
+            cubes=[
+                CubePrimitive(
+                    pose=_pose_from_mm(0.0, 0.0, 0.0, z_m=-0.01),
+                    size=Vector3(
+                        x=geometry.width_mm / 1000.0,
+                        y=geometry.height_mm / 1000.0,
+                        z=0.01,
+                    ),
+                    color=FIELD_SURFACE_COLOR,
+                )
+            ],
+        ),
         _line_entity("field-border", geometry.frame_id, timestamp, border_loop_mm(geometry), 0.02, FIELD_LINE_COLOR),
         _line_entity(
             "field-center-line", geometry.frame_id, timestamp, center_line_mm(geometry), 0.012, FIELD_SECONDARY_COLOR
@@ -116,7 +134,7 @@ def build_path_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
                 lines=[
                     LinePrimitive(
                         thickness=0.03,
-        scale_invariant=True,
+                        scale_invariant=True,
                         points=points,
                         color=PATH_COLOR,
                     )
@@ -216,7 +234,7 @@ def _line_entity(
         lines=[
             LinePrimitive(
                 thickness=thickness_m,
-                scale_invariant=False,
+                scale_invariant=True,
                 points=[_point_from_mm(x_mm, y_mm, z_m=0.0) for x_mm, y_mm in points_mm],
                 color=color,
             )
