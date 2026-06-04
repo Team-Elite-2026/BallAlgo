@@ -1,8 +1,11 @@
 #include "motion/MotionPlanner.hpp"
 
 #include "config.hpp"
+#include "motion/MotionLimits.hpp"
 #include "motion/StrikePose.hpp"
+#include "vision/VisionMath.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 
@@ -16,14 +19,27 @@ int headingToBin(float angleDeg, int bins) {
   return static_cast<int>(wrapped / stepDeg) % bins;
 }
 
-float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
-  return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
-}
-
 float wrapAngleDeg(float angleDeg) {
   float wrapped = std::fmod(angleDeg + 180.f, 360.f);
   if (wrapped < 0) wrapped += 360.f;
   return wrapped - 180.f;
+}
+
+float profileDurationS(const std::vector<ProfileSample>& profile) {
+  if (profile.size() < 2) return 0.f;
+  float durationS = 0.f;
+  for (size_t i = 0; i + 1 < profile.size(); ++i) {
+    const float dsM = std::max(0.f, profile[i + 1].sMm - profile[i].sMm) / 1000.f;
+    if (dsM <= 1e-6f) continue;
+    const float avgV = 0.5f * (profile[i].v + profile[i + 1].v);
+    if (avgV > 0.02f) {
+      durationS += dsM / avgV;
+      continue;
+    }
+    const float aMax = motion::aMaxDir(profile[i].phi, config::kAMaxX, config::kAMaxY);
+    durationS += std::sqrt(2.f * dsM / std::max(0.1f, aMax));
+  }
+  return durationS;
 }
 
 void fillStopChunkIfEmpty(PlannedChunk& chunk) {
@@ -32,11 +48,30 @@ void fillStopChunkIfEmpty(PlannedChunk& chunk) {
   chunk.actions.assign(config::kChunkMaxActions, stop);
 }
 
+void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
+                           float headingDeg) {
+  if (!defensePose.usesInterceptVelocity || chunk.actions.empty()) return;
+  float vxBody = 0.f;
+  float vyBody = 0.f;
+  fieldVelToBody(defensePose.targetVxFieldMps * 1000.f, defensePose.targetVyFieldMps * 1000.f,
+                 headingDeg, vxBody, vyBody);
+  const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
+  for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
+       i < static_cast<int>(chunk.actions.size()); ++i) {
+    chunk.actions[static_cast<size_t>(i)].vx = vxBody;
+    chunk.actions[static_cast<size_t>(i)].vy = vyBody;
+    chunk.actions[static_cast<size_t>(i)].omega = defensePose.targetOmegaRadS;
+    chunk.actions[static_cast<size_t>(i)].ax = 0.f;
+    chunk.actions[static_cast<size_t>(i)].ay = 0.f;
+    chunk.actions[static_cast<size_t>(i)].alpha = 0.f;
+  }
+}
+
 void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, float goalYMm,
                         float goalHeadingDeg, AStar3D& astar, HermiteSpline& spline,
                         VelocityProfile& profiler, PlannedChunk& chunk,
                         std::vector<Waypoint3>* waypoints, std::vector<PathSample>* path,
-                        std::vector<ProfileSample>* profile) {
+                        std::vector<ProfileSample>* profile, float* astarCostS = nullptr) {
   int st = headingToBin(headingDeg, config::kAstarHeadingBins);
   int gt = headingToBin(goalHeadingDeg, config::kAstarHeadingBins);
 
@@ -48,7 +83,7 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
   std::vector<PathSample>& pathRef = path != nullptr ? *path : localPath;
   std::vector<ProfileSample>& profileRef = profile != nullptr ? *profile : localProfile;
 
-  astar.plan(pose.xMm, pose.yMm, st, goalXMm, goalYMm, gt, waypointsRef);
+  astar.plan(pose.xMm, pose.yMm, st, goalXMm, goalYMm, gt, waypointsRef, astarCostS);
   pathRef = spline.fit(waypointsRef, goalHeadingDeg);
 
   float vStart = 0;
@@ -129,18 +164,46 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
   }
 
   debug.usedStrikePosePlan = true;
-  strikePoseBody(ball.xM, ball.yM, goalDeg, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM);
-  ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM, headingDeg,
-              debug.targetXMm, debug.targetYMm);
-  ballFieldMm(pose.xMm, pose.yMm, ball.xM, ball.yM, headingDeg, debug.ballFieldXMm,
-              debug.ballFieldYMm);
-  debug.targetHeadingDeg =
-      headingBetweenPointsDeg(debug.targetXMm, debug.targetYMm, debug.ballFieldXMm, debug.ballFieldYMm);
-  debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
-  debug.withinTargetTolerance = debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
-  buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
-                     astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
-                     &debug.profile);
+  const float maxPlanSpeedMps = std::max(config::kVMaxX, config::kVMaxY);
+  float interceptTimeS =
+      std::hypot(ball.xM, ball.yM) / std::max(0.05f, maxPlanSpeedMps);
+  interceptTimeS = std::clamp(interceptTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
+
+  for (int iteration = 0; iteration < config::kStrikeInterceptMaxIterations; ++iteration) {
+    const PredictedBallPose predicted =
+        predictBallBody(ball.xM, ball.yM, ball.vx, ball.vy, interceptTimeS);
+    debug.interceptTimeS = interceptTimeS;
+    debug.interceptIterations = iteration + 1;
+    debug.predictedBallBodyXM = predicted.xM;
+    debug.predictedBallBodyYM = predicted.yM;
+    debug.predictedBallBodyVXMps = predicted.vx;
+    debug.predictedBallBodyVYMps = predicted.vy;
+
+    strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
+                   debug.strikeTargetBodyYM);
+    ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
+                headingDeg, debug.targetXMm, debug.targetYMm);
+    ballFieldMm(pose.xMm, pose.yMm, predicted.xM, predicted.yM, headingDeg, debug.ballFieldXMm,
+                debug.ballFieldYMm);
+    debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
+    debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
+    debug.withinTargetTolerance =
+        debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+
+    float astarCostS = 0.f;
+    buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
+                       astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
+                       &debug.profile, &astarCostS);
+    const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(debug.profile);
+    const float nextInterceptTimeS =
+        std::clamp(pathTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
+    if (std::fabs(nextInterceptTimeS - interceptTimeS) <= config::kStrikeInterceptConvergeS ||
+        pathTimeS >= config::kStrikeInterceptMaxTimeS ||
+        iteration + 1 == config::kStrikeInterceptMaxIterations) {
+      break;
+    }
+    interceptTimeS = nextInterceptTimeS;
+  }
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
 }
@@ -148,6 +211,66 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
 PlannedChunk MotionPlanner::planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
                                        float headingDeg) {
   return debugPlanToPose(pose, goal, headingDeg).chunk;
+}
+
+PlannedChunk MotionPlanner::planDefense(const PoseState& pose, const BallState& ball,
+                                        float headingDeg,
+                                        const DefenseFieldTarget& defendedGoal) {
+  return debugPlanDefense(pose, ball, headingDeg, defendedGoal).chunk;
+}
+
+DefensePlanDebug MotionPlanner::debugPlanDefense(const PoseState& pose, const BallState& ball,
+                                                 float headingDeg,
+                                                 const DefenseFieldTarget& defendedGoal) {
+  DefensePlanDebug debug;
+  debug.startPose = pose;
+  debug.ball = ball;
+  debug.defendedGoal = defendedGoal;
+  debug.startHeadingDeg = headingDeg;
+  debug.chunk.trajectoryId = nextTrajId();
+  debug.chunk.dtMs = config::kChunkDtMs;
+  debug.chunk.startTimePi = nowPiUs() + config::kSerialLatencyMarginUs;
+
+  if (!pose.valid || !ball.visible) {
+    fillStopChunkIfEmpty(debug.chunk);
+    return debug;
+  }
+
+  DefensePoseResult initialDefensePose =
+      computeDefensePose(pose, ball, headingDeg, defendedGoal, {}, 0.f);
+  if (!initialDefensePose.valid) {
+    fillStopChunkIfEmpty(debug.chunk);
+    return debug;
+  }
+
+  PlannedChunk initialChunk = debug.chunk;
+  std::vector<Waypoint3> initialWaypoints;
+  std::vector<PathSample> initialPath;
+  std::vector<ProfileSample> initialProfile;
+  float astarCostS = 0.f;
+  buildChunkToTarget(pose, headingDeg, initialDefensePose.targetXMm,
+                     initialDefensePose.targetYMm, initialDefensePose.targetHeadingDeg, astar_,
+                     spline_, profiler_, initialChunk, &initialWaypoints, &initialPath,
+                     &initialProfile, &astarCostS);
+  const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(initialProfile);
+
+  debug.defensePose =
+      computeDefensePose(pose, ball, headingDeg, defendedGoal, initialWaypoints, pathTimeS);
+  if (!debug.defensePose.valid) {
+    fillStopChunkIfEmpty(debug.chunk);
+    return debug;
+  }
+
+  debug.targetErrMm =
+      std::hypot(debug.defensePose.targetXMm - pose.xMm, debug.defensePose.targetYMm - pose.yMm);
+  debug.withinTargetTolerance = debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+
+  buildChunkToTarget(pose, headingDeg, debug.defensePose.targetXMm, debug.defensePose.targetYMm,
+                     debug.defensePose.targetHeadingDeg, astar_, spline_, profiler_, debug.chunk,
+                     &debug.waypoints, &debug.path, &debug.profile);
+  applyTerminalVelocity(debug.chunk, debug.defensePose, headingDeg);
+  fillStopChunkIfEmpty(debug.chunk);
+  return debug;
 }
 
 CommandedPosePlanDebug MotionPlanner::debugPlanToPose(const PoseState& pose,

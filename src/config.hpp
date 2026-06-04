@@ -58,6 +58,16 @@ inline constexpr float kBallKfMeasVar = 0.02f;
 inline constexpr float kBallKfProcessPosVar = 0.5f;
 inline constexpr float kBallKfProcessVelVar = 2.f;
 inline constexpr float kStrikeOffsetM = 0.12f;
+inline constexpr float kBallPredictionDamping = 0.96f;
+inline constexpr float kStrikeInterceptMaxTimeS = 2.0f;
+inline constexpr int kStrikeInterceptMaxIterations = 5;
+inline constexpr float kStrikeInterceptConvergeS = 0.025f;
+inline constexpr float kDefenseGoalLineYMinCm = 40.f;
+inline constexpr float kDefenseGoalLineXMaxCm = 55.f;
+inline constexpr float kDefenseGoalLineQuadraticC = 2000.f;
+inline constexpr float kDefenseFutureBallMaxTimeS = 0.5f;
+inline constexpr float kDefenseImpactMarginS = 0.08f;
+inline constexpr float kOmegaMaxRadS = 6.0f;
 inline constexpr double kBallMaxStaleS = 0.22;
 
 inline constexpr int kChunkDtMs = 4;

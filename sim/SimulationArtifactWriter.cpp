@@ -226,12 +226,24 @@ void writeReplans(std::ofstream& out, const std::vector<ReplanResult>& replans, 
       out << pad << "    \"used_strike_pose_plan\": "
           << (replan.productionDebug.usedStrikePosePlan ? "true" : "false") << ",\n";
       out << pad << "    \"goal_deg\": " << replan.productionDebug.goalDeg << ",\n";
+      out << pad << "    \"intercept_time_s\": " << replan.productionDebug.interceptTimeS
+          << ",\n";
+      out << pad << "    \"intercept_iterations\": "
+          << replan.productionDebug.interceptIterations << ",\n";
       out << pad << "    \"target_error_mm\": " << replan.productionDebug.targetErrMm << ",\n";
       out << pad << "    \"within_target_tolerance\": "
           << (replan.productionDebug.withinTargetTolerance ? "true" : "false") << ",\n";
       out << pad << "    \"strike_target_body\": {\n";
       out << pad << "      \"x_m\": " << replan.productionDebug.strikeTargetBodyXM << ",\n";
       out << pad << "      \"y_m\": " << replan.productionDebug.strikeTargetBodyYM << "\n";
+      out << pad << "    },\n";
+      out << pad << "    \"predicted_ball_body\": {\n";
+      out << pad << "      \"x_m\": " << replan.productionDebug.predictedBallBodyXM << ",\n";
+      out << pad << "      \"y_m\": " << replan.productionDebug.predictedBallBodyYM << ",\n";
+      out << pad << "      \"vx_m_s\": " << replan.productionDebug.predictedBallBodyVXMps
+          << ",\n";
+      out << pad << "      \"vy_m_s\": " << replan.productionDebug.predictedBallBodyVYMps
+          << "\n";
       out << pad << "    },\n";
       out << pad << "    \"ball_field\": {\n";
       out << pad << "      \"x_mm\": " << replan.productionDebug.ballFieldXMm << ",\n";

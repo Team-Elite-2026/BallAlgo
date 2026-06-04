@@ -51,7 +51,7 @@ float AStar3D::heuristic(int ix, int iy, int it, int gx, int gy, int gt) const {
 }
 
 bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gtheta,
-                   std::vector<Waypoint3>& out) {
+                   std::vector<Waypoint3>& out, float* costS) {
   out.clear();
   auto toCell = [&](float x, float y) {
     return std::pair{
@@ -119,10 +119,12 @@ bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gthet
     }
   }
   if (parent_[goal] < 0 && goal != start) {
+    if (costS != nullptr) *costS = heuristic(six, siy, st, gix, giy, gt);
     out.push_back({sx, sy, static_cast<float>(st * 360 / hBins_)});
     out.push_back({gx, gy, static_cast<float>(gt * 360 / hBins_)});
     return true;
   }
+  if (costS != nullptr) *costS = gScore_[goal];
   std::vector<int> chain;
   for (int c = goal; c >= 0; c = parent_[c]) chain.push_back(c);
   for (auto it = chain.rbegin(); it != chain.rend(); ++it) {

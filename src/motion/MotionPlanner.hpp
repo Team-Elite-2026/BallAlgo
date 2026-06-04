@@ -3,6 +3,7 @@
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
 #include "motion/AStar3D.hpp"
+#include "motion/DefensePose.hpp"
 #include "motion/HermiteSpline.hpp"
 #include "motion/VelocityProfile.hpp"
 
@@ -46,13 +47,33 @@ struct BallPlanDebug {
   bool usedCenterFallback = false;
   bool usedBodyChaseFallback = false;
   bool usedStrikePosePlan = false;
+  float interceptTimeS = 0;
+  int interceptIterations = 0;
   float strikeTargetBodyXM = 0;
   float strikeTargetBodyYM = 0;
+  float predictedBallBodyXM = 0;
+  float predictedBallBodyYM = 0;
+  float predictedBallBodyVXMps = 0;
+  float predictedBallBodyVYMps = 0;
   float ballFieldXMm = 0;
   float ballFieldYMm = 0;
   float targetXMm = 0;
   float targetYMm = 0;
   float targetHeadingDeg = 0;
+  float targetErrMm = 0;
+  bool withinTargetTolerance = false;
+  PlannedChunk chunk;
+  std::vector<Waypoint3> waypoints;
+  std::vector<PathSample> path;
+  std::vector<ProfileSample> profile;
+};
+
+struct DefensePlanDebug {
+  PoseState startPose;
+  BallState ball;
+  DefenseFieldTarget defendedGoal;
+  DefensePoseResult defensePose;
+  float startHeadingDeg = 0;
   float targetErrMm = 0;
   bool withinTargetTolerance = false;
   PlannedChunk chunk;
@@ -72,6 +93,11 @@ class MotionPlanner {
                           float headingDeg);
   CommandedPosePlanDebug debugPlanToPose(const PoseState& pose, const CommandedPoseGoal& goal,
                                          float headingDeg);
+  PlannedChunk planDefense(const PoseState& pose, const BallState& ball, float headingDeg,
+                           const DefenseFieldTarget& defendedGoal);
+  DefensePlanDebug debugPlanDefense(const PoseState& pose, const BallState& ball,
+                                    float headingDeg,
+                                    const DefenseFieldTarget& defendedGoal);
   uint64_t nextTrajId();
 
  private:
