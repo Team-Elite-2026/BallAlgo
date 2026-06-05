@@ -424,4 +424,5 @@ CMakeFiles/motion_planning.dir/src/main.cpp.o: \
  /usr/include/eigen3/Eigen/src/Eigenvalues/RealQZ.h \
  /usr/include/eigen3/Eigen/src/Eigenvalues/MatrixBaseEigenvalues.h \
  /home/aniket/BallAlgo/MotionPlanningTesting/src/astar.hpp \
- /home/aniket/BallAlgo/MotionPlanningTesting/src/hermite_spline.hpp
+ /home/aniket/BallAlgo/MotionPlanningTesting/src/hermite_spline.hpp \
+ /home/aniket/BallAlgo/MotionPlanningTesting/src/velocity_profiler.hpp

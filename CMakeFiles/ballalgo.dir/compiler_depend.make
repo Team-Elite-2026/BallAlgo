@@ -4931,18 +4931,14 @@ ballalgo: /lib/aarch64-linux-gnu/libGLX.so.0 \
   CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o \
   CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o \
   CMakeFiles/ballalgo.dir/src/main.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o \
   CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o \
   CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o \
-  CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o
+  CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o \
+  libballalgo_motion_core.a
 
 
 CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o:
@@ -4953,15 +4949,11 @@ CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o:
 
-CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o:
-
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o:
-
-CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
 
@@ -5417,8 +5409,6 @@ CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o:
 
 /usr/include/eigen3/Eigen/src/Core/Dot.h:
 
-CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o:
-
 /usr/lib/aarch64-linux-gnu/libopencv_viz.so.4.10.0:
 
 /usr/include/c++/14/bits/ostream_insert.h:
@@ -5798,6 +5788,8 @@ src/camera/CameraCapture.cpp:
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o:
 
 /usr/include/opencv4/opencv2/core/ovx.hpp:
+
+libballalgo_motion_core.a:
 
 /usr/include/c++/14/bits/specfun.h:
 
@@ -6277,8 +6269,6 @@ src/io/GpioLidar.cpp:
 
 /usr/include/eigen3/Eigen/src/Core/Transpositions.h:
 
-CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o:
-
 /usr/include/c++/14/iterator:
 
 /usr/include/eigen3/Eigen/SVD:
@@ -6384,8 +6374,6 @@ src/vision/VisionMath.cpp:
 /usr/include/opencv4/opencv2/core/cvstd_wrapper.hpp:
 
 /usr/include/eigen3/Eigen/src/Core/Reverse.h:
-
-CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o:
 
 /usr/include/eigen3/Eigen/src/Core/Select.h:
 

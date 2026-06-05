@@ -15,6 +15,7 @@ add_executable(motion_planning
     src/robot_ekf.cpp
     src/astar.cpp
     src/hermite_spline.cpp
+    src/velocity_profiler.cpp
 )
 
 target_include_directories(motion_planning PRIVATE src)

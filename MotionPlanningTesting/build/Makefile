@@ -273,6 +273,30 @@ src/robot_ekf.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/motion_planning.dir/build.make CMakeFiles/motion_planning.dir/src/robot_ekf.cpp.s
 .PHONY : src/robot_ekf.cpp.s
 
+src/velocity_profiler.o: src/velocity_profiler.cpp.o
+.PHONY : src/velocity_profiler.o
+
+# target to build an object file
+src/velocity_profiler.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/motion_planning.dir/build.make CMakeFiles/motion_planning.dir/src/velocity_profiler.cpp.o
+.PHONY : src/velocity_profiler.cpp.o
+
+src/velocity_profiler.i: src/velocity_profiler.cpp.i
+.PHONY : src/velocity_profiler.i
+
+# target to preprocess a source file
+src/velocity_profiler.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/motion_planning.dir/build.make CMakeFiles/motion_planning.dir/src/velocity_profiler.cpp.i
+.PHONY : src/velocity_profiler.cpp.i
+
+src/velocity_profiler.s: src/velocity_profiler.cpp.s
+.PHONY : src/velocity_profiler.s
+
+# target to generate assembly for a file
+src/velocity_profiler.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/motion_planning.dir/build.make CMakeFiles/motion_planning.dir/src/velocity_profiler.cpp.s
+.PHONY : src/velocity_profiler.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -300,6 +324,9 @@ help:
 	@echo "... src/robot_ekf.o"
 	@echo "... src/robot_ekf.i"
 	@echo "... src/robot_ekf.s"
+	@echo "... src/velocity_profiler.o"
+	@echo "... src/velocity_profiler.i"
+	@echo "... src/velocity_profiler.s"
 .PHONY : help
 
 

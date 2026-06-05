@@ -33,6 +33,38 @@ struct SplinePoint {
     double heading;  // degrees, 0° = facing +y, 90° = facing +x, clockwise
 };
 
+// Evaluated spline state and derivatives at a single s value.
+// All positional quantities in metres; angular in radians; kappa in 1/m.
+struct SplineDerivState {
+    double x, y;             // position (m)
+    double theta;            // orientation, radians, unwrapped
+    double dx_ds, dy_ds;     // ∂x/∂s, ∂y/∂s  (m / s-unit)
+    double dtheta_ds;        // ∂θ/∂s          (rad / s-unit)
+    double d2x_ds2, d2y_ds2; // ∂²x/∂s²        (m / s-unit²)
+    double d2theta_ds2;      // ∂²θ/∂s²        (rad / s-unit²)
+    double kappa;            // curvature       (1/m)
+};
+
+// Internal per-node storage used by HermiteSplineData::evalState().
+struct HermiteNode {
+    double wx, wy;    // world position (cm)
+    double theta_rad; // orientation, radians, unwrapped across path
+    double ptx, pty;  // position tangent w.r.t. local segment t  (cm)
+    double pttheta;   // theta tangent   w.r.t. local segment t  (rad)
+};
+
+// Full spline representation: discrete samples (for visualisation/output)
+// plus the raw node data needed for continuous analytical evaluation.
+struct HermiteSplineData {
+    std::vector<SplinePoint> samples;  // cm / degrees — backward-compatible
+    std::vector<HermiteNode> nodes;    // one entry per A* node
+    int num_segments = 0;
+
+    // Evaluate position, heading, first/second derivatives, and curvature
+    // at global parameter s ∈ [0, 1].  s is clamped to [0, 1].
+    SplineDerivState evalState(double s) const;
+};
+
 class HermiteSpline {
 public:
     static constexpr int DEFAULT_SAMPLES = 5; // output points per A* segment
@@ -57,6 +89,20 @@ public:
                                           double vy_start = 0.0,
                                           double vx_end   = 0.0,
                                           double vy_end   = 0.0);
+
+    /**
+     * Like build(), but also stores per-node data so the spline can be
+     * evaluated analytically at any s ∈ [0,1] via HermiteSplineData::evalState().
+     *
+     * Theta is Hermite-interpolated (cubic) using Catmull-Rom tangents at
+     * interior nodes and one-sided differences at the endpoints.
+     */
+    static HermiteSplineData buildData(const AStarResult& result,
+                                       int    samples_per_segment = DEFAULT_SAMPLES,
+                                       double vx_start = 0.0,
+                                       double vy_start = 0.0,
+                                       double vx_end   = 0.0,
+                                       double vy_end   = 0.0);
 
     /**
      * Evaluate one cubic Hermite segment at t ∈ [0, 1].

@@ -4947,16 +4947,12 @@ ballalgo
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/main.cpp.o
- /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o
- /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o
- /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o
- /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o
- /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o
  /home/aniket/BallAlgo/CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o
+ /home/aniket/BallAlgo/libballalgo_motion_core.a
 

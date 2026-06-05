@@ -175,6 +175,19 @@ ballalgo_motion_core/fast:
 .PHONY : ballalgo_motion_core/fast
 
 #=============================================================================
+# Target rules for targets named ballalgo_sim_core
+
+# Build rule for target.
+ballalgo_sim_core: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ballalgo_sim_core
+.PHONY : ballalgo_sim_core
+
+# fast build rule for target.
+ballalgo_sim_core/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/build
+.PHONY : ballalgo_sim_core/fast
+
+#=============================================================================
 # Target rules for targets named ballalgo
 
 # Build rule for target.
@@ -188,6 +201,19 @@ ballalgo/fast:
 .PHONY : ballalgo/fast
 
 #=============================================================================
+# Target rules for targets named ballalgo_sim
+
+# Build rule for target.
+ballalgo_sim: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ballalgo_sim
+.PHONY : ballalgo_sim
+
+# fast build rule for target.
+ballalgo_sim/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim.dir/build.make CMakeFiles/ballalgo_sim.dir/build
+.PHONY : ballalgo_sim/fast
+
+#=============================================================================
 # Target rules for targets named ballalgo_planner_bench
 
 # Build rule for target.
@@ -199,6 +225,198 @@ ballalgo_planner_bench: cmake_check_build_system
 ballalgo_planner_bench/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_planner_bench.dir/build.make CMakeFiles/ballalgo_planner_bench.dir/build
 .PHONY : ballalgo_planner_bench/fast
+
+sim/SimulationArtifactWriter.o: sim/SimulationArtifactWriter.cpp.o
+.PHONY : sim/SimulationArtifactWriter.o
+
+# target to build an object file
+sim/SimulationArtifactWriter.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationArtifactWriter.cpp.o
+.PHONY : sim/SimulationArtifactWriter.cpp.o
+
+sim/SimulationArtifactWriter.i: sim/SimulationArtifactWriter.cpp.i
+.PHONY : sim/SimulationArtifactWriter.i
+
+# target to preprocess a source file
+sim/SimulationArtifactWriter.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationArtifactWriter.cpp.i
+.PHONY : sim/SimulationArtifactWriter.cpp.i
+
+sim/SimulationArtifactWriter.s: sim/SimulationArtifactWriter.cpp.s
+.PHONY : sim/SimulationArtifactWriter.s
+
+# target to generate assembly for a file
+sim/SimulationArtifactWriter.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationArtifactWriter.cpp.s
+.PHONY : sim/SimulationArtifactWriter.cpp.s
+
+sim/SimulationCli.o: sim/SimulationCli.cpp.o
+.PHONY : sim/SimulationCli.o
+
+# target to build an object file
+sim/SimulationCli.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCli.cpp.o
+.PHONY : sim/SimulationCli.cpp.o
+
+sim/SimulationCli.i: sim/SimulationCli.cpp.i
+.PHONY : sim/SimulationCli.i
+
+# target to preprocess a source file
+sim/SimulationCli.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCli.cpp.i
+.PHONY : sim/SimulationCli.cpp.i
+
+sim/SimulationCli.s: sim/SimulationCli.cpp.s
+.PHONY : sim/SimulationCli.s
+
+# target to generate assembly for a file
+sim/SimulationCli.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCli.cpp.s
+.PHONY : sim/SimulationCli.cpp.s
+
+sim/SimulationCore.o: sim/SimulationCore.cpp.o
+.PHONY : sim/SimulationCore.o
+
+# target to build an object file
+sim/SimulationCore.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCore.cpp.o
+.PHONY : sim/SimulationCore.cpp.o
+
+sim/SimulationCore.i: sim/SimulationCore.cpp.i
+.PHONY : sim/SimulationCore.i
+
+# target to preprocess a source file
+sim/SimulationCore.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCore.cpp.i
+.PHONY : sim/SimulationCore.cpp.i
+
+sim/SimulationCore.s: sim/SimulationCore.cpp.s
+.PHONY : sim/SimulationCore.s
+
+# target to generate assembly for a file
+sim/SimulationCore.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCore.cpp.s
+.PHONY : sim/SimulationCore.cpp.s
+
+sim/SimulationMath.o: sim/SimulationMath.cpp.o
+.PHONY : sim/SimulationMath.o
+
+# target to build an object file
+sim/SimulationMath.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationMath.cpp.o
+.PHONY : sim/SimulationMath.cpp.o
+
+sim/SimulationMath.i: sim/SimulationMath.cpp.i
+.PHONY : sim/SimulationMath.i
+
+# target to preprocess a source file
+sim/SimulationMath.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationMath.cpp.i
+.PHONY : sim/SimulationMath.cpp.i
+
+sim/SimulationMath.s: sim/SimulationMath.cpp.s
+.PHONY : sim/SimulationMath.s
+
+# target to generate assembly for a file
+sim/SimulationMath.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationMath.cpp.s
+.PHONY : sim/SimulationMath.cpp.s
+
+sim/SimulationRunner.o: sim/SimulationRunner.cpp.o
+.PHONY : sim/SimulationRunner.o
+
+# target to build an object file
+sim/SimulationRunner.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationRunner.cpp.o
+.PHONY : sim/SimulationRunner.cpp.o
+
+sim/SimulationRunner.i: sim/SimulationRunner.cpp.i
+.PHONY : sim/SimulationRunner.i
+
+# target to preprocess a source file
+sim/SimulationRunner.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationRunner.cpp.i
+.PHONY : sim/SimulationRunner.cpp.i
+
+sim/SimulationRunner.s: sim/SimulationRunner.cpp.s
+.PHONY : sim/SimulationRunner.s
+
+# target to generate assembly for a file
+sim/SimulationRunner.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim_core.dir/build.make CMakeFiles/ballalgo_sim_core.dir/sim/SimulationRunner.cpp.s
+.PHONY : sim/SimulationRunner.cpp.s
+
+sim/ballalgo_sim.o: sim/ballalgo_sim.cpp.o
+.PHONY : sim/ballalgo_sim.o
+
+# target to build an object file
+sim/ballalgo_sim.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim.dir/build.make CMakeFiles/ballalgo_sim.dir/sim/ballalgo_sim.cpp.o
+.PHONY : sim/ballalgo_sim.cpp.o
+
+sim/ballalgo_sim.i: sim/ballalgo_sim.cpp.i
+.PHONY : sim/ballalgo_sim.i
+
+# target to preprocess a source file
+sim/ballalgo_sim.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim.dir/build.make CMakeFiles/ballalgo_sim.dir/sim/ballalgo_sim.cpp.i
+.PHONY : sim/ballalgo_sim.cpp.i
+
+sim/ballalgo_sim.s: sim/ballalgo_sim.cpp.s
+.PHONY : sim/ballalgo_sim.s
+
+# target to generate assembly for a file
+sim/ballalgo_sim.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_sim.dir/build.make CMakeFiles/ballalgo_sim.dir/sim/ballalgo_sim.cpp.s
+.PHONY : sim/ballalgo_sim.cpp.s
+
+src/FoxGloveSim/FoxgloveConfig.o: src/FoxGloveSim/FoxgloveConfig.cpp.o
+.PHONY : src/FoxGloveSim/FoxgloveConfig.o
+
+# target to build an object file
+src/FoxGloveSim/FoxgloveConfig.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o
+.PHONY : src/FoxGloveSim/FoxgloveConfig.cpp.o
+
+src/FoxGloveSim/FoxgloveConfig.i: src/FoxGloveSim/FoxgloveConfig.cpp.i
+.PHONY : src/FoxGloveSim/FoxgloveConfig.i
+
+# target to preprocess a source file
+src/FoxGloveSim/FoxgloveConfig.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.i
+.PHONY : src/FoxGloveSim/FoxgloveConfig.cpp.i
+
+src/FoxGloveSim/FoxgloveConfig.s: src/FoxGloveSim/FoxgloveConfig.cpp.s
+.PHONY : src/FoxGloveSim/FoxgloveConfig.s
+
+# target to generate assembly for a file
+src/FoxGloveSim/FoxgloveConfig.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.s
+.PHONY : src/FoxGloveSim/FoxgloveConfig.cpp.s
+
+src/FoxGloveSim/FoxgloveTelemetryPublisher.o: src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.o
+
+# target to build an object file
+src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o
+
+src/FoxGloveSim/FoxgloveTelemetryPublisher.i: src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.i
+
+# target to preprocess a source file
+src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i
+
+src/FoxGloveSim/FoxgloveTelemetryPublisher.s: src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.s
+
+# target to generate assembly for a file
+src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s
+.PHONY : src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s
 
 src/camera/CameraCapture.o: src/camera/CameraCapture.cpp.o
 .PHONY : src/camera/CameraCapture.o
@@ -722,6 +940,32 @@ help:
 	@echo "... ballalgo"
 	@echo "... ballalgo_motion_core"
 	@echo "... ballalgo_planner_bench"
+	@echo "... ballalgo_sim"
+	@echo "... ballalgo_sim_core"
+	@echo "... sim/SimulationArtifactWriter.o"
+	@echo "... sim/SimulationArtifactWriter.i"
+	@echo "... sim/SimulationArtifactWriter.s"
+	@echo "... sim/SimulationCli.o"
+	@echo "... sim/SimulationCli.i"
+	@echo "... sim/SimulationCli.s"
+	@echo "... sim/SimulationCore.o"
+	@echo "... sim/SimulationCore.i"
+	@echo "... sim/SimulationCore.s"
+	@echo "... sim/SimulationMath.o"
+	@echo "... sim/SimulationMath.i"
+	@echo "... sim/SimulationMath.s"
+	@echo "... sim/SimulationRunner.o"
+	@echo "... sim/SimulationRunner.i"
+	@echo "... sim/SimulationRunner.s"
+	@echo "... sim/ballalgo_sim.o"
+	@echo "... sim/ballalgo_sim.i"
+	@echo "... sim/ballalgo_sim.s"
+	@echo "... src/FoxGloveSim/FoxgloveConfig.o"
+	@echo "... src/FoxGloveSim/FoxgloveConfig.i"
+	@echo "... src/FoxGloveSim/FoxgloveConfig.s"
+	@echo "... src/FoxGloveSim/FoxgloveTelemetryPublisher.o"
+	@echo "... src/FoxGloveSim/FoxgloveTelemetryPublisher.i"
+	@echo "... src/FoxGloveSim/FoxgloveTelemetryPublisher.s"
 	@echo "... src/camera/CameraCapture.o"
 	@echo "... src/camera/CameraCapture.i"
 	@echo "... src/camera/CameraCapture.s"

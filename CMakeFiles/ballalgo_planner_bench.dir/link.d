@@ -3,6 +3,7 @@ ballalgo_planner_bench: \
   /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/crti.o \
   /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o \
   CMakeFiles/ballalgo_planner_bench.dir/testing/planner_bench.cpp.o \
+  libballalgo_sim_core.a \
   libballalgo_motion_core.a \
   /usr/lib/gcc/aarch64-linux-gnu/14/libstdc++.so \
   /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/libm.so \
@@ -39,6 +40,8 @@ ballalgo_planner_bench: \
 /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o:
 
 CMakeFiles/ballalgo_planner_bench.dir/testing/planner_bench.cpp.o:
+
+libballalgo_sim_core.a:
 
 libballalgo_motion_core.a:
 

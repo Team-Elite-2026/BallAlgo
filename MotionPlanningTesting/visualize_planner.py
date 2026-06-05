@@ -23,9 +23,12 @@ import os
 import subprocess
 import sys
 
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.cm as cm
 from matplotlib.patches import Circle
+from matplotlib.collections import LineCollection
 
 # ── Visual constants ──────────────────────────────────────────────────────────
 
@@ -154,7 +157,8 @@ def draw_scenario(ax, data, C):
     xs         = [p[0] for p in path_pts]
     ys         = [p[1] for p in path_pts]
 
-    spline_pts = data['spline']
+    spline_pts    = data['spline']
+    profile_speeds = data.get('profile', [])
     sx = [p['x']       for p in spline_pts]
     sy = [p['y']       for p in spline_pts]
     sh = [p['heading'] for p in spline_pts]
@@ -188,8 +192,30 @@ def draw_scenario(ax, data, C):
     ax.plot(xs, ys, '--', color=C_ASTAR, lw=0.9, alpha=0.55, zorder=5)
     ax.scatter(xs, ys, s=12, color=C_ASTAR, alpha=0.75, zorder=6)
 
-    # Hermite spline (C++ output — S'(0) already enforced with vel[] values)
-    ax.plot(sx, sy, '-', color=C_SPLINE, lw=2.2, zorder=7, solid_capstyle='round')
+    # Hermite spline — colored by instantaneous speed when profile data is present,
+    # otherwise drawn as a plain line.
+    if profile_speeds and len(profile_speeds) == len(sx):
+        speeds = np.array(profile_speeds, dtype=float)
+        v_max  = speeds.max() if speeds.max() > 0 else 1.0
+
+        pts  = np.array([sx, sy]).T.reshape(-1, 1, 2)
+        segs = np.concatenate([pts[:-1], pts[1:]], axis=1)
+        seg_speeds = (speeds[:-1] + speeds[1:]) / 2.0  # midpoint speed per segment
+
+        lc = LineCollection(segs, cmap='plasma', linewidth=2.5, zorder=7,
+                            capstyle='round', joinstyle='round')
+        lc.set_array(seg_speeds)
+        lc.set_clim(0, v_max)
+        ax.add_collection(lc)
+
+        cbar = ax.get_figure().colorbar(lc, ax=ax, shrink=0.55, pad=0.02,
+                                        orientation='vertical')
+        cbar.set_label('speed (m/s)', color='#aaaaaa', fontsize=6)
+        cbar.ax.tick_params(colors='#aaaaaa', labelsize=5.5)
+        cbar.ax.yaxis.set_tick_params(color='#555555')
+    else:
+        ax.plot(sx, sy, '-', color=C_SPLINE, lw=2.2, zorder=7,
+                solid_capstyle='round')
 
     # Heading arrows (robot orientation, independent of travel direction)
     alen = 7.0
@@ -270,8 +296,8 @@ legend_items = [
                    label=f'Ball obstacle zone  (r={bcm:.0f} cm)'),
     plt.Line2D([0], [0], c=C_ASTAR, ls='--', marker='o', ms=4,
                label='A* waypoints'),
-    plt.Line2D([0], [0], c=C_SPLINE, lw=2.2,
-               label='Hermite spline  (C1-continuous, C++ computed)'),
+    plt.Line2D([0], [0], c='#ff88ff', lw=2.2,
+               label='Hermite spline  (color = speed, violet=slow → yellow=fast)'),
     plt.Line2D([0], [0], c=C_ARROW, marker='>', ms=5,
                label='Heading arrows  (robot orientation)'),
     mpatches.Patch(fc=C_TARGET, ec='white', lw=0.5,

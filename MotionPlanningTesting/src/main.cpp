@@ -25,6 +25,7 @@
 #include "robot_ekf.hpp"
 #include "astar.hpp"
 #include "hermite_spline.hpp"
+#include "velocity_profiler.hpp"
 
 // ── A* test helpers ───────────────────────────────────────────────────────────
 
@@ -173,7 +174,7 @@ static void runJsonExport() {
     // ═══════════════════════════════════════════════════════════════════════
     struct VelIn { double vx_start, vy_start, vx_end, vy_end; };
     constexpr VelIn vel[N_SCENARIOS] = {
-        /* Sc1: Centre, ball ahead-right  */ {  20,    0,   0,   0 },
+        /* Sc1: Centre, ball ahead-right  */ {  0,    0,   0,   0 },
         /* Sc2: Behind ball, facing right */ {  0,    -10,   0,   0 },
         /* Sc3: Defence goal, facing back */ {  -10,    0,   0,   0 },
         /* Sc4: Right side, ball on left  */ {  -10,    0,   0,   0 },
@@ -182,7 +183,7 @@ static void runJsonExport() {
 
     constexpr Scenario scenarios[N_SCENARIOS] = {
         //  title                             rx   ry   rh   bx   by   gx   gy  appr
-        {"Sc1: Centre, ball ahead-right",      0,  50,   0,   0,   0,  0, 120,  10,
+        {"Sc1: Centre, ball ahead-right",      50,  50,   320,   0,   0,  0, 120,  10,
          vel[0].vx_start, vel[0].vy_start, vel[0].vx_end, vel[0].vy_end},
         {"Sc2: Behind ball, facing right",   -50, -70,  90,  10,  20,  0, 120,  10,
          vel[1].vx_start, vel[1].vy_start, vel[1].vx_end, vel[1].vy_end},
@@ -240,10 +241,19 @@ static void runJsonExport() {
             while (rot < -180.0) rot += 360.0;
         }
 
-        // Hermite spline — boundary tangents = scenario velocity constraints
-        const auto spline = HermiteSpline::build(result, SPLINE_SAMPLES,
-                                                  sc.vx_start, sc.vy_start,
-                                                  sc.vx_end,   sc.vy_end);
+        // Hermite spline + velocity profile
+        const auto sdata = HermiteSpline::buildData(result, SPLINE_SAMPLES,
+                                                     sc.vx_start, sc.vy_start,
+                                                     sc.vx_end,   sc.vy_end);
+        const auto& spline = sdata.samples;
+
+        ProfilerConfig pcfg;
+        pcfg.v_start_mps = static_cast<float>(
+            std::hypot(sc.vx_start, sc.vy_start) * 0.01);  // cm/s → m/s
+        pcfg.v_end_mps  = 0.0f;
+        pcfg.num_steps  = static_cast<int>(sdata.samples.size());
+
+        const auto profile = VelocityProfiler::compute(sdata, pcfg);
 
         std::cout << "    {\n";
         std::cout << "      \"title\":    \"" << sc.title << "\",\n";
@@ -288,7 +298,7 @@ static void runJsonExport() {
 
         // ── Spline block ─────────────────────────────────────────────────────
         if (spline.empty()) {
-            std::cout << "      \"spline\": []\n";
+            std::cout << "      \"spline\": [],\n";
         } else {
             std::cout << "      \"spline\": [\n";
             for (size_t i = 0; i < spline.size(); ++i) {
@@ -298,7 +308,23 @@ static void runJsonExport() {
                 if (i + 1 < spline.size()) std::cout << ",";
                 std::cout << "\n";
             }
-            std::cout << "      ]\n";
+            std::cout << "      ],\n";
+        }
+
+        // ── Velocity profile block ────────────────────────────────────────────
+        // One speed (m/s) per spline sample — used by visualiser to colour the
+        // spline by instantaneous path speed.
+        if (profile.empty()) {
+            std::cout << "      \"profile\": []\n";
+        } else {
+            std::cout << "      \"profile\": [";
+            for (size_t i = 0; i < profile.size(); ++i) {
+                const float spd = std::sqrt(profile[i].vx * profile[i].vx
+                                          + profile[i].vy * profile[i].vy);
+                std::cout << spd;
+                if (i + 1 < profile.size()) std::cout << ", ";
+            }
+            std::cout << "]\n";
         }
 
         std::cout << "    }";

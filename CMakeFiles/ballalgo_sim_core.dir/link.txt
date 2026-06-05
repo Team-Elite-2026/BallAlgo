@@ -1,0 +1,2 @@
+/usr/bin/ar qc libballalgo_sim_core.a CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCore.cpp.o CMakeFiles/ballalgo_sim_core.dir/sim/SimulationCli.cpp.o CMakeFiles/ballalgo_sim_core.dir/sim/SimulationMath.cpp.o CMakeFiles/ballalgo_sim_core.dir/sim/SimulationRunner.cpp.o CMakeFiles/ballalgo_sim_core.dir/sim/SimulationArtifactWriter.cpp.o
+/usr/bin/ranlib libballalgo_sim_core.a
