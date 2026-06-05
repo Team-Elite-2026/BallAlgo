@@ -43,6 +43,7 @@ class FakeRuntimePublisher:
         self.generated_frames = 0
         self.sent_frames = 0
         self.connect_count = 0
+        self.last_connect_error = ""
 
     def _ensure_connected(self) -> bool:
         if self.socket is not None:
@@ -52,11 +53,13 @@ class FakeRuntimePublisher:
             sock.connect(self.cfg.socket_path)
             self.socket = sock
             self.connect_count += 1
+            self.last_connect_error = ""
             return True
-        except (FileNotFoundError, ConnectionRefusedError, OSError):
+        except (FileNotFoundError, ConnectionRefusedError, OSError) as exc:
             if 'sock' in locals():
                 sock.close()
             self.socket = None
+            self.last_connect_error = f"{type(exc).__name__}: {exc}"
             return False
 
     def stop(self, *_args: object) -> None:
@@ -116,7 +119,9 @@ class FakeRuntimePublisher:
 
         print(
             f"Fake runtime scenario={self.cfg.scenario} generated={self.generated_frames} "
-            f"sent={self.sent_frames} connects={self.connect_count}"
+            f"sent={self.sent_frames} connects={self.connect_count} "
+            f"socket_path={self.cfg.socket_path} "
+            f"last_connect_error={self.last_connect_error or 'none'}"
         )
         return self.sent_frames > 0
 
@@ -555,11 +560,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = (repo_root / config_path).resolve()
     cfg = load_config(config_path)
+    print(f"Fake runtime config_path={config_path} socket_path={cfg.socket_path}")
     runtime = FakeRuntimePublisher(
         FakeRuntimeConfig(
             socket_path=cfg.socket_path,
