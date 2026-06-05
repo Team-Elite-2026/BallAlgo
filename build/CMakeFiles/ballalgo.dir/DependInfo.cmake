@@ -8,6 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.cpp" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o.d"
+  "/home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o.d"
   "/home/aniket/BallAlgo/src/camera/CameraCapture.cpp" "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o.d"
   "/home/aniket/BallAlgo/src/estimation/BallKalman.cpp" "CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o.d"
   "/home/aniket/BallAlgo/src/estimation/PoseKalman.cpp" "CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o.d"
@@ -16,15 +18,10 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/aniket/BallAlgo/src/lidar/Ld19Reader.cpp" "CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o.d"
   "/home/aniket/BallAlgo/src/lidar/LidarLocalizer.cpp" "CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o.d"
   "/home/aniket/BallAlgo/src/main.cpp" "CMakeFiles/ballalgo.dir/src/main.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/main.cpp.o.d"
-  "/home/aniket/BallAlgo/src/motion/AStar3D.cpp" "CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o.d"
   "/home/aniket/BallAlgo/src/motion/ActionChunkPublisher.cpp" "CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o.d"
   "/home/aniket/BallAlgo/src/motion/ClockSync.cpp" "CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o.d"
-  "/home/aniket/BallAlgo/src/motion/HermiteSpline.cpp" "CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o.d"
   "/home/aniket/BallAlgo/src/motion/MotionPipeline.cpp" "CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o.d"
-  "/home/aniket/BallAlgo/src/motion/MotionPlanner.cpp" "CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o.d"
   "/home/aniket/BallAlgo/src/motion/Protocol.cpp" "CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o.d"
-  "/home/aniket/BallAlgo/src/motion/StrikePose.cpp" "CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o.d"
-  "/home/aniket/BallAlgo/src/motion/VelocityProfile.cpp" "CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o.d"
   "/home/aniket/BallAlgo/src/vision/SectorTracker.cpp" "CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o.d"
   "/home/aniket/BallAlgo/src/vision/Thresholds.cpp" "CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o.d"
   "/home/aniket/BallAlgo/src/vision/VisionMath.cpp" "CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o.d"
