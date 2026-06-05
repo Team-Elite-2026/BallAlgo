@@ -3,6 +3,8 @@ ballalgo: \
   /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/crti.o \
   /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o \
   CMakeFiles/ballalgo.dir/src/main.cpp.o \
+  CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o \
+  CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o \
   CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o \
   CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o \
   CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o \
@@ -11,17 +13,13 @@ ballalgo: \
   CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o \
   CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o \
   CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o \
-  CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o \
   CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o \
   CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o \
+  libballalgo_motion_core.a \
   /usr/lib/aarch64-linux-gnu/libopencv_stitching.so.4.10.0 \
   /usr/lib/aarch64-linux-gnu/libopencv_alphamat.so.4.10.0 \
   /usr/lib/aarch64-linux-gnu/libopencv_aruco.so.4.10.0 \
@@ -114,6 +112,15 @@ ballalgo: \
   /lib/aarch64-linux-gnu/libyaml-0.so.2 \
   /lib/ld-linux-aarch64.so.1 \
   /lib/aarch64-linux-gnu/libdw.so.1 \
+  /lib/aarch64-linux-gnu/libjpeg.so.62 \
+  /lib/aarch64-linux-gnu/libwebp.so.7 \
+  /lib/aarch64-linux-gnu/libpng16.so.16 \
+  /lib/aarch64-linux-gnu/libgdcmMSFF.so.3.0 \
+  /lib/aarch64-linux-gnu/libtiff.so.6 \
+  /lib/aarch64-linux-gnu/libopenjp2.so.7 \
+  /lib/aarch64-linux-gnu/libOpenEXR-3_1.so.30 \
+  /lib/aarch64-linux-gnu/libgdal.so.36 \
+  /lib/aarch64-linux-gnu/libgdcmDSED.so.3.0 \
   /lib/aarch64-linux-gnu/libz.so.1 \
   /lib/aarch64-linux-gnu/libGLX.so.0 \
   /lib/aarch64-linux-gnu/liblapack.so.3 \
@@ -121,7 +128,6 @@ ballalgo: \
   /lib/aarch64-linux-gnu/libtbb.so.12 \
   /lib/aarch64-linux-gnu/libboost_log.so.1.83.0 \
   /lib/aarch64-linux-gnu/libboost_thread.so.1.83.0 \
-  /lib/aarch64-linux-gnu/libjpeg.so.62 \
   /lib/aarch64-linux-gnu/libp11-kit.so.0 \
   /lib/aarch64-linux-gnu/libidn2.so.0 \
   /lib/aarch64-linux-gnu/libunistring.so.5 \
@@ -137,14 +143,144 @@ ballalgo: \
   /lib/aarch64-linux-gnu/libzstd.so.1 \
   /lib/aarch64-linux-gnu/liblzma.so.5 \
   /lib/aarch64-linux-gnu/libbz2.so.1.0 \
+  /lib/aarch64-linux-gnu/libsharpyuv.so.0 \
+  /lib/aarch64-linux-gnu/libgdcmDICT.so.3.0 \
+  /lib/aarch64-linux-gnu/libgdcmjpeg8.so.3.0 \
+  /lib/aarch64-linux-gnu/libgdcmjpeg12.so.3.0 \
+  /lib/aarch64-linux-gnu/libgdcmjpeg16.so.3.0 \
+  /lib/aarch64-linux-gnu/libcharls.so.2 \
+  /lib/aarch64-linux-gnu/libuuid.so.1 \
+  /lib/aarch64-linux-gnu/libjson-c.so.5 \
+  /lib/aarch64-linux-gnu/libgdcmIOD.so.3.0 \
+  /lib/aarch64-linux-gnu/libgdcmCommon.so.3.0 \
+  /lib/aarch64-linux-gnu/libLerc.so.4 \
+  /lib/aarch64-linux-gnu/libjbig.so.0 \
+  /lib/aarch64-linux-gnu/libdeflate.so.0 \
+  /lib/aarch64-linux-gnu/libImath-3_1.so.29 \
+  /lib/aarch64-linux-gnu/libIlmThread-3_1.so.30 \
+  /lib/aarch64-linux-gnu/libIex-3_1.so.30 \
+  /lib/aarch64-linux-gnu/libcurl-gnutls.so.4 \
+  /lib/aarch64-linux-gnu/libodbc.so.2 \
+  /lib/aarch64-linux-gnu/libodbcinst.so.2 \
+  /lib/aarch64-linux-gnu/libxml2.so.2 \
+  /lib/aarch64-linux-gnu/libcrypto.so.3 \
+  /lib/aarch64-linux-gnu/liblz4.so.1 \
+  /lib/aarch64-linux-gnu/libblosc.so.1 \
+  /lib/libarmadillo.so.14 \
+  /lib/aarch64-linux-gnu/libqhull_r.so.8.0 \
+  /lib/aarch64-linux-gnu/libxerces-c-3.2.so \
+  /lib/aarch64-linux-gnu/libgeotiff.so.5 \
+  /lib/aarch64-linux-gnu/libavif.so.16 \
+  /lib/aarch64-linux-gnu/libheif.so.1 \
+  /lib/aarch64-linux-gnu/libaec.so.0 \
+  /lib/aarch64-linux-gnu/libpoppler.so.147 \
+  /lib/aarch64-linux-gnu/libgif.so.7 \
+  /lib/aarch64-linux-gnu/libnetcdf.so.22 \
+  /lib/aarch64-linux-gnu/libcfitsio.so.10 \
+  /lib/aarch64-linux-gnu/libhdf5_serial.so.310 \
+  /lib/aarch64-linux-gnu/libsqlite3.so.0 \
+  /lib/aarch64-linux-gnu/libpq.so.5 \
+  /lib/aarch64-linux-gnu/libkmlbase.so.1 \
+  /lib/aarch64-linux-gnu/libkmldom.so.1 \
+  /lib/aarch64-linux-gnu/libkmlengine.so.1 \
+  /lib/aarch64-linux-gnu/libfyba.so.0 \
+  /lib/aarch64-linux-gnu/libpcre2-8.so.0 \
+  /lib/aarch64-linux-gnu/libspatialite.so.8 \
+  /lib/aarch64-linux-gnu/libmariadb.so.3 \
+  /lib/aarch64-linux-gnu/libfreexl.so.1 \
+  /lib/aarch64-linux-gnu/libogdi.so.4.1 \
+  /lib/aarch64-linux-gnu/libexpat.so.1 \
+  /lib/aarch64-linux-gnu/libgeos_c.so.1 \
+  /lib/aarch64-linux-gnu/libproj.so.25 \
+  /lib/aarch64-linux-gnu/libdfalt.so.0 \
+  /lib/aarch64-linux-gnu/libmfhdfalt.so.0 \
   /lib/aarch64-linux-gnu/libGLdispatch.so.0 \
   /lib/aarch64-linux-gnu/libX11.so.6 \
   /lib/aarch64-linux-gnu/libgfortran.so.5 \
   /lib/aarch64-linux-gnu/libboost_filesystem.so.1.83.0 \
   /lib/aarch64-linux-gnu/libffi.so.8 \
+  /lib/aarch64-linux-gnu/libnghttp3.so.9 \
+  /lib/aarch64-linux-gnu/libngtcp2_crypto_gnutls.so.8 \
+  /lib/aarch64-linux-gnu/libngtcp2.so.16 \
+  /lib/aarch64-linux-gnu/libnghttp2.so.14 \
+  /lib/aarch64-linux-gnu/librtmp.so.1 \
+  /lib/aarch64-linux-gnu/libssh2.so.1 \
+  /lib/aarch64-linux-gnu/libpsl.so.5 \
+  /lib/aarch64-linux-gnu/libgssapi_krb5.so.2 \
+  /lib/aarch64-linux-gnu/libldap.so.2 \
+  /lib/aarch64-linux-gnu/liblber.so.2 \
+  /lib/aarch64-linux-gnu/libbrotlidec.so.1 \
+  /lib/aarch64-linux-gnu/libltdl.so.7 \
+  /lib/aarch64-linux-gnu/libxxhash.so.0 \
+  /lib/aarch64-linux-gnu/libsnappy.so.1 \
+  /lib/aarch64-linux-gnu/libarpack.so.2 \
+  /lib/aarch64-linux-gnu/libicuuc.so.76 \
+  /lib/aarch64-linux-gnu/libdav1d.so.7 \
+  /lib/aarch64-linux-gnu/libgav1.so.1 \
+  /lib/aarch64-linux-gnu/librav1e.so.0.7 \
+  /lib/aarch64-linux-gnu/libSvtAv1Enc.so.2 \
+  /lib/aarch64-linux-gnu/libaom.so.3 \
+  /lib/aarch64-linux-gnu/libfreetype.so.6 \
+  /lib/aarch64-linux-gnu/libfontconfig.so.1 \
+  /lib/aarch64-linux-gnu/libgpgmepp.so.6 \
+  /lib/aarch64-linux-gnu/liblcms2.so.2 \
+  /lib/aarch64-linux-gnu/libnss3.so \
+  /lib/aarch64-linux-gnu/libsmime3.so \
+  /lib/aarch64-linux-gnu/libplc4.so \
+  /lib/aarch64-linux-gnu/libnspr4.so \
+  /lib/aarch64-linux-gnu/libhdf5_serial_hl.so.310 \
+  /lib/aarch64-linux-gnu/libcurl.so.4 \
+  /lib/aarch64-linux-gnu/libsz.so.2 \
+  /lib/aarch64-linux-gnu/libssl.so.3 \
+  /lib/aarch64-linux-gnu/libminizip.so.1 \
+  /lib/aarch64-linux-gnu/liburiparser.so.1 \
+  /lib/aarch64-linux-gnu/libfyut.so.0 \
+  /lib/aarch64-linux-gnu/libfygm.so.0 \
+  /lib/aarch64-linux-gnu/librttopo.so.1 \
+  /lib/aarch64-linux-gnu/libtirpc.so.3 \
+  /lib/aarch64-linux-gnu/libgeos.so.3.13.1 \
   /lib/aarch64-linux-gnu/libxcb.so.1 \
+  /lib/aarch64-linux-gnu/libkrb5.so.3 \
+  /lib/aarch64-linux-gnu/libk5crypto.so.3 \
+  /lib/aarch64-linux-gnu/libcom_err.so.2 \
+  /lib/aarch64-linux-gnu/libkrb5support.so.0 \
+  /lib/aarch64-linux-gnu/libsasl2.so.2 \
+  /lib/aarch64-linux-gnu/libbrotlicommon.so.1 \
+  /lib/aarch64-linux-gnu/libicudata.so.76 \
+  /lib/aarch64-linux-gnu/libabsl_synchronization.so.20240722 \
+  /lib/aarch64-linux-gnu/libgpgme.so.11 \
+  /lib/aarch64-linux-gnu/libnssutil3.so \
+  /lib/aarch64-linux-gnu/libplds4.so \
   /lib/aarch64-linux-gnu/libXau.so.6 \
-  /lib/aarch64-linux-gnu/libXdmcp.so.6
+  /lib/aarch64-linux-gnu/libXdmcp.so.6 \
+  /lib/aarch64-linux-gnu/libkeyutils.so.1 \
+  /lib/aarch64-linux-gnu/libresolv.so.2 \
+  /lib/aarch64-linux-gnu/libabsl_graphcycles_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_kernel_timeout_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_stacktrace.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_symbolize.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_time.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_malloc_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_base.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_spinlock_wait.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_raw_logging_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libassuan.so.9 \
+  /lib/aarch64-linux-gnu/libgpg-error.so.0 \
+  /lib/aarch64-linux-gnu/libabsl_debugging_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_demangle_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_strings.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_time_zone.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_demangle_rust.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_strings_internal.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_string_view.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /usr/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /usr/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_decode_rust_punycode.so.20240722 \
+  /lib/aarch64-linux-gnu/libabsl_utf8_for_code_point.so.20240722
 
 /usr/lib/gcc/aarch64-linux-gnu/14/../../../aarch64-linux-gnu/Scrt1.o:
 
@@ -153,6 +289,10 @@ ballalgo: \
 /usr/lib/gcc/aarch64-linux-gnu/14/crtbeginS.o:
 
 CMakeFiles/ballalgo.dir/src/main.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o:
 
@@ -170,27 +310,19 @@ CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o:
 
-CMakeFiles/ballalgo.dir/src/motion/AStar3D.cpp.o:
-
-CMakeFiles/ballalgo.dir/src/motion/HermiteSpline.cpp.o:
-
-CMakeFiles/ballalgo.dir/src/motion/VelocityProfile.cpp.o:
-
-CMakeFiles/ballalgo.dir/src/motion/StrikePose.cpp.o:
-
 CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o:
 
-CMakeFiles/ballalgo.dir/src/motion/MotionPlanner.cpp.o:
-
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
+
+libballalgo_motion_core.a:
 
 /usr/lib/aarch64-linux-gnu/libopencv_stitching.so.4.10.0:
 
@@ -376,6 +508,24 @@ CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
 
 /lib/aarch64-linux-gnu/libdw.so.1:
 
+/lib/aarch64-linux-gnu/libjpeg.so.62:
+
+/lib/aarch64-linux-gnu/libwebp.so.7:
+
+/lib/aarch64-linux-gnu/libpng16.so.16:
+
+/lib/aarch64-linux-gnu/libgdcmMSFF.so.3.0:
+
+/lib/aarch64-linux-gnu/libtiff.so.6:
+
+/lib/aarch64-linux-gnu/libopenjp2.so.7:
+
+/lib/aarch64-linux-gnu/libOpenEXR-3_1.so.30:
+
+/lib/aarch64-linux-gnu/libgdal.so.36:
+
+/lib/aarch64-linux-gnu/libgdcmDSED.so.3.0:
+
 /lib/aarch64-linux-gnu/libz.so.1:
 
 /lib/aarch64-linux-gnu/libGLX.so.0:
@@ -389,8 +539,6 @@ CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
 /lib/aarch64-linux-gnu/libboost_log.so.1.83.0:
 
 /lib/aarch64-linux-gnu/libboost_thread.so.1.83.0:
-
-/lib/aarch64-linux-gnu/libjpeg.so.62:
 
 /lib/aarch64-linux-gnu/libp11-kit.so.0:
 
@@ -422,6 +570,108 @@ CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
 
 /lib/aarch64-linux-gnu/libbz2.so.1.0:
 
+/lib/aarch64-linux-gnu/libsharpyuv.so.0:
+
+/lib/aarch64-linux-gnu/libgdcmDICT.so.3.0:
+
+/lib/aarch64-linux-gnu/libgdcmjpeg8.so.3.0:
+
+/lib/aarch64-linux-gnu/libgdcmjpeg12.so.3.0:
+
+/lib/aarch64-linux-gnu/libgdcmjpeg16.so.3.0:
+
+/lib/aarch64-linux-gnu/libcharls.so.2:
+
+/lib/aarch64-linux-gnu/libuuid.so.1:
+
+/lib/aarch64-linux-gnu/libjson-c.so.5:
+
+/lib/aarch64-linux-gnu/libgdcmIOD.so.3.0:
+
+/lib/aarch64-linux-gnu/libgdcmCommon.so.3.0:
+
+/lib/aarch64-linux-gnu/libLerc.so.4:
+
+/lib/aarch64-linux-gnu/libjbig.so.0:
+
+/lib/aarch64-linux-gnu/libdeflate.so.0:
+
+/lib/aarch64-linux-gnu/libImath-3_1.so.29:
+
+/lib/aarch64-linux-gnu/libIlmThread-3_1.so.30:
+
+/lib/aarch64-linux-gnu/libIex-3_1.so.30:
+
+/lib/aarch64-linux-gnu/libcurl-gnutls.so.4:
+
+/lib/aarch64-linux-gnu/libodbc.so.2:
+
+/lib/aarch64-linux-gnu/libodbcinst.so.2:
+
+/lib/aarch64-linux-gnu/libxml2.so.2:
+
+/lib/aarch64-linux-gnu/libcrypto.so.3:
+
+/lib/aarch64-linux-gnu/liblz4.so.1:
+
+/lib/aarch64-linux-gnu/libblosc.so.1:
+
+/lib/libarmadillo.so.14:
+
+/lib/aarch64-linux-gnu/libqhull_r.so.8.0:
+
+/lib/aarch64-linux-gnu/libxerces-c-3.2.so:
+
+/lib/aarch64-linux-gnu/libgeotiff.so.5:
+
+/lib/aarch64-linux-gnu/libavif.so.16:
+
+/lib/aarch64-linux-gnu/libheif.so.1:
+
+/lib/aarch64-linux-gnu/libaec.so.0:
+
+/lib/aarch64-linux-gnu/libpoppler.so.147:
+
+/lib/aarch64-linux-gnu/libgif.so.7:
+
+/lib/aarch64-linux-gnu/libnetcdf.so.22:
+
+/lib/aarch64-linux-gnu/libcfitsio.so.10:
+
+/lib/aarch64-linux-gnu/libhdf5_serial.so.310:
+
+/lib/aarch64-linux-gnu/libsqlite3.so.0:
+
+/lib/aarch64-linux-gnu/libpq.so.5:
+
+/lib/aarch64-linux-gnu/libkmlbase.so.1:
+
+/lib/aarch64-linux-gnu/libkmldom.so.1:
+
+/lib/aarch64-linux-gnu/libkmlengine.so.1:
+
+/lib/aarch64-linux-gnu/libfyba.so.0:
+
+/lib/aarch64-linux-gnu/libpcre2-8.so.0:
+
+/lib/aarch64-linux-gnu/libspatialite.so.8:
+
+/lib/aarch64-linux-gnu/libmariadb.so.3:
+
+/lib/aarch64-linux-gnu/libfreexl.so.1:
+
+/lib/aarch64-linux-gnu/libogdi.so.4.1:
+
+/lib/aarch64-linux-gnu/libexpat.so.1:
+
+/lib/aarch64-linux-gnu/libgeos_c.so.1:
+
+/lib/aarch64-linux-gnu/libproj.so.25:
+
+/lib/aarch64-linux-gnu/libdfalt.so.0:
+
+/lib/aarch64-linux-gnu/libmfhdfalt.so.0:
+
 /lib/aarch64-linux-gnu/libGLdispatch.so.0:
 
 /lib/aarch64-linux-gnu/libX11.so.6:
@@ -432,8 +682,166 @@ CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
 
 /lib/aarch64-linux-gnu/libffi.so.8:
 
+/lib/aarch64-linux-gnu/libnghttp3.so.9:
+
+/lib/aarch64-linux-gnu/libngtcp2_crypto_gnutls.so.8:
+
+/lib/aarch64-linux-gnu/libngtcp2.so.16:
+
+/lib/aarch64-linux-gnu/libnghttp2.so.14:
+
+/lib/aarch64-linux-gnu/librtmp.so.1:
+
+/lib/aarch64-linux-gnu/libssh2.so.1:
+
+/lib/aarch64-linux-gnu/libpsl.so.5:
+
+/lib/aarch64-linux-gnu/libgssapi_krb5.so.2:
+
+/lib/aarch64-linux-gnu/libldap.so.2:
+
+/lib/aarch64-linux-gnu/liblber.so.2:
+
+/lib/aarch64-linux-gnu/libbrotlidec.so.1:
+
+/lib/aarch64-linux-gnu/libltdl.so.7:
+
+/lib/aarch64-linux-gnu/libxxhash.so.0:
+
+/lib/aarch64-linux-gnu/libsnappy.so.1:
+
+/lib/aarch64-linux-gnu/libarpack.so.2:
+
+/lib/aarch64-linux-gnu/libicuuc.so.76:
+
+/lib/aarch64-linux-gnu/libdav1d.so.7:
+
+/lib/aarch64-linux-gnu/libgav1.so.1:
+
+/lib/aarch64-linux-gnu/librav1e.so.0.7:
+
+/lib/aarch64-linux-gnu/libSvtAv1Enc.so.2:
+
+/lib/aarch64-linux-gnu/libaom.so.3:
+
+/lib/aarch64-linux-gnu/libfreetype.so.6:
+
+/lib/aarch64-linux-gnu/libfontconfig.so.1:
+
+/lib/aarch64-linux-gnu/libgpgmepp.so.6:
+
+/lib/aarch64-linux-gnu/liblcms2.so.2:
+
+/lib/aarch64-linux-gnu/libnss3.so:
+
+/lib/aarch64-linux-gnu/libsmime3.so:
+
+/lib/aarch64-linux-gnu/libplc4.so:
+
+/lib/aarch64-linux-gnu/libnspr4.so:
+
+/lib/aarch64-linux-gnu/libhdf5_serial_hl.so.310:
+
+/lib/aarch64-linux-gnu/libcurl.so.4:
+
+/lib/aarch64-linux-gnu/libsz.so.2:
+
+/lib/aarch64-linux-gnu/libssl.so.3:
+
+/lib/aarch64-linux-gnu/libminizip.so.1:
+
+/lib/aarch64-linux-gnu/liburiparser.so.1:
+
+/lib/aarch64-linux-gnu/libfyut.so.0:
+
+/lib/aarch64-linux-gnu/libfygm.so.0:
+
+/lib/aarch64-linux-gnu/librttopo.so.1:
+
+/lib/aarch64-linux-gnu/libtirpc.so.3:
+
+/lib/aarch64-linux-gnu/libgeos.so.3.13.1:
+
 /lib/aarch64-linux-gnu/libxcb.so.1:
+
+/lib/aarch64-linux-gnu/libkrb5.so.3:
+
+/lib/aarch64-linux-gnu/libk5crypto.so.3:
+
+/lib/aarch64-linux-gnu/libcom_err.so.2:
+
+/lib/aarch64-linux-gnu/libkrb5support.so.0:
+
+/lib/aarch64-linux-gnu/libsasl2.so.2:
+
+/lib/aarch64-linux-gnu/libbrotlicommon.so.1:
+
+/lib/aarch64-linux-gnu/libicudata.so.76:
+
+/lib/aarch64-linux-gnu/libabsl_synchronization.so.20240722:
+
+/lib/aarch64-linux-gnu/libgpgme.so.11:
+
+/lib/aarch64-linux-gnu/libnssutil3.so:
+
+/lib/aarch64-linux-gnu/libplds4.so:
 
 /lib/aarch64-linux-gnu/libXau.so.6:
 
 /lib/aarch64-linux-gnu/libXdmcp.so.6:
+
+/lib/aarch64-linux-gnu/libkeyutils.so.1:
+
+/lib/aarch64-linux-gnu/libresolv.so.2:
+
+/lib/aarch64-linux-gnu/libabsl_graphcycles_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_kernel_timeout_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_stacktrace.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_symbolize.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_time.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_malloc_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_base.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_spinlock_wait.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_raw_logging_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libassuan.so.9:
+
+/lib/aarch64-linux-gnu/libgpg-error.so.0:
+
+/lib/aarch64-linux-gnu/libabsl_debugging_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_demangle_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_strings.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_time_zone.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_demangle_rust.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_strings_internal.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_string_view.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/usr/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/usr/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_throw_delegate.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_decode_rust_punycode.so.20240722:
+
+/lib/aarch64-linux-gnu/libabsl_utf8_for_code_point.so.20240722:
