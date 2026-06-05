@@ -44,10 +44,16 @@ class FoxgloveTelemetryPublisher {
   void closeSocket();
   bool due(double hz, uint64_t nowNs, uint64_t& lastNs) const;
   void sendFrame(const std::string& payload);
+  void noteSocketError(const std::string& error);
+  void maybeReportSocketHealth(uint64_t nowNs);
 
   FoxgloveConfig config_;
   int socketFd_ = -1;
   std::string socketPath_;
+  std::string lastSocketError_;
+  bool reportedConnected_ = false;
+  uint64_t lastSocketReportNs_ = 0;
+  uint64_t framesSent_ = 0;
 
   uint64_t lastPoseNs_ = 0;
   uint64_t lastBallNs_ = 0;

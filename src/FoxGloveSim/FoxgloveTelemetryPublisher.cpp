@@ -135,6 +135,37 @@ FoxgloveTelemetryPublisher::~FoxgloveTelemetryPublisher() {
   closeSocket();
 }
 
+void FoxgloveTelemetryPublisher::noteSocketError(const std::string& error) {
+  lastSocketError_ = error;
+}
+
+void FoxgloveTelemetryPublisher::maybeReportSocketHealth(uint64_t nowNs) {
+  if (lastSocketReportNs_ != 0 && nowNs - lastSocketReportNs_ < static_cast<uint64_t>(2.0 * kNsPerS)) {
+    return;
+  }
+  lastSocketReportNs_ = nowNs;
+
+  if (socketFd_ >= 0) {
+    if (!reportedConnected_) {
+      std::fprintf(stderr,
+                   "[Foxglove] socket connected path=%s framesSent=%llu\n",
+                   socketPath_.c_str(),
+                   static_cast<unsigned long long>(framesSent_));
+      std::fflush(stderr);
+      reportedConnected_ = true;
+    }
+    return;
+  }
+
+  reportedConnected_ = false;
+  std::fprintf(stderr,
+               "[Foxglove] socket disconnected path=%s lastError=%s framesSent=%llu\n",
+               socketPath_.c_str(),
+               lastSocketError_.empty() ? "none" : lastSocketError_.c_str(),
+               static_cast<unsigned long long>(framesSent_));
+  std::fflush(stderr);
+}
+
 void FoxgloveTelemetryPublisher::closeSocket() {
   if (socketFd_ >= 0) {
     ::close(socketFd_);
@@ -145,7 +176,10 @@ void FoxgloveTelemetryPublisher::closeSocket() {
 bool FoxgloveTelemetryPublisher::connectSocket() {
   closeSocket();
   socketFd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
-  if (socketFd_ < 0) return false;
+  if (socketFd_ < 0) {
+    noteSocketError("socket() failed: " + std::string(std::strerror(errno)));
+    return false;
+  }
 
   int flags = ::fcntl(socketFd_, F_GETFL, 0);
   if (flags >= 0) ::fcntl(socketFd_, F_SETFL, flags | O_NONBLOCK);
@@ -153,8 +187,12 @@ bool FoxgloveTelemetryPublisher::connectSocket() {
   sockaddr_un addr{};
   addr.sun_family = AF_UNIX;
   std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", socketPath_.c_str());
-  if (::connect(socketFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) return true;
+  if (::connect(socketFd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
+    lastSocketError_.clear();
+    return true;
+  }
 
+  noteSocketError("connect() failed: " + std::string(std::strerror(errno)));
   closeSocket();
   return false;
 }
@@ -177,20 +215,27 @@ void FoxgloveTelemetryPublisher::sendFrame(const std::string& payload) {
 
   const std::string framed = payload + "\n";
   const ssize_t sent = ::send(socketFd_, framed.data(), framed.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
-  if (sent == static_cast<ssize_t>(framed.size())) return;
+  if (sent == static_cast<ssize_t>(framed.size())) {
+    ++framesSent_;
+    lastSocketError_.clear();
+    return;
+  }
 
   if (sent < 0 &&
       (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOENT ||
        errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
+    noteSocketError("send() failed: " + std::string(std::strerror(errno)));
     closeSocket();
     return;
   }
 
   if (sent >= 0 && sent < static_cast<ssize_t>(framed.size())) {
+    noteSocketError("send() partial write");
     closeSocket();
     return;
   }
 
+  noteSocketError("send() failed: " + std::string(std::strerror(errno)));
   closeSocket();
 }
 
@@ -200,6 +245,7 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   if (!config_.enabled) return;
 
   const uint64_t timestampNs = nowNs();
+  maybeReportSocketHealth(timestampNs);
   const bool sendPose = config_.streamPose && due(config_.poseHz, timestampNs, lastPoseNs_);
   const bool sendBall = config_.streamBall && due(config_.ballHz, timestampNs, lastBallNs_);
   const bool sendVelocity =
