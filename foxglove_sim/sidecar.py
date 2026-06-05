@@ -165,6 +165,9 @@ class BallAlgoFoxgloveSidecar:
         self.recording_path: Path | None = None
         self.last_static_scene_ns = 0
         self.channels: dict[str, Any] = {}
+        self.snapshot_count = 0
+        self.last_snapshot_ns = 0
+        self.last_transport_report_ns = 0
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -266,6 +269,7 @@ class BallAlgoFoxgloveSidecar:
             client.setblocking(False)
             self._close_client()
             self.client_socket = client
+            print("BallAlgo runtime connected to Foxglove sidecar socket.")
 
     def _drain_snapshots(self) -> list[dict[str, Any]]:
         """Read and parse every complete newline-framed JSON snapshot in the buffer."""
@@ -276,6 +280,7 @@ class BallAlgoFoxgloveSidecar:
             return []
         chunk = self.client_socket.recv(1 << 20)
         if not chunk:
+            print("BallAlgo runtime disconnected from Foxglove sidecar socket.")
             self._close_client()
             return []
         self.client_buffer.extend(chunk)
@@ -420,6 +425,8 @@ class BallAlgoFoxgloveSidecar:
     def _handle_snapshot(self, snapshot: dict[str, Any]) -> None:
         self._enrich_snapshot(snapshot)
         timestamp_ns = int(snapshot["timestamp_ns"])
+        self.snapshot_count += 1
+        self.last_snapshot_ns = timestamp_ns
 
         self._publish_static_scene(snapshot["field"], timestamp_ns)
         if self.cfg.stream_pose or self.cfg.stream_ball:
@@ -435,6 +442,29 @@ class BallAlgoFoxgloveSidecar:
             self._publish_log(snapshot, timestamp_ns)
         if self.cfg.stream_camera:
             self._publish_camera(snapshot, timestamp_ns)
+
+    def _maybe_report_transport_health(self) -> None:
+        now_ns = datetime.now(timezone.utc).timestamp() * 1_000_000_000
+        now_ns = int(now_ns)
+        if self.last_transport_report_ns and now_ns - self.last_transport_report_ns < 2_000_000_000:
+            return
+        self.last_transport_report_ns = now_ns
+
+        seconds_since_snapshot = None
+        if self.last_snapshot_ns:
+            seconds_since_snapshot = (now_ns - self.last_snapshot_ns) / 1_000_000_000.0
+
+        print(
+            "Foxglove transport: "
+            f"runtime_connected={'yes' if self.client_socket is not None else 'no'} "
+            f"snapshots={self.snapshot_count} "
+            f"seconds_since_last_snapshot="
+            f"{seconds_since_snapshot:.2f}" if seconds_since_snapshot is not None else
+            "Foxglove transport: "
+            f"runtime_connected={'yes' if self.client_socket is not None else 'no'} "
+            f"snapshots={self.snapshot_count} "
+            "seconds_since_last_snapshot=never"
+        )
 
     # ------------------------------------------------------------------
     # Entry point
@@ -482,6 +512,7 @@ class BallAlgoFoxgloveSidecar:
                     self._accept_client_if_ready()
                     for snapshot in self._drain_snapshots():
                         self._handle_snapshot(snapshot)
+                    self._maybe_report_transport_health()
             finally:
                 self._close_client()
                 if self.server_socket is not None:

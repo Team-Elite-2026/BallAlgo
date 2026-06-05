@@ -251,10 +251,14 @@ Deferred placeholders remain in config/catalog for:
 
 ## Recommended BallAlgo Foxglove Layout
 
-There is now a generated standard layout JSON you can import directly instead
-of rebuilding the dashboard by hand every time:
+There are now two generated layout formats:
 
 - [layouts/ballalgo_standard_layout.json](./layouts/ballalgo_standard_layout.json)
+  - Foxglove SDK / notebook-style layout JSON
+- [layouts/ballalgo_overview_app_layout.json](./layouts/ballalgo_overview_app_layout.json)
+  - normal Foxglove app import/export format for the main live-debug view
+- [layouts/ballalgo_camera_app_layout.json](./layouts/ballalgo_camera_app_layout.json)
+  - normal Foxglove app import/export format for the camera/range/session view
 
 This layout is designed to work with either:
 
@@ -269,12 +273,15 @@ From the `BallAlgo` root:
 
 ```bash
 ./env/bin/python foxglove_sim/layouts/build_layout.py
+./env/bin/python foxglove_sim/layouts/build_app_layouts.py
 ```
 
 That rewrites:
 
 ```text
 foxglove_sim/layouts/ballalgo_standard_layout.json
+foxglove_sim/layouts/ballalgo_overview_app_layout.json
+foxglove_sim/layouts/ballalgo_camera_app_layout.json
 ```
 
 ### Import the standard layout in Foxglove
@@ -286,8 +293,19 @@ In Foxglove:
 3. Select:
 
 ```text
-BallAlgo/foxglove_sim/layouts/ballalgo_standard_layout.json
+BallAlgo/foxglove_sim/layouts/ballalgo_overview_app_layout.json
 ```
+
+Use the camera-focused import file when you specifically want the image/range
+view:
+
+```text
+BallAlgo/foxglove_sim/layouts/ballalgo_camera_app_layout.json
+```
+
+The notebook-style file `ballalgo_standard_layout.json` is kept as the SDK/API
+source layout, but the two `*_app_layout.json` files are the ones intended for
+normal Foxglove app import.
 
 After import, connect the data source:
 
