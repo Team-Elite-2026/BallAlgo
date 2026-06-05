@@ -14,7 +14,6 @@ struct FoxgloveConfig {
   bool streamVelocity = true;
   bool streamLidar = false;
   bool streamCamera = false;
-  bool streamAnnotations = false;
   bool streamLogs = true;
 
   double pathsHz = 15.0;

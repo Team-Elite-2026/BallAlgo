@@ -185,7 +185,6 @@ class BallAlgoFoxgloveSidecar:
             name
             for flag, name in (
                 (self.cfg.stream_lidar, "stream_lidar"),
-                (self.cfg.stream_annotations, "stream_annotations"),
             )
             if flag
         ]
@@ -193,6 +192,11 @@ class BallAlgoFoxgloveSidecar:
             print(
                 f"Warning: stream flags enabled but not yet implemented in sidecar: "
                 f"{', '.join(unimplemented)}"
+            )
+        if self.cfg.stream_camera and not _HAS_IMAGE_ANNOTATIONS:
+            print(
+                "Warning: foxglove-sdk image annotation support is unavailable; "
+                "camera frames will stream without overlay annotations."
             )
 
     def _init_channels(self) -> None:

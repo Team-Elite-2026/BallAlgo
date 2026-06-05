@@ -133,15 +133,15 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
         panel="Image panel",
         nominal_hz=15.0,
         producer="vision pipeline",
-        purpose="Bounding boxes, centroids, labels, and other 2D overlays for the camera stream.",
+        purpose="Bounding boxes, centroids, labels, and other 2D overlays emitted alongside the camera stream when detections exist.",
     ),
     FoxgloveTopic(
         name="/debug/log",
         schema="foxglove.Log",
         panel="Log panel",
         nominal_hz=None,
-        producer="all subsystems",
-        purpose="Human-readable planner, localization, and vision debug events.",
+        producer="runtime event stream",
+        purpose="Human-readable event log for state transitions, planner updates, and runtime warnings, plus a low-rate status heartbeat.",
     ),
 )
 

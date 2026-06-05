@@ -72,6 +72,12 @@ class FoxgloveTelemetryPublisher {
   float prevHeadingDeg_ = 0;
   float prevOmegaDegS_ = 0;
 
+  bool havePrevPoseValidity_ = false;
+  bool prevPoseValid_ = false;
+  bool havePrevBallVisibility_ = false;
+  bool prevBallVisible_ = false;
+  unsigned long prevFrameGrabFailures_ = 0;
+
   uint64_t lastPathTrajectoryId_ = 0;
 };
 

@@ -15,7 +15,6 @@ class FoxgloveConfig:
     stream_velocity: bool = True
     stream_lidar: bool = False
     stream_camera: bool = False
-    stream_annotations: bool = False
     stream_logs: bool = True
 
     paths_hz: float = 15.0
@@ -56,7 +55,6 @@ def load_config(path: str | Path) -> FoxgloveConfig:
         "stream_velocity": _parse_bool,
         "stream_lidar": _parse_bool,
         "stream_camera": _parse_bool,
-        "stream_annotations": _parse_bool,
         "stream_logs": _parse_bool,
         "paths_hz": float,
         "pose_hz": float,
