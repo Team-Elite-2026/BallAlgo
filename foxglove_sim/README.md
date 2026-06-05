@@ -103,10 +103,8 @@ Use the 3D panel in 2D mode.
 Publish:
 
 - `/field/scene/static`
+- `/field/scene/live`
 - `/planner/scene/path`
-- `/planner/scene/waypoints`
-- `/planner/scene/target`
-- `/robot/pose`
 
 Recommended schema:
 
@@ -115,11 +113,10 @@ Recommended schema:
 This lets us draw:
 
 - static field outline
-- goal markers
-- A* waypoints
-- spline path
-- executed trace
-- target/strike point
+- robot pose marker and heading arrow
+- ball marker
+- spline path / executed trace
+- target / strike point overlays carried in the planner scene
 
 ### 2. LiDAR visualization
 
@@ -243,15 +240,73 @@ Implemented now:
 - `/robot/accel`
 - `/robot/angular`
 - `/ball/twist`
+- `/ball/range`
+- `/camera/front/image`
+- `/camera/front/annotations`
 - `/debug/log`
 
 Deferred placeholders remain in config/catalog for:
 
 - LiDAR point cloud / localization overlays
-- camera stream
-- image annotations
 
 ## Recommended BallAlgo Foxglove Layout
+
+There is now a generated standard layout JSON you can import directly instead
+of rebuilding the dashboard by hand every time:
+
+- [layouts/ballalgo_standard_layout.json](./layouts/ballalgo_standard_layout.json)
+
+This layout is designed to work with either:
+
+- the fake telemetry publisher under [fake/](./fake/)
+- the real `ballalgo` runtime streaming actual data
+
+Both paths publish the same Foxglove topic names, so the layout is reusable.
+
+### Regenerate the standard layout
+
+From the `BallAlgo` root:
+
+```bash
+./env/bin/python foxglove_sim/layouts/build_layout.py
+```
+
+That rewrites:
+
+```text
+foxglove_sim/layouts/ballalgo_standard_layout.json
+```
+
+### Import the standard layout in Foxglove
+
+In Foxglove:
+
+1. Open the layout menu
+2. Choose `Import layout` or the equivalent layout import action
+3. Select:
+
+```text
+BallAlgo/foxglove_sim/layouts/ballalgo_standard_layout.json
+```
+
+After import, connect the data source:
+
+- fake data: `ws://127.0.0.1:8765`
+- live Pi data: `ws://<pi-ip>:8765`
+
+The imported layout gives you:
+
+- `Overview` tab
+  - top-down field scene
+  - robot acceleration plot
+  - robot angular kinematics plot
+  - robot velocity plot
+  - ball velocity plot
+  - debug log panel
+- `Camera` tab
+  - front camera image panel
+  - ball range plot
+  - session-info/raw-messages panel
 
 ### Field panel
 
@@ -382,7 +437,7 @@ runtime.
 If the sidecar is already running, publish fake telemetry into it:
 
 ```bash
-python3 foxglove_sim/fake_runtime.py --scenario replan_demo
+python3 foxglove_sim/fake/fake_runtime.py --scenario replan_demo
 ```
 
 Useful scenarios:
@@ -397,14 +452,14 @@ Useful scenarios:
 This launches the sidecar and the fake runtime together:
 
 ```bash
-python3 foxglove_sim/run_fake_foxglove_demo.py --scenario replan_demo
+python3 foxglove_sim/fake/run_demo.py --scenario replan_demo
 ```
 
 If your default `python3` does not have `foxglove-sdk` installed, point the
 launcher at a different interpreter for the sidecar:
 
 ```bash
-python3 foxglove_sim/run_fake_foxglove_demo.py \
+python3 foxglove_sim/fake/run_demo.py \
   --scenario replan_demo \
   --sidecar-python /path/to/python-with-foxglove-sdk
 ```
@@ -435,6 +490,8 @@ pose marker that is not what we want for soccer.
 - [schema_catalog.py](./schema_catalog.py): JSON schema catalog for custom topics
 - [sidecar.py](./sidecar.py): Foxglove WebSocket + MCAP sidecar
 - [topic_catalog.py](./topic_catalog.py): canonical topic/schema map
+- [layouts/](./layouts): generated importable Foxglove layouts
+- [fake/](./fake): fake telemetry publisher and local demo launcher
 - [requirements.txt](./requirements.txt): Python SDK dependency list
 
 ## Practical Recommendation

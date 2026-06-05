@@ -1,0 +1,459 @@
+{
+  "version": 1,
+  "content": {
+    "type": "tabs",
+    "selectedTabIndex": 0,
+    "tabs": [
+      {
+        "title": "Overview",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 2,
+              "content": {
+                "type": "panel",
+                "panelType": "ThreeDee",
+                "config": {
+                  "scene": {
+                    "backgroundColor": "#101215",
+                    "transforms": {
+                      "visible": false,
+                      "showLabel": false,
+                      "axisSize": 0.2,
+                      "lineWidth": 1.0
+                    },
+                    "syncCamera": false
+                  },
+                  "topics": {
+                    "/field/scene/static": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    },
+                    "/field/scene/live": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "selectedIdVariable": "selected_id",
+                      "computeVertexNormals": false
+                    },
+                    "/planner/scene/path": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    },
+                    "/robot/pose": {
+                      "visible": false,
+                      "type": "arrow"
+                    },
+                    "/ball/pose": {
+                      "visible": false,
+                      "type": "arrow"
+                    }
+                  },
+                  "syncedTopics": {
+                    "/field/scene/static": false,
+                    "/field/scene/live": true,
+                    "/planner/scene/path": true
+                  },
+                  "cameraState": {
+                    "distance": 2.6,
+                    "perspective": false,
+                    "phi": 0.0,
+                    "target": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    "thetaOffset": 0.0,
+                    "near": 0.05,
+                    "far": 50.0,
+                    "logDepth": false
+                  },
+                  "followTf": "field",
+                  "fixedFrame": "field",
+                  "followMode": "follow-none"
+                },
+                "title": "Field Overview",
+                "version": 1
+              }
+            },
+            {
+              "proportion": 1.45,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 3,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/robot/accel.ax_body_m_s2",
+                                  "color": "#4e98e2",
+                                  "label": "ax body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/accel.ay_body_m_s2",
+                                  "color": "#f5774d",
+                                  "label": "ay body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/accel.magnitude_body_m_s2",
+                                  "color": "#f7df71",
+                                  "label": "accel magnitude",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "yAxisLabel": "m/s^2",
+                              "followingViewWidth": 10.0
+                            },
+                            "title": "Linear Acceleration",
+                            "version": 1
+                          }
+                        },
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/robot/angular.heading_deg",
+                                  "color": "#c84fe3",
+                                  "label": "heading",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/angular.omega_deg_s",
+                                  "color": "#4cf5ae",
+                                  "label": "omega",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/angular.alpha_deg_s2",
+                                  "color": "#f7df71",
+                                  "label": "alpha",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "yAxisLabel": "deg / deg/s / deg/s^2",
+                              "followingViewWidth": 10.0
+                            },
+                            "title": "Angular Kinematics",
+                            "version": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "proportion": 1.45,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Log",
+                            "config": {
+                              "minLogLevel": 1,
+                              "topicToRender": "/debug/log",
+                              "fontSize": 12,
+                              "showLevel": true,
+                              "showDate": false,
+                              "showTime": true,
+                              "showTimezone": false,
+                              "showName": false,
+                              "showSourceLocation": false
+                            },
+                            "title": "Debug Log",
+                            "version": 1
+                          }
+                        },
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/robot/twist.vx_body_m_s",
+                                  "color": "#4e98e2",
+                                  "label": "vx body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/twist.vy_body_m_s",
+                                  "color": "#f5774d",
+                                  "label": "vy body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/twist.speed_body_m_s",
+                                  "color": "#f7df71",
+                                  "label": "speed body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "yAxisLabel": "m/s",
+                              "followingViewWidth": 10.0
+                            },
+                            "title": "Robot Velocity",
+                            "version": 1
+                          }
+                        },
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/ball/twist.vx_body_m_s",
+                                  "color": "#4e98e2",
+                                  "label": "vx body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/ball/twist.vy_body_m_s",
+                                  "color": "#f5774d",
+                                  "label": "vy body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/ball/twist.speed_body_m_s",
+                                  "color": "#f7df71",
+                                  "label": "speed body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "yAxisLabel": "m/s",
+                              "followingViewWidth": 10.0
+                            },
+                            "title": "Ball Velocity",
+                            "version": 1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "title": "Camera",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 2,
+              "content": {
+                "type": "panel",
+                "panelType": "Image",
+                "config": {
+                  "synchronize": true,
+                  "syncedTopics": {
+                    "/camera/front/image": true,
+                    "/camera/front/annotations": true
+                  },
+                  "imageMode": {
+                    "imageTopic": "/camera/front/image",
+                    "annotations": {
+                      "/camera/front/annotations": {
+                        "visible": true
+                      }
+                    }
+                  }
+                },
+                "title": "Front Camera",
+                "version": 1
+              }
+            },
+            {
+              "proportion": 1,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1.2,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "Plot",
+                      "config": {
+                        "paths": [
+                          {
+                            "value": "/ball/range.dist_cal_m",
+                            "color": "#f7df71",
+                            "label": "distance",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/ball/range.body_x_m",
+                            "color": "#4e98e2",
+                            "label": "body x",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/ball/range.body_y_m",
+                            "color": "#f5774d",
+                            "label": "body y",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/ball/range.angle_deg",
+                            "color": "#c84fe3",
+                            "label": "angle",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": true
+                          }
+                        ],
+                        "showLegend": true,
+                        "legendDisplay": "floating",
+                        "showPlotValuesInLegend": true,
+                        "showXAxisLabels": true,
+                        "showYAxisLabels": true,
+                        "isSynced": true,
+                        "xAxisVal": "timestamp",
+                        "xAxisLabel": "Time (s)",
+                        "timeWindowMode": "sliding",
+                        "yAxisLabel": "m",
+                        "followingViewWidth": 10.0,
+                        "rightYAxis": {
+                          "label": "Angle (deg)",
+                          "showTickLabels": true,
+                          "showGridLines": false
+                        }
+                      },
+                      "title": "Ball Range",
+                      "version": 1
+                    }
+                  },
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "RawMessages",
+                      "config": {
+                        "expansion": "all",
+                        "topicPath": "/session/info",
+                        "fontSize": 12
+                      },
+                      "title": "Session Info",
+                      "version": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
