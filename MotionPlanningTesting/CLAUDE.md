@@ -93,7 +93,8 @@ MPLBACKEND=Agg python3 visualize_planner.py   # render planner_visualization.png
 |------|------|
 | `src/main.cpp` | Entry point. Four modes: EKF demo, CSV, --astar terminal test, --json export |
 | `src/astar.hpp/cpp` | A* planner + heading schedule |
-| `src/hermite_spline.hpp/cpp` | Cubic Hermite spline over A* output |
+| `src/hermite_spline.hpp/cpp` | Cubic Hermite spline over A* output + continuous derivative evaluation |
+| `src/velocity_profiler.hpp/cpp` | S-curve velocity profiler (forward/backward passes, jerk-limited) |
 | `src/robot_ekf.hpp/cpp` | Extended Kalman Filter for robot position (mouse + LiDAR fusion) |
 | `src/ball_kalman.hpp/cpp` | Kalman filter for ball position (camera measurements) |
 | `src/kalman.hpp/cpp` | Generic Kalman filter base (used by BallKalman) |
@@ -116,16 +117,31 @@ BallKalman (ball x,y) ──┤
                              robot_heading → approachHeading (strike angle)
                         │
                         ▼
-                  HermiteSpline::build(astar_result)
+                  HermiteSpline::buildData(astar_result)          ← preferred over build()
                         │
-                        ├─ Tangent direction = heading schedule
-                        ├─ Tangent magnitude = avg adjacent chord lengths (C1 continuity)
-                        └─ SplinePoint::heading = robot ORIENTATION (not direction of travel)
+                        ├─ Position tangents: Catmull-Rom, scaled to avg chord length (C1)
+                        ├─ Theta tangents: Catmull-Rom on unwrapped radians (cubic, not linear)
+                        ├─ Stores HermiteNode[] for continuous analytical evaluation
+                        └─ .samples[] = SplinePoint[] identical to build() output
                         │
                         ▼
-                  Output: SplinePoint[] {x, y, heading} at ~1 cm resolution
-                  → Send (x, y) as position target to Teensy
-                  → Send heading as orientation command to Teensy
+                  HermiteSplineData::evalState(s)     s ∈ [0, 1]
+                        │
+                        └─ Returns SplineDerivState: x, y, θ (m/rad),
+                           dx/ds, dy/ds, dθ/ds, d²x/ds², d²y/ds², d²θ/ds², κ  (SI units)
+                        │
+                        ▼
+                  VelocityProfiler::compute(spline_data, cfg)
+                        │
+                        ├─ Pre-pass: ṡ_ceiling(s) from motor back-EMF + lateral traction
+                        ├─ Forward pass: jerk-limited acceleration from ṡ_start
+                        ├─ Backward pass: jerk-limited deceleration to ṡ_end
+                        └─ ṡ_final(s) = min(forward, backward, ceiling)
+                        │
+                        ▼
+                  Output: ProfilePoint[] {s, ṡ, ṡ̈, vx, vy, ω, ax, ay, α}
+                  → Pack into ActionChunk (fixed dt_ms slices) for Teensy
+                  → vx/vy/ω = (d·/ds)·ṡ     ax/ay/α = (d²·/ds²)·ṡ² + (d·/ds)·ṡ̈
 ```
 
 ---
@@ -232,11 +248,17 @@ visualize_planner.py
   └─ get_planner_data()
        └─ subprocess: ./build/bin/motion_planning --json → stdout JSON
             ├─ top-level constants (field size, cell size, ball_clear_cm, ...)
-            └─ scenarios[]: robot, ball, goal, approach, astar{path_cm, ...}, spline[{x,y,heading}]
+            └─ scenarios[]: robot, ball, goal, approach,
+                            astar{path_cm, ...},
+                            spline[{x,y,heading}],
+                            profile[speed_mps, ...]   ← one float per spline sample
   └─ draw_scenario(ax, data, constants)
        ├─ draw_field()  — uses constants from JSON (grid size, goal positions)
        ├─ A* path plotted as blue dashed line with dots
-       ├─ Hermite spline plotted as solid red curve
+       ├─ Hermite spline drawn as LineCollection colored by speed (plasma colormap)
+       │    violet/dark = slow (jerk ramp-up/down)  →  yellow/bright = fast (cruise)
+       │    Falls back to plain red line if "profile" key is absent
+       ├─ Colorbar per subplot showing speed range (m/s)
        ├─ Heading arrows every HDG_EVERY=6 spline points (robot orientation)
        ├─ Approach target: green circle + arrow pointing toward ball
        └─ Stats overlay: node count, path length, rotation, strike angle
@@ -246,13 +268,97 @@ visualize_planner.py
 
 ---
 
+---
+
+### HermiteSpline Extended API
+
+`build()` (original) returns `vector<SplinePoint>` — still works, untouched.
+
+`buildData()` (new) returns `HermiteSplineData` which wraps the same samples **plus** raw node data for continuous evaluation. Use this whenever you need derivatives or the velocity profiler.
+
+```cpp
+HermiteSplineData data = HermiteSpline::buildData(
+    astar_result,
+    samples_per_segment,   // default 5
+    vx_start, vy_start,    // cm/s, sets spline tangent at s=0
+    vx_end,   vy_end       // cm/s, sets spline tangent at s=1
+);
+
+// Discrete samples (same as build()):
+data.samples[i].x / .y / .heading
+
+// Continuous analytical evaluation at any s ∈ [0,1]:
+SplineDerivState st = data.evalState(s);
+// st.x, st.y          — metres
+// st.theta            — radians, unwrapped
+// st.dx_ds, st.dy_ds  — m / s-unit
+// st.dtheta_ds        — rad / s-unit
+// st.d2x_ds2 ...      — m / s-unit²
+// st.kappa            — 1/m
+```
+
+**Theta is Hermite-interpolated (cubic)** using Catmull-Rom tangents on unwrapped angles. The old `build()` linearly interpolated theta — `buildData()` is smoother and gives correct `d²θ/ds²` for the profiler.
+
+All evalState output is SI (metres, radians). The internal nodes store cm; conversion happens inside evalState.
+
+---
+
+### Velocity Profiler
+
+**File:** `src/velocity_profiler.hpp/cpp`
+
+Implements the 3-pass S-curve profiler from PipelineContext §Step 4.3.
+
+**Usage:**
+```cpp
+ProfilerConfig cfg;
+cfg.v_start_mps  = 0.2f;   // m/s — derived from ||vx_start, vy_start|| * 0.01
+cfg.v_end_mps    = 0.0f;   // stop at approach point
+cfg.a_start_mps2 = 0.0f;
+cfg.J_max        = 10.0f;  // tune this: higher = snappier S-curve transitions
+cfg.num_steps    = 500;    // resolution of s-grid
+
+// Motor constants — must match physical robot:
+cfg.datasheet_no_load_rpm = 1620.0f;
+cfg.load_comp_omega       = 50.0f;    // rad/s deduction for load
+cfg.r_wheel     = 0.025f;
+cfg.R_chassis   = 0.090f;
+cfg.kS = 0.5f;  cfg.kV = 0.08f;  cfg.kA = 0.02f;  cfg.V_bus = 12.0f;
+cfg.alpha_wheel = { -2.5307f, -0.6109f, 0.6109f, 2.5307f };  // rad
+cfg.a_max_grip_accel = 1.5f;  // m/s² — total traction budget
+
+auto profile = VelocityProfiler::compute(data, cfg);
+// profile[i].s, .s_dot, .s_ddot
+// profile[i].vx, .vy, .omega   (m/s, rad/s — global frame)
+// profile[i].ax, .ay, .alpha   (m/s², rad/s²)
+```
+
+**Algorithm internals:**
+- `calcCeiling(st, cfg)` — hard ṡ cap: min of motor back-EMF limit and centripetal traction limit. Runs as a pre-pass over all s steps.
+- `calcDynLimits(st, s_dot, vx, vy, ω, cfg)` — per-step dynamic {accel, decel} limits from voltage headroom (back-EMF + friction consumed, remaining voltage drives ṡ̈) and friction circle (lateral accel consumed, remainder available for tangential).
+- Forward pass — tracks `s_ddot`, ramps toward `dl.accel` bounded by `J_max · ds / ṡ`, never goes negative (deceleration is the backward pass's job).
+- Backward pass — integrates backward from s=1, ramps deceleration magnitude toward `dl.decel` with same jerk bound, computes what velocity at step i allows reaching step i+1's velocity.
+- Intersection — `ṡ_final = min(fwd, bwd, ceiling)`, then `ṡ̈` via kinematic finite difference.
+
+**Unit notes:** All motor-model functions expect positional spline derivatives in **metres** (evalState already converts cm→m). `v_start_mps` should be `hypot(vx_start_cm, vy_start_cm) * 0.01`.
+
+**Tuning handles:**
+- `J_max` — smoothness of acceleration transitions; 10 is a reasonable starting point.
+- `a_max_grip_accel` — total traction budget (m/s²); lower on carpet, higher on smooth floor.
+- `load_comp_omega` — empirical deduction from no-load RPM to account for motor loading.
+
+---
+
 ### Integration Path to Production
 
 When integrating into `ballalgo`:
-1. Copy `src/astar.hpp/cpp` and `src/hermite_spline.hpp/cpp` into the main `src/`
+1. Copy `src/astar.hpp/cpp`, `src/hermite_spline.hpp/cpp`, and `src/velocity_profiler.hpp/cpp` into the main `src/`
 2. Call `AStar::plan(ekf.getX(), ekf.getY(), compass_deg, ball_kf.getX(), ball_kf.getY())`
-3. Walk the returned `spline[]` — send `(x, y)` as position target and `heading` as orientation to Teensy over UART
-4. Re-plan every camera frame or whenever ball position changes significantly
-5. `approach_cm` and `BALL_CLEAR_CM` may need tuning based on physical robot behaviour
+3. Call `HermiteSpline::buildData(result, samples, vx, vy, 0, 0)` — use actual robot velocity as boundary tangent
+4. Call `VelocityProfiler::compute(data, cfg)` — tune `ProfilerConfig` constants to match physical robot
+5. Slice `profile[]` into `ActionChunk` at the chosen `dt_ms` by integrating `dt = ds / ṡ_final` to convert from s-domain to time-domain
+6. Send `ActionChunk` over UART to Teensy; Teensy indexes by elapsed time
+7. Re-plan every camera frame or whenever ball position changes significantly
+8. Constants to tune on physical hardware: `J_max`, `a_max_grip_accel`, `load_comp_omega`, `kS/kV/kA`, `approach_cm`, `BALL_CLEAR_CM`
 
 
