@@ -269,6 +269,8 @@ CMakeFiles/ballalgo.dir/src/main.cpp.o: \
  /usr/include/opencv4/opencv2/core/ovx.hpp \
  /usr/include/opencv4/opencv2/core/cvdef.h \
  /home/aniket/BallAlgo/src/config.hpp \
+ /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.hpp \
+ /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.hpp \
  /home/aniket/BallAlgo/src/estimation/BallKalman.hpp \
  /usr/include/eigen3/Eigen/Dense /usr/include/eigen3/Eigen/Core \
  /usr/include/eigen3/Eigen/src/Core/util/DisableStupidWarnings.h \
@@ -462,18 +464,20 @@ CMakeFiles/ballalgo.dir/src/main.cpp.o: \
  /home/aniket/BallAlgo/src/estimation/PoseKalman.hpp \
  /home/aniket/BallAlgo/src/lidar/LidarLocalizer.hpp \
  /home/aniket/BallAlgo/src/lidar/Ld19Reader.hpp \
- /usr/include/c++/14/optional /home/aniket/BallAlgo/src/io/GpioLidar.hpp \
- /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
+ /usr/include/c++/14/optional \
  /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.hpp \
+ /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
  /home/aniket/BallAlgo/src/motion/ClockSync.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPlanner.hpp \
  /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
  /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
  /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/io/GpioLidar.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPipeline.hpp \
  /home/aniket/BallAlgo/src/vision/SectorTracker.hpp \
  /home/aniket/BallAlgo/src/vision/Thresholds.hpp \
  /home/aniket/BallAlgo/src/vision/VisionMath.hpp \
+ /usr/include/opencv4/opencv2/imgcodecs.hpp \
  /usr/include/opencv4/opencv2/imgproc.hpp \
  /usr/include/opencv4/opencv2/imgproc/segmentation.hpp \
  /usr/include/c++/14/chrono /usr/include/c++/14/deque \

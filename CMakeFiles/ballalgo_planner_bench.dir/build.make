@@ -96,6 +96,7 @@ ballalgo_planner_bench_EXTERNAL_OBJECTS =
 ballalgo_planner_bench: CMakeFiles/ballalgo_planner_bench.dir/testing/planner_bench.cpp.o
 ballalgo_planner_bench: CMakeFiles/ballalgo_planner_bench.dir/build.make
 ballalgo_planner_bench: CMakeFiles/ballalgo_planner_bench.dir/compiler_depend.ts
+ballalgo_planner_bench: libballalgo_sim_core.a
 ballalgo_planner_bench: libballalgo_motion_core.a
 ballalgo_planner_bench: CMakeFiles/ballalgo_planner_bench.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable ballalgo_planner_bench"

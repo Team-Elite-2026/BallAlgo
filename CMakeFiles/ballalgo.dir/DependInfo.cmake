@@ -8,6 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.cpp" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o.d"
+  "/home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o.d"
   "/home/aniket/BallAlgo/src/camera/CameraCapture.cpp" "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o.d"
   "/home/aniket/BallAlgo/src/estimation/BallKalman.cpp" "CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o.d"
   "/home/aniket/BallAlgo/src/estimation/PoseKalman.cpp" "CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o" "gcc" "CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o.d"

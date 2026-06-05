@@ -1,5 +1,9 @@
 file(REMOVE_RECURSE
   "CMakeFiles/ballalgo.dir/link.d"
+  "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o"
+  "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o.d"
+  "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o"
+  "CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o.d"
   "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o"
   "CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o.d"
   "CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o"

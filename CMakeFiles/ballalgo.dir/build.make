@@ -86,10 +86,38 @@ CMakeFiles/ballalgo.dir/src/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ballalgo.dir/src/main.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/aniket/BallAlgo/src/main.cpp -o CMakeFiles/ballalgo.dir/src/main.cpp.s
 
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o: CMakeFiles/ballalgo.dir/flags.make
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o: src/FoxGloveSim/FoxgloveConfig.cpp
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o -MF CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o.d -o CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o -c /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.cpp
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.cpp > CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.i
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveConfig.cpp -o CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.s
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o: CMakeFiles/ballalgo.dir/flags.make
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o: src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o -MF CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o.d -o CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o -c /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp > CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.i
+
+CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/aniket/BallAlgo/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp -o CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.s
+
 CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o: src/vision/Thresholds.cpp
 CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o -MF CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o.d -o CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o -c /home/aniket/BallAlgo/src/vision/Thresholds.cpp
 
 CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.i: cmake_force
@@ -103,7 +131,7 @@ CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o: src/vision/SectorTracker.cpp
 CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o -MF CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o.d -o CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o -c /home/aniket/BallAlgo/src/vision/SectorTracker.cpp
 
 CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.i: cmake_force
@@ -117,7 +145,7 @@ CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o: src/vision/VisionMath.cpp
 CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o -MF CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o.d -o CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o -c /home/aniket/BallAlgo/src/vision/VisionMath.cpp
 
 CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.i: cmake_force
@@ -131,7 +159,7 @@ CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o: src/camera/CameraCapture.cpp
 CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o -MF CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o.d -o CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o -c /home/aniket/BallAlgo/src/camera/CameraCapture.cpp
 
 CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.i: cmake_force
@@ -145,7 +173,7 @@ CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o: src/lidar/Ld19Reader.cpp
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o -MF CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o.d -o CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o -c /home/aniket/BallAlgo/src/lidar/Ld19Reader.cpp
 
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.i: cmake_force
@@ -159,7 +187,7 @@ CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o: src/lidar/LidarLocalizer.cpp
 CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Building CXX object CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o -MF CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o.d -o CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o -c /home/aniket/BallAlgo/src/lidar/LidarLocalizer.cpp
 
 CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.i: cmake_force
@@ -173,7 +201,7 @@ CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o: src/estimation/PoseKalman.cpp
 CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "Building CXX object CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o -MF CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o.d -o CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o -c /home/aniket/BallAlgo/src/estimation/PoseKalman.cpp
 
 CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.i: cmake_force
@@ -187,7 +215,7 @@ CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o: src/estimation/BallKalman.cpp
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Building CXX object CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o -MF CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o.d -o CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o -c /home/aniket/BallAlgo/src/estimation/BallKalman.cpp
 
 CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.i: cmake_force
@@ -201,7 +229,7 @@ CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o: src/motion/Protocol.cpp
 CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_10) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o -MF CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o.d -o CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o -c /home/aniket/BallAlgo/src/motion/Protocol.cpp
 
 CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.i: cmake_force
@@ -215,7 +243,7 @@ CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o: src/motion/ClockSync.cpp
 CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_11) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o -MF CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o.d -o CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o -c /home/aniket/BallAlgo/src/motion/ClockSync.cpp
 
 CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.i: cmake_force
@@ -229,7 +257,7 @@ CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o: src/motion/ActionChunkPublisher.cpp
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_12) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o -MF CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o.d -o CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o -c /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.cpp
 
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.i: cmake_force
@@ -243,7 +271,7 @@ CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o: src/motion/MotionPipeline.cpp
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_13) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o -MF CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o.d -o CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o -c /home/aniket/BallAlgo/src/motion/MotionPipeline.cpp
 
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.i: cmake_force
@@ -257,7 +285,7 @@ CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o: src/io/RobotSerial.cpp
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_14) "Building CXX object CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Building CXX object CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o -MF CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o.d -o CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o -c /home/aniket/BallAlgo/src/io/RobotSerial.cpp
 
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.i: cmake_force
@@ -271,7 +299,7 @@ CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.s: cmake_force
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o: CMakeFiles/ballalgo.dir/flags.make
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o: src/io/GpioLidar.cpp
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o: CMakeFiles/ballalgo.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_15) "Building CXX object CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_17) "Building CXX object CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o -MF CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o.d -o CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o -c /home/aniket/BallAlgo/src/io/GpioLidar.cpp
 
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.i: cmake_force
@@ -285,6 +313,8 @@ CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.s: cmake_force
 # Object files for target ballalgo
 ballalgo_OBJECTS = \
 "CMakeFiles/ballalgo.dir/src/main.cpp.o" \
+"CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o" \
+"CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o" \
 "CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o" \
 "CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o" \
 "CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o" \
@@ -304,6 +334,8 @@ ballalgo_OBJECTS = \
 ballalgo_EXTERNAL_OBJECTS =
 
 ballalgo: CMakeFiles/ballalgo.dir/src/main.cpp.o
+ballalgo: CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveConfig.cpp.o
+ballalgo: CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o
 ballalgo: CMakeFiles/ballalgo.dir/src/vision/Thresholds.cpp.o
 ballalgo: CMakeFiles/ballalgo.dir/src/vision/SectorTracker.cpp.o
 ballalgo: CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o
@@ -377,7 +409,7 @@ ballalgo: /usr/lib/aarch64-linux-gnu/libopencv_photo.so.4.10.0
 ballalgo: /usr/lib/aarch64-linux-gnu/libopencv_imgproc.so.4.10.0
 ballalgo: /usr/lib/aarch64-linux-gnu/libopencv_core.so.4.10.0
 ballalgo: CMakeFiles/ballalgo.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_16) "Linking CXX executable ballalgo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/home/aniket/BallAlgo/CMakeFiles --progress-num=$(CMAKE_PROGRESS_18) "Linking CXX executable ballalgo"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/ballalgo.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

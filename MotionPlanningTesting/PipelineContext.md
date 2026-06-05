@@ -216,16 +216,6 @@ Velocity Constraints:
 1. $S'(0) = [v_{\text{start, } x}, \ v_{\text{start, } y}, \ \omega_{\text{start}}]^T$
 2. $S'(1) = [v_\text{end},v_ \text{end},\omega_ \text{end}]^T$
 
-- Local tangent: The path tangent angle is computed at every micro-step: $\phi(s) = \text{atan2}(x'(s), y'(s))$.
-- Curvature ($\kappa$) & radius of curvature ($\rho$):
-
-$$
-\kappa(s) =
-\frac{x'(s)y''(s) - y'(s)x''(s)}{(x'(s)^2 + y'(s)^2)^{3/2}},
-\qquad
-\rho(s) = \frac{1}{\kappa(s)}
-$$
-
 ### 3. Time-Optimal S-Curve Generation (The 7-Phase Profile)
 
 The Pi runs a forward/backward integration pass over the spline segments. Instead of jumping instantly to $A_{\max}$ (creating a step-change in motor current), the profile ramps acceleration linearly up and down using fixed maximum jerk constraints ($J_{\max}$). This splits every velocity transition into distinct phases:
@@ -237,7 +227,7 @@ Before any time-integration occurs, the Pi must evaluate the geometric spline to
 Because the spatial derivatives strictly define the ratio of translation to rotation, the Pi determines the instantaneous path velocity ceiling $\dot{s}_{\max}(s)$ at every point. This ceiling is the hard minimum of the motor back-EMF limit (electrical headroom) and the lateral traction limit (centripetal friction).
 
 **Step 2: The Forward Pass (Phases 1–4)**
-Starting at s=0 with initial path velocity $\dot{s}_0$, the integrator steps forward by $ds$. At each step, it calculates the available dynamic acceleration $\ddot{s}_{\max}(s)$ based on the robot's state at the previous step.
+Starting at s=0 with initial path velocity $\dot{s}_0$, the integrator steps forward by ds. At each step, it calculates the available dynamic acceleration $\ddot{s}_{\max}(s)$ based on the robot's state/spline state at the previous step.
 • **Phase 1: Ramping Acceleration:** Path jerk is set to $J_{\max}$. Path acceleration $\ddot{s}$ builds linearly toward $\ddot{s}_{\max}(s)$.
 • **Phase 2: Constant Acceleration:** Path jerk drops to 0. Path acceleration is sustained at $\ddot{s}_{\max}(s)$, continually adjusting to "ride the absolute physical limit" of the motors and traction.
 • **Phase 3: Ramping Down Acceleration:** As the integrated forward velocity approaches the pre-calculated ceiling $\dot{s}_{\max}(s)$, path jerk hits $-J_{\max}$ to smoothly round off the curve.
@@ -245,19 +235,27 @@ Starting at s=0 with initial path velocity $\dot{s}_0$, the integrator steps for
 
 **Step 3: The Backward Pass (Phases 5–7)**
 The Pi jumps to $s=1$, sets the target exit velocity $\dot{s}_{\text{end}}$, and integrates backward by $-ds$.
-• **Phases 5–7: Deceleration S-Curve:** The integrator works backward, strictly querying the dynamic deceleration boundary to find the maximum allowable braking force $\ddot{s}_{\min}(s)$. Crucially, this backward pass is *also* bounded by the pre-calculated $\dot{s}_{\max}(s)$ ceiling. By strictly adhering to the ceiling, the backward pass automatically scrubs momentum before every sharp corner, creating a braking S-Curve prior to every local minimum in the path limit.
+• **Phases 5–7: Deceleration S-Curve:** The integrator works backward, strictly querying the dynamic deceleration boundary to find the maximum allowable braking force $\ddot{s}_{\min}(s)$ by using the values from the future spline step. Crucially, this backward pass is *also* bounded by the pre-calculated $\dot{s}_{\max}(s)$ ceiling. By strictly adhering to the ceiling, the backward pass automatically scrubs momentum before every sharp corner, creating a braking S-Curve prior to every local minimum in the path limit.
 
 **Step 4: The Intersection**
 
 The true, final, mathematically safe velocity profile is strictly defined as the intersection of the two passes:
 
 $\dot{s}_{\text{final}}(s) = \min(\dot{s}_{\text{fwd}}(s), \dot{s}_{\text{bwd}}(s))$
-The actual real-world commands are then derived directly from $\dot{s}_{\text{final}}(s)$:
+The actual real-world commands are then derived directly from the calculated velocities:
 
 ```cpp
+s_ddot =
+    (s_dot_final_next * s_dot_final_next - s_dot_final_current * s_dot_final_current)
+  / (2.0f * ds);
+
 vx = dx_ds * s_dot_final;
 vy = dy_ds * s_dot_final;
 omega = dtheta_ds * s_dot_final;
+
+ax    = x''(s)     * s_dot^2 + x'(s)     * s_ddot;
+ay    = y''(s)     * s_dot^2 + y'(s)     * s_ddot;
+alpha = theta''(s) * s_dot^2 + theta'(s) * s_ddot;
 ```
 
 run this in a `for` loop over s from 0 to 1 **before** the profiler runs to build your ceiling array.
@@ -319,139 +317,217 @@ Run this dynamically **during** the Forward and Backward passes to find your acc
 #include <algorithm>
 
 struct RobotState {
-    float vx, vy, omega; 
+    float vx, vy, omega;
 };
 
-struct KinematicLimits {
-    float max_velocity;      
-    float max_acceleration;  
-    float max_deceleration;  
-    float max_omega;         
-    float max_alpha_accel;   
-    float max_alpha_decel;   
+struct DynamicLimits {
+    // Positive path acceleration limit
+    float max_s_ddot_accel;
+
+    // Positive magnitude of path deceleration limit
+    float max_s_ddot_decel;
 };
 
 // Physical constants
-const float alpha_wheel[4] = {-2.5307f, -0.6109f, 0.6109f, 2.5307f}; 
+const float alpha_wheel[4] = {
+    -2.5307f, -0.6109f, 0.6109f, 2.5307f
+};
+
 const float R_chassis = 0.09f;
 const float r_wheel = 0.025f;
-const float V_bus = 12.0f; 
+const float V_bus = 12.0f;
 
-// Motor constants 
+// Motor constants
 const float kS = 0.5f;   // Static friction voltage
-const float kV = 0.08f;  // Back-EMF constant (V per rad/s)
-const float kA = 0.02f;  // Acceleration torque constant (V per rad/s^2)
+const float kV = 0.08f;  // Back-EMF constant, V per rad/s
+const float kA = 0.02f;  // Acceleration constant, V per rad/s^2
 
-KinematicLimits calculate_dynamic_limits(float target_phi, float requested_a_chassis, float requested_alpha, RobotState current_state, float kappa) {
-    KinematicLimits limits;
-    
-    // Initialize with large ceilings to find the bounding minimum constraints
-    limits.max_velocity = 999.0f;
-    limits.max_omega = 999.0f;
-    limits.max_acceleration = 999.0f;
-    limits.max_deceleration = 999.0f;
-    limits.max_alpha_accel = 999.0f;
-    limits.max_alpha_decel = 999.0f;
+const float EPS = 0.001f;
 
-    
+// Total available acceleration from traction/grip.
+// This can replace both a_max_lateral and a_max_traction
+// in the simplified traction model.
+const float a_max_grip_accel = 1.5f;  // m/s^2
+
+DynamicLimits calculate_dynamic_limits(
+    float dx_ds,
+    float dy_ds,
+    float dtheta_ds,
+
+    float d2x_ds2,
+    float d2y_ds2,
+    float d2theta_ds2,
+
+    float s_dot,
+
+    RobotState current_state,
+    float kappa
+) {
+    DynamicLimits limits;
+
+    limits.max_s_ddot_accel = 999.0f;
+    limits.max_s_ddot_decel = 999.0f;
+
+    float s_dot_sq = s_dot * s_dot;
+
+    // ------------------------------------------------------------
+    // 1. Motor voltage limits, converted directly to s_ddot limits
+    // ------------------------------------------------------------
     for (int i = 0; i < 4; i++) {
-        // --- DIRECTIONAL PROJECTIONS ---
-        // Matches the cos(alpha - phi) identity for your 0 deg = (0,1) custom frame
-        float proj_trans = sin(alpha_wheel[i]) * sin(target_phi) + cos(alpha_wheel[i]) * cos(target_phi);
-        float proj_rot = -R_chassis; 
-
-        // --- 2. DYNAMIC VOLTAGE HEADROOM CALCULATION ---
-        // Determines how much instantaneous voltage headroom is left for accelerating
-        float current_v_wheel = sin(alpha_wheel[i]) * current_state.vx + 
-                                cos(alpha_wheel[i]) * current_state.vy + 
-                                proj_rot * current_state.omega;
+        // --------------------------------------------------------
+        // 1A. Current wheel velocity
+        // --------------------------------------------------------
+        float current_v_wheel =
+            std::sin(alpha_wheel[i]) * current_state.vx
+          + std::cos(alpha_wheel[i]) * current_state.vy
+          - R_chassis * current_state.omega;
 
         float current_w_motor = current_v_wheel / r_wheel;
+
+        // --------------------------------------------------------
+        // 1B. Available motor voltage headroom
+        // --------------------------------------------------------
         float v_back_emf = kV * current_w_motor;
 
         float friction_v = 0.0f;
-        if (current_w_motor > 0.01f) friction_v = kS;
-        else if (current_w_motor < -0.01f) friction_v = -kS;
+        if (current_w_motor > 0.01f) {
+            friction_v = kS;
+        } else if (current_w_motor < -0.01f) {
+            friction_v = -kS;
+        }
 
         float max_volt_pos = V_bus - friction_v - v_back_emf;
-        float max_volt_neg = -V_bus - friction_v - v_back_emf; 
+        float max_volt_neg = -V_bus - friction_v - v_back_emf;
 
+        // Convert voltage headroom to wheel linear acceleration limits
         float a_wheel_max_pos = (max_volt_pos * r_wheel) / kA;
         float a_wheel_max_neg = (max_volt_neg * r_wheel) / kA;
 
-        // --- 3. TRANSLATIONAL ACCEL/DECEL ASYMMETRY (Coupled with requested Alpha) ---
-        float a_wheel_rot_component = proj_rot * requested_alpha;
-        float a_wheel_remain_pos = a_wheel_max_pos - a_wheel_rot_component;
-        float a_wheel_remain_neg = a_wheel_max_neg - a_wheel_rot_component;
+        // --------------------------------------------------------
+        // 1C. Wheel acceleration model
+        //
+        // wheel_vel_i = K_i * s_dot
+        //
+        // wheel_accel_i =
+        //      K_i * s_ddot
+        //    + C_i * s_dot^2
+        //
+        // K_i comes from first derivatives.
+        // C_i comes from second derivatives.
+        // --------------------------------------------------------
 
-        if (std::abs(proj_trans) > 0.001f) {
-            float chassis_accel_bound1 = a_wheel_remain_pos / proj_trans;
-            float chassis_accel_bound2 = a_wheel_remain_neg / proj_trans;
+        float K_i =
+            std::sin(alpha_wheel[i]) * dx_ds
+          + std::cos(alpha_wheel[i]) * dy_ds
+          - R_chassis * dtheta_ds;
 
-            float local_max_accel = std::max(chassis_accel_bound1, chassis_accel_bound2);
-            float local_max_decel = std::min(chassis_accel_bound1, chassis_accel_bound2);
+        float C_i =
+            std::sin(alpha_wheel[i]) * d2x_ds2
+          + std::cos(alpha_wheel[i]) * d2y_ds2
+          - R_chassis * d2theta_ds2;
 
-            if (local_max_accel > 0.0f) {
-                limits.max_acceleration = std::min(limits.max_acceleration, local_max_accel);
+        // Acceleration already required just because the path is curving
+        // or theta is changing nonlinearly with s.
+        float a_wheel_curve_term = C_i * s_dot_sq;
+
+        if (std::abs(K_i) > EPS) {
+            // Solve:
+            //
+            // a_wheel_max_neg <= K_i * s_ddot + a_wheel_curve_term
+            //                   <= a_wheel_max_pos
+            //
+            // Therefore:
+            //
+            // s_ddot <= (a_wheel_max_pos - a_wheel_curve_term) / K_i
+            // s_ddot >= (a_wheel_max_neg - a_wheel_curve_term) / K_i
+
+            float s_ddot_bound1 =
+                (a_wheel_max_pos - a_wheel_curve_term) / K_i;
+
+            float s_ddot_bound2 =
+                (a_wheel_max_neg - a_wheel_curve_term) / K_i;
+
+            float local_s_ddot_max =
+                std::max(s_ddot_bound1, s_ddot_bound2);
+
+            float local_s_ddot_min =
+                std::min(s_ddot_bound1, s_ddot_bound2);
+
+            // Positive s_ddot = accelerate forward along the path
+            if (local_s_ddot_max > 0.0f) {
+                limits.max_s_ddot_accel =
+                    std::min(limits.max_s_ddot_accel,
+                             local_s_ddot_max);
             } else {
-                limits.max_acceleration = 0.0f; 
+                limits.max_s_ddot_accel = 0.0f;
             }
 
-            if (local_max_decel < 0.0f) {
-                limits.max_deceleration = std::min(limits.max_deceleration, std::abs(local_max_decel));
+            // Negative s_ddot = decelerate/brake along the path
+            if (local_s_ddot_min < 0.0f) {
+                limits.max_s_ddot_decel =
+                    std::min(limits.max_s_ddot_decel,
+                             std::abs(local_s_ddot_min));
             } else {
-                limits.max_deceleration = 0.0f; 
+                limits.max_s_ddot_decel = 0.0f;
             }
-        }
-
-        // --- 4. ROTATIONAL ACCEL/DECEL CEILINGS (Coupled with requested Accel) ---
-        float a_wheel_trans_component = proj_trans * requested_a_chassis;
-        float a_wheel_rot_remain_pos = a_wheel_max_pos - a_wheel_trans_component;
-        float a_wheel_rot_remain_neg = a_wheel_max_neg - a_wheel_trans_component;
-
-        float alpha_bound1 = a_wheel_rot_remain_pos / proj_rot; 
-        float alpha_bound2 = a_wheel_rot_remain_neg / proj_rot; 
-
-        float local_alpha_limit_pos = std::max(alpha_bound1, alpha_bound2);
-        float local_alpha_limit_neg = std::min(alpha_bound1, alpha_bound2);
-
-        if (current_state.omega >= 0.0f) {
-            limits.max_alpha_accel = std::min(limits.max_alpha_accel, std::max(0.0f, local_alpha_limit_pos));
-            limits.max_alpha_decel = std::min(limits.max_alpha_decel, std::abs(std::min(0.0f, local_alpha_limit_neg)));
         } else {
-            limits.max_alpha_accel = std::min(limits.max_alpha_accel, std::abs(std::min(0.0f, local_alpha_limit_neg)));
-            limits.max_alpha_decel = std::min(limits.max_alpha_decel, std::max(0.0f, local_alpha_limit_pos));
+            // If K_i is near zero, this wheel's acceleration does not
+            // depend much on s_ddot. But the curve term still matters.
+            //
+            // If the curve term alone exceeds the wheel acceleration limit,
+            // then the current s_dot is already infeasible. Usually this
+            // should have been prevented by the precomputed s_dot ceiling.
+            if (a_wheel_curve_term > a_wheel_max_pos ||
+                a_wheel_curve_term < a_wheel_max_neg) {
+                limits.max_s_ddot_accel = 0.0f;
+                limits.max_s_ddot_decel = 0.0f;
+            }
         }
     }
 
-    // --- 5. CENTRIPETAL & TRACTION LIMITS (Add to bottom of calculate_dynamic_limits) ---
+    // ------------------------------------------------------------
+    // 2. Traction limit, converted to path acceleration
+    // ------------------------------------------------------------
+    float path_speed_ratio =
+        std::sqrt(dx_ds * dx_ds + dy_ds * dy_ds);
 
-		// a_max_lateral should be found experimentally (e.g., 1.5 m/s^2 depending on wheels/carpet)
-		const float a_max_traction = 1.5f; 
-		
-		// Calculate current centripetal acceleration: a_c = v^2 / r = v^2 * kappa
-		// Using current chassis velocity
-		float current_v_sq = (current_state.vx * current_state.vx) + (current_state.vy * current_state.vy);
-		float a_centripetal = current_v_sq * std::abs(kappa); 
-		
-		// Clamp to avoid domain errors if we briefly exceed limits due to discrete steps
-		a_centripetal = std::min(a_centripetal, a_max_traction);
-		
-		// Remaining grip for forward/backward acceleration (Pythagorean theorem)
-		float a_tangential_avail = std::sqrt( (a_max_traction * a_max_traction) - (a_centripetal * a_centripetal) );
-		
-		// Apply traction constraints to the motor-derived limits
-		limits.max_acceleration = std::min(limits.max_acceleration, a_tangential_avail);
-		limits.max_deceleration = std::min(limits.max_deceleration, a_tangential_avail);
-		
-		// Apply the velocity ceiling
-		float V_curve_max = 999.0f;
-		if (std::abs(kappa) > 0.001f) {
-		    V_curve_max = std::sqrt(a_max_traction / std::abs(kappa));
-		}
-		limits.max_velocity = std::min(limits.max_velocity, V_curve_max);
-		
-		return limits;
+    if (path_speed_ratio > EPS) {
+        // True translational acceleration from the path second derivative:
+        //
+        // ax = d2x_ds2 * s_dot^2 + dx_ds * s_ddot
+        // ay = d2y_ds2 * s_dot^2 + dy_ds * s_ddot
+        //
+        // For the traction bound, approximate the part already required
+        // for following the curve as centripetal acceleration.
+        float current_v_sq =
+            current_state.vx * current_state.vx
+          + current_state.vy * current_state.vy;
+
+        float a_lateral_used =
+            current_v_sq * std::abs(kappa);
+
+        a_lateral_used =
+            std::min(a_lateral_used, a_max_grip_accel);
+
+        float a_tangential_avail =
+            std::sqrt(
+                a_max_grip_accel * a_max_grip_accel
+              - a_lateral_used * a_lateral_used
+            );
+
+        float s_ddot_traction =
+            a_tangential_avail / path_speed_ratio;
+
+        limits.max_s_ddot_accel =
+            std::min(limits.max_s_ddot_accel,
+                     s_ddot_traction);
+
+        limits.max_s_ddot_decel =
+            std::min(limits.max_s_ddot_decel,
+                     s_ddot_traction);
+    }
+
+    return limits;
 }
 ```
 

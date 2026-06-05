@@ -12,6 +12,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/motion_planning.dir/src/main.cpp.o.d"
   "CMakeFiles/motion_planning.dir/src/robot_ekf.cpp.o"
   "CMakeFiles/motion_planning.dir/src/robot_ekf.cpp.o.d"
+  "CMakeFiles/motion_planning.dir/src/velocity_profiler.cpp.o"
+  "CMakeFiles/motion_planning.dir/src/velocity_profiler.cpp.o.d"
   "bin/motion_planning"
   "bin/motion_planning.pdb"
 )
