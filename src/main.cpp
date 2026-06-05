@@ -11,6 +11,7 @@
 #include "vision/SectorTracker.hpp"
 #include "vision/Thresholds.hpp"
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <cstdio>
