@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offense Step 2.5 Visualizer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f5;
+      color: #1f2933;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: 100vh;
+    }
+    aside {
+      padding: 18px;
+      background: #ffffff;
+      border-right: 1px solid #d8d8d2;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 14px;
+    }
+    label {
+      display: grid;
+      gap: 5px;
+      margin: 10px 0;
+      font-size: 13px;
+    }
+    input {
+      font: inherit;
+      padding: 7px 8px;
+      border: 1px solid #b8b8b0;
+      border-radius: 4px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border: 1px solid #1f2933;
+      border-radius: 4px;
+      background: #1f2933;
+      color: white;
+      cursor: pointer;
+    }
+    pre {
+      white-space: pre-wrap;
+      font-size: 12px;
+      background: #f1f1ed;
+      padding: 10px;
+      border-radius: 4px;
+      line-height: 1.45;
+    }
+    section {
+      padding: 18px;
+      overflow: auto;
+    }
+    canvas {
+      background: #ffffff;
+      border: 1px solid #d8d8d2;
+      max-width: 100%;
+      height: auto;
+    }
+    @media (max-width: 860px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      aside {
+        border-right: 0;
+        border-bottom: 1px solid #d8d8d2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <aside>
+      <h1>Offense Step 2.5</h1>
+      <label>Start X centered cm <input id="robotX" type="number" value="-20" step="1"></label>
+      <label>Start Y centered cm <input id="robotY" type="number" value="-60" step="1"></label>
+      <label>Start heading deg <input id="robotHeading" type="number" value="0" step="5"></label>
+      <label>Ball X centered cm <input id="ballX" type="number" value="10" step="1"></label>
+      <label>Ball Y centered cm <input id="ballY" type="number" value="15" step="1"></label>
+      <label>Ball VX field cm/s <input id="ballVx" type="number" value="25" step="1"></label>
+      <label>Ball VY field cm/s <input id="ballVy" type="number" value="90" step="1"></label>
+      <label>Attack goal X centered cm <input id="goalX" type="number" value="0" step="1"></label>
+      <label>Attack goal Y centered cm <input id="goalY" type="number" value="121.5" step="1"></label>
+      <button id="draw">Redraw</button>
+      <pre id="debug"></pre>
+    </aside>
+    <section>
+      <canvas id="field" width="820" height="980"></canvas>
+    </section>
+  </main>
+
+  <script>
+    const fieldW = 1820;
+    const fieldH = 2430;
+    const fps = 120;
+    const gamma = 0.96;
+    const strikeOffsetM = 0.12;
+    const strikeInterceptMaxTimeS = 2.0;
+    const strikeInterceptMaxIterations = 5;
+    const strikeInterceptConvergeS = 0.025;
+    const vMaxX = 0.8;
+    const vMaxY = 0.6;
+
+    function centeredCmToFieldMm(v, axis) {
+      return v * 10 + axis * 0.5;
+    }
+    function fieldMmToCenteredCm(v, axis) {
+      return (v - axis * 0.5) / 10;
+    }
+    function wrapAngleDeg(angle) {
+      let wrapped = (angle + 180) % 360;
+      if (wrapped < 0) wrapped += 360;
+      return wrapped - 180;
+    }
+    function vMaxDir(phi) {
+      const c = Math.cos(phi);
+      const s = Math.sin(phi);
+      const d = (c / vMaxX) ** 2 + (s / vMaxY) ** 2;
+      return d < 1e-9 ? Math.max(vMaxX, vMaxY) : 1 / Math.sqrt(d);
+    }
+    function fieldPointToBodyMeters(fieldX, fieldY, robotX, robotY, headingDeg) {
+      const h = headingDeg * Math.PI / 180;
+      const c = Math.cos(h);
+      const s = Math.sin(h);
+      const dx = fieldX - robotX;
+      const dy = fieldY - robotY;
+      return {
+        x: (c * dx + s * dy) / 1000,
+        y: (-s * dx + c * dy) / 1000
+      };
+    }
+    function fieldVelocityToBody(fieldVx, fieldVy, headingDeg) {
+      const h = headingDeg * Math.PI / 180;
+      const c = Math.cos(h);
+      const s = Math.sin(h);
+      return {
+        x: c * fieldVx + s * fieldVy,
+        y: -s * fieldVx + c * fieldVy
+      };
+    }
+    function bodyPointToFieldMm(bodyX, bodyY, robotX, robotY, headingDeg) {
+      const h = headingDeg * Math.PI / 180;
+      const c = Math.cos(h);
+      const s = Math.sin(h);
+      return {
+        x: robotX + (c * bodyX * 1000 - s * bodyY * 1000),
+        y: robotY + (s * bodyX * 1000 + c * bodyY * 1000)
+      };
+    }
+    function predictBallBody(x, y, vx, vy, timeS) {
+      const dt = 1 / fps;
+      const samples = Math.max(0, timeS / dt);
+      let dampedTime = timeS;
+      let outVx = vx;
+      let outVy = vy;
+      if (Math.abs(1 - gamma) > 1e-5) {
+        dampedTime = dt * (1 - Math.pow(gamma, samples)) / (1 - gamma);
+        outVx = vx * Math.pow(gamma, samples);
+        outVy = vy * Math.pow(gamma, samples);
+      }
+      return { x: x + vx * dampedTime, y: y + vy * dampedTime, vx: outVx, vy: outVy };
+    }
+    function approximatePathTime(robotX, robotY, headingDeg, targetX, targetY, goalHeadingDeg) {
+      const dx = targetX - robotX;
+      const dy = targetY - robotY;
+      const distanceM = Math.hypot(dx, dy) / 1000;
+      const local = fieldPointToBodyMeters(targetX, targetY, robotX, robotY, headingDeg);
+      const phi = Math.atan2(local.y, local.x);
+      const moveTime = distanceM / Math.max(0.05, vMaxDir(phi));
+      const headingDiff = Math.abs(wrapAngleDeg(goalHeadingDeg - headingDeg));
+      const rotateTime = 0.08 * (headingDiff / 90);
+      return moveTime + rotateTime;
+    }
+    function computeOffense(robotX, robotY, headingDeg, ballX, ballY, ballVx, ballVy, goalX, goalY) {
+      const ballBody = fieldPointToBodyMeters(ballX, ballY, robotX, robotY, headingDeg);
+      const ballBodyV = fieldVelocityToBody(ballVx, ballVy, headingDeg);
+      const goalBody = fieldPointToBodyMeters(goalX, goalY, robotX, robotY, headingDeg);
+      const goalDeg = Math.atan2(goalBody.y, goalBody.x) * 180 / Math.PI;
+      let interceptTimeS = Math.min(
+        strikeInterceptMaxTimeS,
+        Math.hypot(ballBody.x, ballBody.y) / Math.max(0.05, Math.max(vMaxX, vMaxY))
+      );
+      const iterations = [];
+
+      for (let i = 0; i < strikeInterceptMaxIterations; i++) {
+        const predictedBody = predictBallBody(ballBody.x, ballBody.y, ballBodyV.x, ballBodyV.y, interceptTimeS);
+        const predictedField = bodyPointToFieldMm(predictedBody.x, predictedBody.y, robotX, robotY, headingDeg);
+        const goalDx = goalX - predictedField.x;
+        const goalDy = goalY - predictedField.y;
+        const goalDist = Math.hypot(goalDx, goalDy);
+        const strikeField = goalDist > 1e-6
+          ? {
+              x: predictedField.x - strikeOffsetM * 1000 * (goalDx / goalDist),
+              y: predictedField.y - strikeOffsetM * 1000 * (goalDy / goalDist)
+            }
+          : { x: predictedField.x, y: predictedField.y };
+        const strikeBody = fieldPointToBodyMeters(strikeField.x, strikeField.y, robotX, robotY, headingDeg);
+        const targetHeadingDeg = Math.atan2(goalY - strikeField.y, goalX - strikeField.x) * 180 / Math.PI;
+        const pathTimeS = approximatePathTime(robotX, robotY, headingDeg, strikeField.x, strikeField.y, targetHeadingDeg);
+        iterations.push({
+          index: i + 1,
+          interceptTimeS,
+          pathTimeS,
+          predictedBody,
+          predictedField,
+          goalDx,
+          goalDy,
+          goalDist,
+          strikeBody,
+          strikeField,
+          targetHeadingDeg
+        });
+        const nextInterceptTimeS = Math.min(strikeInterceptMaxTimeS, pathTimeS);
+        if (Math.abs(nextInterceptTimeS - interceptTimeS) <= strikeInterceptConvergeS ||
+            pathTimeS >= strikeInterceptMaxTimeS ||
+            i + 1 === strikeInterceptMaxIterations) {
+          break;
+        }
+        interceptTimeS = nextInterceptTimeS;
+      }
+
+      return {
+        ballBody,
+        ballBodyV,
+        goalDeg,
+        iterations,
+        final: iterations[iterations.length - 1]
+      };
+    }
+    function drawArrow(ctx, x1, y1, x2, y2, color) {
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - 12 * Math.cos(angle - 0.45), y2 - 12 * Math.sin(angle - 0.45));
+      ctx.lineTo(x2 - 12 * Math.cos(angle + 0.45), y2 - 12 * Math.sin(angle + 0.45));
+      ctx.closePath();
+      ctx.fill();
+    }
+    function drawHeadingArrow(ctx, x, y, headingDeg, lengthPx, color) {
+      const headingRad = headingDeg * Math.PI / 180;
+      drawArrow(ctx, x, y, x + Math.cos(headingRad) * lengthPx, y - Math.sin(headingRad) * lengthPx, color);
+    }
+    function draw() {
+      const canvas = document.getElementById("field");
+      const ctx = canvas.getContext("2d");
+      const pad = 60;
+      const scale = Math.min((canvas.width - pad * 2) / fieldW, (canvas.height - pad * 2) / fieldH);
+      const ox = (canvas.width - fieldW * scale) / 2;
+      const oy = (canvas.height + fieldH * scale) / 2;
+      const sx = x => ox + x * scale;
+      const sy = y => oy - y * scale;
+
+      const robotX = centeredCmToFieldMm(Number(document.getElementById("robotX").value), fieldW);
+      const robotY = centeredCmToFieldMm(Number(document.getElementById("robotY").value), fieldH);
+      const headingDeg = Number(document.getElementById("robotHeading").value);
+      const ballX = centeredCmToFieldMm(Number(document.getElementById("ballX").value), fieldW);
+      const ballY = centeredCmToFieldMm(Number(document.getElementById("ballY").value), fieldH);
+      const ballVx = Number(document.getElementById("ballVx").value) / 100;
+      const ballVy = Number(document.getElementById("ballVy").value) / 100;
+      const goalX = centeredCmToFieldMm(Number(document.getElementById("goalX").value), fieldW);
+      const goalY = centeredCmToFieldMm(Number(document.getElementById("goalY").value), fieldH);
+
+      const result = computeOffense(robotX, robotY, headingDeg, ballX, ballY, ballVx, ballVy, goalX, goalY);
+      const final = result.final;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = "#1f2933";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx(0), sy(fieldH), fieldW * scale, fieldH * scale);
+
+      ctx.strokeStyle = "#999";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(sx(goalX), sy(goalY));
+      ctx.lineTo(sx(final.strikeField.x), sy(final.strikeField.y));
+      ctx.stroke();
+      drawArrow(ctx, sx(ballX), sy(ballY), sx(ballX + ballVx * 800), sy(ballY + ballVy * 800), "#f58518");
+      drawArrow(
+        ctx,
+        sx(final.predictedField.x),
+        sy(final.predictedField.y),
+        sx(final.predictedField.x + (final.predictedBody.vx * Math.cos(headingDeg * Math.PI / 180) - final.predictedBody.vy * Math.sin(headingDeg * Math.PI / 180)) * 800),
+        sy(final.predictedField.y + (final.predictedBody.vx * Math.sin(headingDeg * Math.PI / 180) + final.predictedBody.vy * Math.cos(headingDeg * Math.PI / 180)) * 800),
+        "#e45756"
+      );
+      drawHeadingArrow(ctx, sx(final.strikeField.x), sy(final.strikeField.y), final.targetHeadingDeg, 42, "#54a24b");
+
+      const points = [
+        [goalX, goalY, "#222", "goal", 10, -10],
+        [ballX, ballY, "#f58518", "ball now", 10, -12],
+        [final.predictedField.x, final.predictedField.y, "#e45756", "future ball", 10, -12],
+        [final.strikeField.x, final.strikeField.y, "#54a24b", "strike pose", 10, -16]
+      ];
+      ctx.font = "13px Arial";
+      for (const [x, y, color, label, dx, dy] of points) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(sx(x), sy(y), 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillText(label, sx(x) + dx, sy(y) + dy);
+      }
+
+      const iterationSummary = result.iterations
+        .map(it => `iter ${it.index}: tint=${it.interceptTimeS.toFixed(3)}s, path=${it.pathTimeS.toFixed(3)}s`)
+        .join("\n");
+      document.getElementById("debug").textContent =
+        `start centered cm=(${fieldMmToCenteredCm(robotX, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(robotY, fieldH).toFixed(1)})\n` +
+        `ball body=(${result.ballBody.x.toFixed(3)}, ${result.ballBody.y.toFixed(3)}) m\n` +
+        `ball body velocity=(${result.ballBodyV.x.toFixed(3)}, ${result.ballBodyV.y.toFixed(3)}) m/s\n` +
+        `goal angle in body frame=${result.goalDeg.toFixed(1)} deg\n` +
+        `future ball centered cm=(${fieldMmToCenteredCm(final.predictedField.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(final.predictedField.y, fieldH).toFixed(1)})\n` +
+        `strike pose centered cm=(${fieldMmToCenteredCm(final.strikeField.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(final.strikeField.y, fieldH).toFixed(1)})\n` +
+        `ball->goal line angle=${(Math.atan2(final.goalDy, final.goalDx) * 180 / Math.PI).toFixed(1)} deg\n` +
+        `target heading=${final.targetHeadingDeg.toFixed(1)} deg\n` +
+        `final intercept time=${final.interceptTimeS.toFixed(3)} s\n` +
+        `approx path time=${final.pathTimeS.toFixed(3)} s\n` +
+        `iterations=${result.iterations.length}\n` +
+        `${iterationSummary}`;
+    }
+    document.getElementById("draw").addEventListener("click", draw);
+    document.querySelectorAll("input").forEach(input => input.addEventListener("input", draw));
+    draw();
+  </script>
+</body>
+</html>

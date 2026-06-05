@@ -25,6 +25,11 @@ struct CommandedPoseGoal {
   float headingDeg = 0;
 };
 
+struct FieldTarget {
+  float xMm = 0;
+  float yMm = 0;
+};
+
 struct CommandedPosePlanDebug {
   PoseState startPose;
   CommandedPoseGoal goal;
@@ -42,6 +47,9 @@ struct BallPlanDebug {
   PoseState startPose;
   BallState ball;
   float goalDeg = 0;
+  bool usedGoalFieldTarget = false;
+  float goalFieldXMm = 0;
+  float goalFieldYMm = 0;
   float startHeadingDeg = 0;
   bool fullPlanner = false;
   bool usedCenterFallback = false;
@@ -87,8 +95,12 @@ class MotionPlanner {
   MotionPlanner();
   PlannedChunk plan(const PoseState& pose, const BallState& ball, float goalDeg,
                     float headingDeg, bool fullPlanner);
+  PlannedChunk plan(const PoseState& pose, const BallState& ball, float goalDeg,
+                    float headingDeg, bool fullPlanner, const FieldTarget* goalFieldTarget);
   BallPlanDebug debugPlan(const PoseState& pose, const BallState& ball, float goalDeg,
                           float headingDeg, bool fullPlanner);
+  BallPlanDebug debugPlan(const PoseState& pose, const BallState& ball, float goalDeg,
+                          float headingDeg, bool fullPlanner, const FieldTarget* goalFieldTarget);
   PlannedChunk planToPose(const PoseState& pose, const CommandedPoseGoal& goal,
                           float headingDeg);
   CommandedPosePlanDebug debugPlanToPose(const PoseState& pose, const CommandedPoseGoal& goal,

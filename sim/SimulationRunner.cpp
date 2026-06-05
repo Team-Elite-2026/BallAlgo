@@ -117,10 +117,14 @@ SimulationResult simulateProductionBallPlan(MotionPlanner& planner, const PoseSt
     replan.productionRoute = true;
     replan.plannerInputs =
         makeProductionPlannerInputs(currentPose, currentHeadingDeg, currentBall, goalTarget);
+    const FieldTarget plannerGoalFieldTarget{
+        static_cast<float>(replan.plannerInputs.goalTargetField.xMm),
+        static_cast<float>(replan.plannerInputs.goalTargetField.yMm)};
     replan.productionDebug =
         planner.debugPlan(currentPose, replan.plannerInputs.ballBody,
                           static_cast<float>(replan.plannerInputs.goalDeg),
-                          static_cast<float>(currentHeadingDeg), true);
+                          static_cast<float>(currentHeadingDeg), true,
+                          &plannerGoalFieldTarget);
     replan.targetXMm = replan.productionDebug.targetXMm;
     replan.targetYMm = replan.productionDebug.targetYMm;
     replan.targetHeadingDeg = replan.productionDebug.targetHeadingDeg;

@@ -19,6 +19,10 @@ int headingToBin(float angleDeg, int bins) {
   return static_cast<int>(wrapped / stepDeg) % bins;
 }
 
+float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
+  return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
+}
+
 float wrapAngleDeg(float angleDeg) {
   float wrapped = std::fmod(angleDeg + 180.f, 360.f);
   if (wrapped < 0) wrapped += 360.f;
@@ -46,6 +50,17 @@ void fillStopChunkIfEmpty(PlannedChunk& chunk) {
   if (!chunk.actions.empty()) return;
   MotionAction stop{};
   chunk.actions.assign(config::kChunkMaxActions, stop);
+}
+
+void fieldPointToBodyMeters(float fieldXMm, float fieldYMm, const PoseState& pose, float headingDeg,
+                            float& bodyXM, float& bodyYM) {
+  const float headingRad = headingDeg * static_cast<float>(M_PI / 180.0);
+  const float c = std::cos(headingRad);
+  const float s = std::sin(headingRad);
+  const float dxMm = fieldXMm - pose.xMm;
+  const float dyMm = fieldYMm - pose.yMm;
+  bodyXM = (c * dxMm + s * dyMm) / 1000.f;
+  bodyYM = (-s * dxMm + c * dyMm) / 1000.f;
 }
 
 void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
@@ -115,15 +130,32 @@ static uint64_t nowPiUs() {
 
 PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, float goalDeg,
                                  float headingDeg, bool fullPlanner) {
-  return debugPlan(pose, ball, goalDeg, headingDeg, fullPlanner).chunk;
+  return debugPlan(pose, ball, goalDeg, headingDeg, fullPlanner, nullptr).chunk;
 }
 
 BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& ball, float goalDeg,
                                        float headingDeg, bool fullPlanner) {
+  return debugPlan(pose, ball, goalDeg, headingDeg, fullPlanner, nullptr);
+}
+
+PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, float goalDeg,
+                                 float headingDeg, bool fullPlanner,
+                                 const FieldTarget* goalFieldTarget) {
+  return debugPlan(pose, ball, goalDeg, headingDeg, fullPlanner, goalFieldTarget).chunk;
+}
+
+BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& ball, float goalDeg,
+                                       float headingDeg, bool fullPlanner,
+                                       const FieldTarget* goalFieldTarget) {
   BallPlanDebug debug;
   debug.startPose = pose;
   debug.ball = ball;
   debug.goalDeg = goalDeg;
+  debug.usedGoalFieldTarget = goalFieldTarget != nullptr;
+  if (goalFieldTarget != nullptr) {
+    debug.goalFieldXMm = goalFieldTarget->xMm;
+    debug.goalFieldYMm = goalFieldTarget->yMm;
+  }
   debug.startHeadingDeg = headingDeg;
   debug.fullPlanner = fullPlanner;
   debug.chunk.trajectoryId = nextTrajId();
@@ -179,13 +211,35 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     debug.predictedBallBodyVXMps = predicted.vx;
     debug.predictedBallBodyVYMps = predicted.vy;
 
-    strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
-                   debug.strikeTargetBodyYM);
-    ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
-                headingDeg, debug.targetXMm, debug.targetYMm);
     ballFieldMm(pose.xMm, pose.yMm, predicted.xM, predicted.yM, headingDeg, debug.ballFieldXMm,
                 debug.ballFieldYMm);
-    debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
+    if (goalFieldTarget != nullptr) {
+      const float goalDxMm = goalFieldTarget->xMm - debug.ballFieldXMm;
+      const float goalDyMm = goalFieldTarget->yMm - debug.ballFieldYMm;
+      const float goalDistMm = std::hypot(goalDxMm, goalDyMm);
+      if (goalDistMm > 1e-3f) {
+        debug.targetXMm =
+            debug.ballFieldXMm - 1000.f * config::kStrikeOffsetM * (goalDxMm / goalDistMm);
+        debug.targetYMm =
+            debug.ballFieldYMm - 1000.f * config::kStrikeOffsetM * (goalDyMm / goalDistMm);
+        fieldPointToBodyMeters(debug.targetXMm, debug.targetYMm, pose, headingDeg,
+                               debug.strikeTargetBodyXM, debug.strikeTargetBodyYM);
+        debug.targetHeadingDeg = headingBetweenPointsDeg(
+            debug.targetXMm, debug.targetYMm, goalFieldTarget->xMm, goalFieldTarget->yMm);
+      } else {
+        strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
+                       debug.strikeTargetBodyYM);
+        ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
+                    headingDeg, debug.targetXMm, debug.targetYMm);
+        debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
+      }
+    } else {
+      strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
+                     debug.strikeTargetBodyYM);
+      ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
+                  headingDeg, debug.targetXMm, debug.targetYMm);
+      debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
+    }
     debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
     debug.withinTargetTolerance =
         debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
