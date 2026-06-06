@@ -139,9 +139,9 @@ void PoseKalman::updateGoalBearing(double measBearingRad, double goalXMm, double
   Eigen::Matrix<double, 1, 4> H;
   H << -dyF / r2, dxF / r2, 0.0, 0.0;
 
-  // Occlusion-scaled measurement variance: R = base + penalty*(1-c)^2.
-  const double c = std::clamp(certainty, 0.0, 1.0);
-  const double oneMinusC = 1.0 - c;
+  // Occlusion-scaled measurement variance: R = base + penalty*(1-cert)^2.
+  const double cert = std::clamp(certainty, 0.0, 1.0);
+  const double oneMinusC = 1.0 - cert;
   const double R = config::kGoalBearingBaseVarRad2 +
                    config::kGoalBearingPenaltyRad2 * oneMinusC * oneMinusC;
 

@@ -12,6 +12,7 @@
 #include "vision/Thresholds.hpp"
 #include "vision/VisionMath.hpp"
 
+#include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -193,6 +194,15 @@ int main(int argc, char** argv) {
     }
     if (!roiBuilt) buildRoi();
 
+    cv::Mat maskedFrame;
+    if (!roiMask.empty()) {
+      maskedFrame = cv::Mat::zeros(frame.size(), frame.type());
+      frame.copyTo(maskedFrame, roiMask);
+    }
+    const cv::Mat& displayFrame = maskedFrame.empty() ? frame : maskedFrame;
+    cv::imshow("Camera", displayFrame);
+    cv::waitKey(1);
+
     cv::Mat hsv;
     cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
     cv::Mat binBall, binY, binB;
@@ -308,7 +318,7 @@ int main(int argc, char** argv) {
     telemetry.visionBallDistance = ball.distCal;
     telemetry.planner = actionChunkPublisher.latestDebugSnapshot();
     if (foxglove.config().streamCamera && !frame.empty()) {
-      cv::imencode(".jpg", frame, telemetry.cameraJpegBytes,
+      cv::imencode(".jpg", displayFrame, telemetry.cameraJpegBytes,
                    {cv::IMWRITE_JPEG_QUALITY, 70});
       telemetry.ballPxFound = ball.found;
       if (ball.found && ball.distPx > 0) {

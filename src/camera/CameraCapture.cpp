@@ -280,10 +280,10 @@ void CameraCapture::Impl::applyControls(libcamera::Request* request) {
     controls.set(libcamera::controls::ExposureTime,
                  static_cast<int64_t>(config::kExposureUs));
   }
-  if (config::kCameraGain > 0 &&
+  if (config::kExposureSens > 0.f &&
       supported.count(libcamera::controls::AnalogueGain.id())) {
     controls.set(libcamera::controls::AnalogueGain,
-                 static_cast<float>(config::kCameraGain));
+                 config::kExposureSens / 100.f);
   }
   if (supported.count(libcamera::controls::Brightness.id())) {
     controls.set(libcamera::controls::Brightness,

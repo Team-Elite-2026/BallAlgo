@@ -21,13 +21,13 @@ inline constexpr float kLidarYawOffsetDeg = 0.f;
 inline constexpr int kFrameWidth = 655;
 inline constexpr int kFrameHeight = 600;
 inline constexpr int kCameraFps = 120;
-inline constexpr int kExposureUs = 10000;
+inline constexpr int   kExposureUs   = 5000;
+inline constexpr float kExposureSens = 1600.f;  // ISO; AnalogueGain = sens / 100
 inline constexpr int kCameraFocus = 108;
 inline constexpr int kCameraWhiteBalance = 4000;
 inline constexpr int kCameraBrightness = 0;
 inline constexpr int kCameraContrast = 1;
 inline constexpr int kCameraSaturation = 1;
-inline constexpr int kCameraGain = 0;
 
 inline constexpr const char* kThresholdsJson = "thresholds.json";
 
