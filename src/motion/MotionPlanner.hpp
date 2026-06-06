@@ -4,6 +4,7 @@
 #include "estimation/PoseKalman.hpp"
 #include "motion/AStar3D.hpp"
 #include "motion/DefensePose.hpp"
+#include "motion/OffensePose.hpp"
 #include "motion/HermiteSpline.hpp"
 #include "motion/VelocityProfile.hpp"
 
@@ -46,6 +47,7 @@ struct CommandedPosePlanDebug {
 struct BallPlanDebug {
   PoseState startPose;
   BallState ball;
+  OffensePoseResult offensePose;
   float goalDeg = 0;
   bool usedGoalFieldTarget = false;
   float goalFieldXMm = 0;

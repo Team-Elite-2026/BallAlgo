@@ -2,7 +2,7 @@
 
 #include "config.hpp"
 #include "motion/MotionLimits.hpp"
-#include "motion/StrikePose.hpp"
+#include "motion/OffensePose.hpp"
 #include "vision/VisionMath.hpp"
 
 #include <algorithm>
@@ -17,10 +17,6 @@ int headingToBin(float angleDeg, int bins) {
   const float wrapped = std::fmod(std::fmod(angleDeg, 360.f) + 360.f, 360.f);
   const float stepDeg = 360.f / static_cast<float>(bins);
   return static_cast<int>(wrapped / stepDeg) % bins;
-}
-
-float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
-  return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
 }
 
 float wrapAngleDeg(float angleDeg) {
@@ -46,21 +42,33 @@ float profileDurationS(const std::vector<ProfileSample>& profile) {
   return durationS;
 }
 
+float initialOffenseInterceptTimeS(const BallState& ball) {
+  const float maxPlanSpeedMps = std::max(config::kVMaxX, config::kVMaxY);
+  const float travelTimeS =
+      std::hypot(ball.xM, ball.yM) / std::max(0.05f, maxPlanSpeedMps);
+  return std::clamp(travelTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
+}
+
 void fillStopChunkIfEmpty(PlannedChunk& chunk) {
   if (!chunk.actions.empty()) return;
   MotionAction stop{};
   chunk.actions.assign(config::kChunkMaxActions, stop);
 }
 
-void fieldPointToBodyMeters(float fieldXMm, float fieldYMm, const PoseState& pose, float headingDeg,
-                            float& bodyXM, float& bodyYM) {
-  const float headingRad = headingDeg * static_cast<float>(M_PI / 180.0);
-  const float c = std::cos(headingRad);
-  const float s = std::sin(headingRad);
-  const float dxMm = fieldXMm - pose.xMm;
-  const float dyMm = fieldYMm - pose.yMm;
-  bodyXM = (c * dxMm + s * dyMm) / 1000.f;
-  bodyYM = (-s * dxMm + c * dyMm) / 1000.f;
+void fillBallDebugFromOffensePose(BallPlanDebug& debug, const OffensePoseResult& offensePose) {
+  debug.offensePose = offensePose;
+  debug.usedStrikePosePlan = offensePose.state == OffensePoseState::NormalStrike;
+  debug.strikeTargetBodyXM = offensePose.strikeTargetBodyXM;
+  debug.strikeTargetBodyYM = offensePose.strikeTargetBodyYM;
+  debug.predictedBallBodyXM = offensePose.predictedBallBodyXM;
+  debug.predictedBallBodyYM = offensePose.predictedBallBodyYM;
+  debug.predictedBallBodyVXMps = offensePose.predictedBallBodyVXMps;
+  debug.predictedBallBodyVYMps = offensePose.predictedBallBodyVYMps;
+  debug.ballFieldXMm = offensePose.predictedBallFieldXMm;
+  debug.ballFieldYMm = offensePose.predictedBallFieldYMm;
+  debug.targetXMm = offensePose.targetXMm;
+  debug.targetYMm = offensePose.targetYMm;
+  debug.targetHeadingDeg = offensePose.targetHeadingDeg;
 }
 
 void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
@@ -195,51 +203,18 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     return debug;
   }
 
-  debug.usedStrikePosePlan = true;
-  const float maxPlanSpeedMps = std::max(config::kVMaxX, config::kVMaxY);
-  float interceptTimeS =
-      std::hypot(ball.xM, ball.yM) / std::max(0.05f, maxPlanSpeedMps);
-  interceptTimeS = std::clamp(interceptTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
+  const bool hasGoalFieldTarget = goalFieldTarget != nullptr;
+  const float goalFieldXMm = hasGoalFieldTarget ? goalFieldTarget->xMm : 0.f;
+  const float goalFieldYMm = hasGoalFieldTarget ? goalFieldTarget->yMm : 0.f;
+  float interceptTimeS = initialOffenseInterceptTimeS(ball);
 
   for (int iteration = 0; iteration < config::kStrikeInterceptMaxIterations; ++iteration) {
-    const PredictedBallPose predicted =
-        predictBallBody(ball.xM, ball.yM, ball.vx, ball.vy, interceptTimeS);
+    const OffensePoseResult offensePose =
+        computeOffensePose(pose, ball, goalDeg, headingDeg, hasGoalFieldTarget, goalFieldXMm,
+                           goalFieldYMm, interceptTimeS);
     debug.interceptTimeS = interceptTimeS;
     debug.interceptIterations = iteration + 1;
-    debug.predictedBallBodyXM = predicted.xM;
-    debug.predictedBallBodyYM = predicted.yM;
-    debug.predictedBallBodyVXMps = predicted.vx;
-    debug.predictedBallBodyVYMps = predicted.vy;
-
-    ballFieldMm(pose.xMm, pose.yMm, predicted.xM, predicted.yM, headingDeg, debug.ballFieldXMm,
-                debug.ballFieldYMm);
-    if (goalFieldTarget != nullptr) {
-      const float goalDxMm = goalFieldTarget->xMm - debug.ballFieldXMm;
-      const float goalDyMm = goalFieldTarget->yMm - debug.ballFieldYMm;
-      const float goalDistMm = std::hypot(goalDxMm, goalDyMm);
-      if (goalDistMm > 1e-3f) {
-        debug.targetXMm =
-            debug.ballFieldXMm - 1000.f * config::kStrikeOffsetM * (goalDxMm / goalDistMm);
-        debug.targetYMm =
-            debug.ballFieldYMm - 1000.f * config::kStrikeOffsetM * (goalDyMm / goalDistMm);
-        fieldPointToBodyMeters(debug.targetXMm, debug.targetYMm, pose, headingDeg,
-                               debug.strikeTargetBodyXM, debug.strikeTargetBodyYM);
-        debug.targetHeadingDeg = headingBetweenPointsDeg(
-            debug.targetXMm, debug.targetYMm, goalFieldTarget->xMm, goalFieldTarget->yMm);
-      } else {
-        strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
-                       debug.strikeTargetBodyYM);
-        ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
-                    headingDeg, debug.targetXMm, debug.targetYMm);
-        debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
-      }
-    } else {
-      strikePoseBody(predicted.xM, predicted.yM, goalDeg, debug.strikeTargetBodyXM,
-                     debug.strikeTargetBodyYM);
-      ballFieldMm(pose.xMm, pose.yMm, debug.strikeTargetBodyXM, debug.strikeTargetBodyYM,
-                  headingDeg, debug.targetXMm, debug.targetYMm);
-      debug.targetHeadingDeg = wrapAngleDeg(headingDeg + goalDeg);
-    }
+    fillBallDebugFromOffensePose(debug, offensePose);
     debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
     debug.withinTargetTolerance =
         debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
