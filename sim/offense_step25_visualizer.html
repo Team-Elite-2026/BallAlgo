@@ -120,7 +120,7 @@
       <label>White border inset Y cm <input id="boundaryInsetY" type="number" value="10" step="1"></label>
 
       <h2>Strike</h2>
-      <label>Strike offset cm <input id="strikeOffsetCm" type="number" value="12" step="1"></label>
+      <label>Intake offset cm <input id="strikeOffsetCm" type="number" value="9" step="1"></label>
       <button id="draw">Redraw</button>
       <pre id="debug"></pre>
     </aside>
@@ -135,11 +135,15 @@
     const fieldH = 2430;
     const fps = 120;
     const gamma = 0.96;
-    const strikeInterceptMaxTimeS = 2.0;
+    const strikeInterceptMaxTimeS = 1.0;
     const strikeInterceptMaxIterations = 5;
     const strikeInterceptConvergeS = 0.025;
     const vMaxX = 0.8;
     const vMaxY = 0.6;
+    const robotDiameterMm = 180;
+    const robotRadiusMm = robotDiameterMm * 0.5;
+    const ballDiameterMm = 42.67;
+    const ballRadiusMm = ballDiameterMm * 0.5;
     const poseColor = "#8b5cf6";
 
     const blueGoal = { x: fieldW * 0.5, y: fieldH };
@@ -247,8 +251,63 @@
       return moveTime + rotateTime;
     }
 
+    function ballPastLeftBoundary(ballX, values) {
+      return ballX - ballRadiusMm <= values.boundaryInsetX;
+    }
+
+    function ballPastRightBoundary(ballX, values) {
+      return ballX + ballRadiusMm >= fieldW - values.boundaryInsetX;
+    }
+
+    function ballPastBottomBoundary(ballY, values) {
+      return ballY - ballRadiusMm <= values.boundaryInsetY;
+    }
+
+    function ballPastTopBoundary(ballY, values) {
+      return ballY + ballRadiusMm >= fieldH - values.boundaryInsetY;
+    }
+
     function ballAtOrBeyondBoundary(ballX, ballY, insetX, insetY) {
-      return ballX <= insetX || ballX >= fieldW - insetX || ballY <= insetY || ballY >= fieldH - insetY;
+      return ballX - ballRadiusMm <= insetX ||
+             ballX + ballRadiusMm >= fieldW - insetX ||
+             ballY - ballRadiusMm <= insetY ||
+             ballY + ballRadiusMm >= fieldH - insetY;
+    }
+
+    function safeMinX(values) {
+      return values.boundaryInsetX;
+    }
+
+    function safeMaxX(values) {
+      return fieldW - values.boundaryInsetX;
+    }
+
+    function safeMinY(values) {
+      return values.boundaryInsetY;
+    }
+
+    function safeMaxY(values) {
+      return fieldH - values.boundaryInsetY;
+    }
+
+    function clampPoseToSafeBox(point, values) {
+      return {
+        x: Math.min(safeMaxX(values), Math.max(safeMinX(values), point.x)),
+        y: Math.min(safeMaxY(values), Math.max(safeMinY(values), point.y))
+      };
+    }
+
+    function poseOutsideSafeBox(point, values) {
+      return point.x < safeMinX(values) || point.x > safeMaxX(values) ||
+             point.y < safeMinY(values) || point.y > safeMaxY(values);
+    }
+
+    function ballInCornerBand(ballX, ballY, values) {
+      const nearLeft = ballPastLeftBoundary(ballX, values);
+      const nearRight = ballPastRightBoundary(ballX, values);
+      const nearBottom = ballPastBottomBoundary(ballY, values);
+      const nearTop = ballPastTopBoundary(ballY, values);
+      return (nearLeft || nearRight) && (nearBottom || nearTop);
     }
 
     function initialInterceptTimeS(ballBody) {
@@ -258,139 +317,129 @@
       );
     }
 
-    function computeDirectCollectTarget(state, robotX, robotY, headingDeg, currentField, predictedField, strikeOffsetM, valuesForBoundary) {
-      const strikeOffsetMm = strikeOffsetM * 1000;
+    function setTargetFacingBall(robotX, robotY, headingDeg, predictedField, targetField, values) {
+      const clampedTarget = clampPoseToSafeBox(targetField, values);
+      return {
+        targetField: clampedTarget,
+        targetBody: fieldPointToBodyMeters(clampedTarget.x, clampedTarget.y, robotX, robotY, headingDeg),
+        targetHeadingDeg: headingBetweenPointsDeg(
+          clampedTarget.x,
+          clampedTarget.y,
+          predictedField.x,
+          predictedField.y
+        )
+      };
+    }
+
+    function computeForwardSafeStrikeTarget(robotX, robotY, headingDeg, predictedField, values) {
+      const targetField = clampPoseToSafeBox({
+        x: predictedField.x,
+        y: predictedField.y - values.intakeOffsetMm
+      }, values);
+      return {
+        targetField,
+        targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
+        targetHeadingDeg: 90
+      };
+    }
+
+    function computeDirectCollectTarget(state, robotX, robotY, headingDeg, predictedField, values) {
+      const strikeOffsetMm = values.intakeOffsetMm;
+
+      if (state === "collect_corner") {
+        const nearLeft = ballPastLeftBoundary(predictedField.x, values);
+        const nearBottom = ballPastBottomBoundary(predictedField.y, values);
+        return setTargetFacingBall(
+          robotX,
+          robotY,
+          headingDeg,
+          predictedField,
+          {
+            x: nearLeft ? safeMinX(values) : safeMaxX(values),
+            y: nearBottom ? safeMinY(values) : safeMaxY(values)
+          },
+          values
+        );
+      }
 
       if (state === "collect_boundary") {
-        const leftLine = valuesForBoundary.boundaryInsetX;
-        const rightLine = fieldW - valuesForBoundary.boundaryInsetX;
-        const bottomLine = valuesForBoundary.boundaryInsetY;
-        const topLine = fieldH - valuesForBoundary.boundaryInsetY;
+        const leftLine = values.boundaryInsetX;
+        const rightLine = fieldW - values.boundaryInsetX;
+        const bottomLine = values.boundaryInsetY;
+        const topLine = fieldH - values.boundaryInsetY;
         const leftDist = Math.abs(predictedField.x - leftLine);
         const rightDist = Math.abs(predictedField.x - rightLine);
         const bottomDist = Math.abs(predictedField.y - bottomLine);
         const topDist = Math.abs(predictedField.y - topLine);
-        const targetField = {
-          x: predictedField.x,
-          y: predictedField.y
-        };
         if (leftDist <= rightDist && leftDist <= bottomDist && leftDist <= topDist) {
-          targetField.x += strikeOffsetMm;
+          return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
+            x: predictedField.x + strikeOffsetMm,
+            y: predictedField.y
+          }, values);
         } else if (rightDist <= bottomDist && rightDist <= topDist) {
-          targetField.x -= strikeOffsetMm;
+          return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
+            x: predictedField.x - strikeOffsetMm,
+            y: predictedField.y
+          }, values);
         } else if (bottomDist <= topDist) {
-          targetField.y += strikeOffsetMm;
+          return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
+            x: predictedField.x,
+            y: predictedField.y + strikeOffsetMm
+          }, values);
         } else {
-          targetField.y -= strikeOffsetMm;
+          return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
+            x: predictedField.x,
+            y: predictedField.y - strikeOffsetMm
+          }, values);
         }
-
-        return {
-          targetField,
-          targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
-          targetHeadingDeg: headingBetweenPointsDeg(
-            targetField.x,
-            targetField.y,
-            predictedField.x,
-            predictedField.y
-          )
-        };
       }
 
       if (state === "collect_enemy_line") {
-        const targetField = {
+        return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
           x: predictedField.x,
           y: predictedField.y - strikeOffsetMm
-        };
-        return {
-          targetField,
-          targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
-          targetHeadingDeg: headingBetweenPointsDeg(
-            targetField.x,
-            targetField.y,
-            predictedField.x,
-            predictedField.y
-          )
-        };
+        }, values);
       }
 
       if (state === "collect_our_line") {
-        const targetField = {
+        return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, {
           x: predictedField.x,
           y: predictedField.y + strikeOffsetMm
-        };
-        return {
-          targetField,
-          targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
-          targetHeadingDeg: headingBetweenPointsDeg(
-            targetField.x,
-            targetField.y,
-            predictedField.x,
-            predictedField.y
-          )
-        };
+        }, values);
       }
 
-      let dx = currentField.x - predictedField.x;
-      let dy = currentField.y - predictedField.y;
-      let dist = Math.hypot(dx, dy);
-      let targetField;
-      let targetHeadingDeg;
-
-      if (dist <= 1e-6) {
-        dx = robotX - predictedField.x;
-        dy = robotY - predictedField.y;
-        dist = Math.hypot(dx, dy);
-      }
-
-      if (dist > 1e-6) {
-        const ux = dx / dist;
-        const uy = dy / dist;
-        targetField = {
-          x: predictedField.x + strikeOffsetMm * ux,
-          y: predictedField.y + strikeOffsetMm * uy
-        };
-        targetHeadingDeg = headingBetweenPointsDeg(
-          targetField.x,
-          targetField.y,
-          predictedField.x,
-          predictedField.y
-        );
-      } else {
-        const headingRad = headingDeg * Math.PI / 180;
-        targetField = {
-          x: predictedField.x - strikeOffsetMm * Math.cos(headingRad),
-          y: predictedField.y - strikeOffsetMm * Math.sin(headingRad)
-        };
-        targetHeadingDeg = headingDeg;
-      }
-
-      return {
-        targetField,
-        targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
-        targetHeadingDeg
-      };
+      return setTargetFacingBall(robotX, robotY, headingDeg, predictedField, predictedField, values);
     }
 
-    function computeStrikeTarget(robotX, robotY, headingDeg, predictedField, goalX, goalY, strikeOffsetM) {
+    function computeStrikeTarget(robotX, robotY, headingDeg, predictedField, goalX, goalY, values) {
       const goalDx = goalX - predictedField.x;
       const goalDy = goalY - predictedField.y;
       const goalDist = Math.hypot(goalDx, goalDy);
       const targetField = goalDist > 1e-6 ? {
-        x: predictedField.x - strikeOffsetM * 1000 * (goalDx / goalDist),
-        y: predictedField.y - strikeOffsetM * 1000 * (goalDy / goalDist)
+        x: predictedField.x - values.intakeOffsetMm * (goalDx / goalDist),
+        y: predictedField.y - values.intakeOffsetMm * (goalDy / goalDist)
       } : {
         x: predictedField.x,
         y: predictedField.y
       };
 
+      if (poseOutsideSafeBox(targetField, values)) {
+        return computeForwardSafeStrikeTarget(robotX, robotY, headingDeg, predictedField, values);
+      }
+
+      const clampedTarget = clampPoseToSafeBox(targetField, values);
+
       return {
-        targetField,
-        targetBody: fieldPointToBodyMeters(targetField.x, targetField.y, robotX, robotY, headingDeg),
-        targetHeadingDeg: headingBetweenPointsDeg(targetField.x, targetField.y, goalX, goalY)
+        targetField: clampedTarget,
+        targetBody: fieldPointToBodyMeters(clampedTarget.x, clampedTarget.y, robotX, robotY, headingDeg),
+        targetHeadingDeg: headingBetweenPointsDeg(clampedTarget.x, clampedTarget.y, goalX, goalY)
       };
     }
 
     function classifyState(predictedField, values) {
+      if (ballInCornerBand(predictedField.x, predictedField.y, values)) {
+        return "collect_corner";
+      }
       if (ballAtOrBeyondBoundary(predictedField.x, predictedField.y, values.boundaryInsetX, values.boundaryInsetY)) {
         return "collect_boundary";
       }
@@ -408,7 +457,8 @@
         normal_strike: "Normal Strike",
         collect_enemy_line: "Collect Beyond Enemy Goal Line",
         collect_our_line: "Collect Behind Our Goal Line",
-        collect_boundary: "Collect At Boundary"
+        collect_boundary: "Collect At Boundary",
+        collect_corner: "Collect In Corner"
       }[state] || state;
     }
 
@@ -421,7 +471,6 @@
         values.headingDeg
       );
       const ballBodyV = fieldVelocityToBody(values.ballVx, values.ballVy, values.headingDeg);
-      const robotInFrontOfOurGoalLine = values.robotY > values.ourGoalLineY;
       let interceptTimeS = initialInterceptTimeS(ballBody);
       const iterations = [];
 
@@ -452,16 +501,14 @@
               predictedField,
               blueGoal.x,
               blueGoal.y,
-              values.strikeOffsetM
+              values
             )
           : computeDirectCollectTarget(
               state,
               values.robotX,
               values.robotY,
               values.headingDeg,
-              { x: values.ballX, y: values.ballY },
               predictedField,
-              values.strikeOffsetM,
               values
             );
         const pathTimeS = approximatePathTime(
@@ -507,7 +554,6 @@
         ballPastEnemyGoalLine: final.ballPastEnemyGoalLine,
         ballPastOurGoalLine: final.ballPastOurGoalLine,
         ballAtBoundary: final.ballAtBoundary,
-        robotInFrontOfOurGoalLine,
         ballBody,
         ballBodyV,
         currentBallField: { x: values.ballX, y: values.ballY },
@@ -529,7 +575,7 @@
       return { bg: "#fff0e0", fg: "#b45309" };
     }
 
-    function drawArrow(ctx, x1, y1, x2, y2, color, width = 3) {
+    function drawArrow(ctx, x1, y1, x2, y2, color, width = 3, headLength = 11) {
       const angle = Math.atan2(y2 - y1, x2 - x1);
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
@@ -540,15 +586,16 @@
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - 11 * Math.cos(angle - 0.45), y2 - 11 * Math.sin(angle - 0.45));
-      ctx.lineTo(x2 - 11 * Math.cos(angle + 0.45), y2 - 11 * Math.sin(angle + 0.45));
+      ctx.lineTo(x2 - headLength * Math.cos(angle - 0.45), y2 - headLength * Math.sin(angle - 0.45));
+      ctx.lineTo(x2 - headLength * Math.cos(angle + 0.45), y2 - headLength * Math.sin(angle + 0.45));
       ctx.closePath();
       ctx.fill();
     }
 
-    function drawHeadingArrow(ctx, x, y, headingDeg, lengthPx, color) {
+    function drawHeadingArrow(ctx, x, y, headingDeg, lengthPx, color, headLength = 11) {
       const rad = headingDeg * Math.PI / 180;
-      drawArrow(ctx, x, y, x + Math.cos(rad) * lengthPx, y - Math.sin(rad) * lengthPx, color, 3);
+      drawArrow(ctx, x, y, x + Math.cos(rad) * lengthPx, y - Math.sin(rad) * lengthPx, color, 3,
+        Math.min(headLength, Math.max(5, lengthPx * 0.35)));
     }
 
     function drawGoalBoxTop(ctx, sx, sy, widthMm, depthMm, insetY) {
@@ -586,7 +633,10 @@
       const chamfer = 120;
       const whiteInsetX = values.boundaryInsetX;
       const whiteInsetY = values.boundaryInsetY;
-
+      const allowedMinX = safeMinX(values);
+      const allowedMaxX = safeMaxX(values);
+      const allowedMinY = safeMinY(values);
+      const allowedMaxY = safeMaxY(values);
       ctx.fillStyle = "#050608";
       ctx.fillRect(outerX, outerY, outerW, outerH);
 
@@ -609,10 +659,10 @@
       const whiteH = (fieldH - 2 * whiteInsetY) * scale;
 
       ctx.fillStyle = "rgba(220, 38, 38, 0.12)";
-      ctx.fillRect(sx(0), sy(fieldH), fieldW * scale, whiteTop - sy(fieldH));
-      ctx.fillRect(sx(0), whiteTop + whiteH, fieldW * scale, sy(0) - (whiteTop + whiteH));
-      ctx.fillRect(sx(0), whiteTop, whiteLeft - sx(0), whiteH);
-      ctx.fillRect(whiteLeft + whiteW, whiteTop, sx(fieldW) - (whiteLeft + whiteW), whiteH);
+      ctx.fillRect(sx(0), sy(fieldH), fieldW * scale, sy(allowedMaxY) - sy(fieldH));
+      ctx.fillRect(sx(0), sy(allowedMinY), fieldW * scale, sy(0) - sy(allowedMinY));
+      ctx.fillRect(sx(0), sy(allowedMaxY), sx(allowedMinX) - sx(0), (allowedMaxY - allowedMinY) * scale);
+      ctx.fillRect(sx(allowedMaxX), sy(allowedMaxY), sx(fieldW) - sx(allowedMaxX), (allowedMaxY - allowedMinY) * scale);
 
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 4;
@@ -668,12 +718,8 @@
       ctx.fillText("Blue Goal", sx(fieldW * 0.5 - 40), sy(fieldH) + 22);
       ctx.fillText("Yellow Goal", sx(fieldW * 0.5 - 48), sy(0) - 10);
 
-      ctx.fillStyle = "#0f172a";
-      ctx.beginPath();
-      ctx.arc(sx(values.robotX), sy(values.robotY), 8, 0, Math.PI * 2);
-      ctx.fill();
-      drawHeadingArrow(ctx, sx(values.robotX), sy(values.robotY), values.headingDeg, 34, "#0f172a");
-      ctx.fillText("robot", sx(values.robotX) + 10, sy(values.robotY) - 10);
+      const robotDrawR = robotRadiusMm * scale;
+      const ballDrawR = Math.max(5, ballRadiusMm * scale);
 
       ctx.strokeStyle = "#8b949e";
       ctx.lineWidth = 2.5;
@@ -713,13 +759,13 @@
 
       ctx.fillStyle = "#f97316";
       ctx.beginPath();
-      ctx.arc(sx(values.ballX), sy(values.ballY), 8, 0, Math.PI * 2);
+      ctx.arc(sx(values.ballX), sy(values.ballY), ballDrawR, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillText("ball now", sx(values.ballX) + 10, sy(values.ballY) - 12);
 
       ctx.fillStyle = "#ef4444";
       ctx.beginPath();
-      ctx.arc(sx(result.predictedBallField.x), sy(result.predictedBallField.y), 8, 0, Math.PI * 2);
+      ctx.arc(sx(result.predictedBallField.x), sy(result.predictedBallField.y), ballDrawR, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillText(
         "future ball",
@@ -727,21 +773,19 @@
         sy(result.predictedBallField.y) - 12
       );
 
-      if (result.usesDirectBallPose) {
-        ctx.strokeStyle = poseColor;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(sx(result.targetField.x), sy(result.targetField.y), 12, 0, Math.PI * 2);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = poseColor;
-        ctx.beginPath();
-        ctx.arc(sx(result.targetField.x), sy(result.targetField.y), 8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      drawHeadingArrow(ctx, sx(result.targetField.x), sy(result.targetField.y), result.targetHeadingDeg, 42, poseColor);
+      ctx.strokeStyle = poseColor;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(sx(result.targetField.x), sy(result.targetField.y), robotDrawR, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = poseColor;
-      ctx.fillText("target pose", sx(result.targetField.x) + 10, sy(result.targetField.y) - 16);
+      ctx.beginPath();
+      ctx.arc(sx(result.targetField.x), sy(result.targetField.y), 5, 0, Math.PI * 2);
+      ctx.fill();
+      drawHeadingArrow(ctx, sx(result.targetField.x), sy(result.targetField.y), result.targetHeadingDeg,
+        Math.max(10, robotDrawR - 8), poseColor, 8);
+      ctx.fillStyle = poseColor;
+      ctx.fillText("target pose", sx(result.targetField.x) + robotDrawR + 8, sy(result.targetField.y) - robotDrawR - 6);
     }
 
     function draw() {
@@ -756,7 +800,7 @@
         goalLineInset: cmToMm(Number(document.getElementById("goalLineInsetCm").value)),
         boundaryInsetX: cmToMm(Number(document.getElementById("boundaryInsetX").value)),
         boundaryInsetY: cmToMm(Number(document.getElementById("boundaryInsetY").value)),
-        strikeOffsetM: Number(document.getElementById("strikeOffsetCm").value) / 100
+        intakeOffsetMm: cmToMm(Number(document.getElementById("strikeOffsetCm").value))
       };
       values.ourGoalLineY = values.goalLineInset;
       values.enemyGoalLineY = fieldH - values.goalLineInset;
@@ -786,7 +830,7 @@
 
       document.getElementById("debug").textContent =
         `state=${stateName(result.state)}\n` +
-        `state rule=boundary -> enemy line -> our line -> normal strike\n` +
+        `state rule=corner -> boundary -> enemy line -> our line -> normal strike\n` +
         `visual field orientation=enemy flipped to top\n` +
         `enemy goal=blue top\n` +
         `our goal=yellow bottom\n` +
@@ -795,20 +839,27 @@
         `ball past enemy goal line=${result.ballPastEnemyGoalLine}\n` +
         `ball past our goal line=${result.ballPastOurGoalLine}\n` +
         `ball at or beyond white border=${result.ballAtBoundary}\n` +
-        `robot in front of our goal line=${result.robotInFrontOfOurGoalLine}\n` +
+        `robot diameter=${(robotDiameterMm / 10).toFixed(1)} cm\n` +
+        `ball diameter=${(ballDiameterMm / 10).toFixed(3)} cm\n` +
         `ball centered cm=(${fieldMmToCenteredCm(values.ballX, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(values.ballY, fieldH).toFixed(1)})\n` +
         `ball body m=(${result.ballBody.x.toFixed(3)}, ${result.ballBody.y.toFixed(3)})\n` +
         `future ball centered cm=(${fieldMmToCenteredCm(result.predictedBallField.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(result.predictedBallField.y, fieldH).toFixed(1)})\n` +
         `target centered cm=(${fieldMmToCenteredCm(result.targetField.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(result.targetField.y, fieldH).toFixed(1)})\n` +
         `target heading=${result.targetHeadingDeg.toFixed(1)} deg\n` +
+        `allowed center x range=${(safeMinX(values) / 10).toFixed(1)}..${(safeMaxX(values) / 10).toFixed(1)} cm\n` +
+        `allowed center y range=${(safeMinY(values) / 10).toFixed(1)}..${(safeMaxY(values) / 10).toFixed(1)} cm\n` +
         `goal line inset from each goal=${(values.goalLineInset / 10).toFixed(1)} cm\n` +
         `our goal line y from bottom=${(values.ourGoalLineY / 10).toFixed(1)} cm\n` +
         `enemy goal line y from bottom=${(values.enemyGoalLineY / 10).toFixed(1)} cm\n` +
         `white border inset x=${(values.boundaryInsetX / 10).toFixed(1)} cm\n` +
         `white border inset y=${(values.boundaryInsetY / 10).toFixed(1)} cm\n` +
+        `intake offset=${(values.intakeOffsetMm / 10).toFixed(1)} cm\n` +
+        `terminal velocity=(0.00, 0.00) m/s, omega=0.00 rad/s\n` +
         (result.usesDirectBallPose
-          ? `collect mode uses future ball pose and strike offset\n`
+          ? `collect mode uses future ball pose and intake offset\n`
           : `normal strike uses future ball pose and goal offset\n`) +
+        `boundary test uses ball edge; corner test triggers when the ball touches two white borders\n` +
+        `target center must stay on or inside the white border\n` +
         `final intercept time=${result.finalInterceptTimeS.toFixed(3)} s\n` +
         `approx path time=${result.finalPathTimeS.toFixed(3)} s\n` +
         `iterations=${result.iterations.length}\n` +

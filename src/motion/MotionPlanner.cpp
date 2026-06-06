@@ -69,6 +69,9 @@ void fillBallDebugFromOffensePose(BallPlanDebug& debug, const OffensePoseResult&
   debug.targetXMm = offensePose.targetXMm;
   debug.targetYMm = offensePose.targetYMm;
   debug.targetHeadingDeg = offensePose.targetHeadingDeg;
+  debug.targetVxFieldMps = offensePose.targetVxFieldMps;
+  debug.targetVyFieldMps = offensePose.targetVyFieldMps;
+  debug.targetOmegaRadS = offensePose.targetOmegaRadS;
 }
 
 void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
@@ -84,6 +87,25 @@ void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defense
     chunk.actions[static_cast<size_t>(i)].vx = vxBody;
     chunk.actions[static_cast<size_t>(i)].vy = vyBody;
     chunk.actions[static_cast<size_t>(i)].omega = defensePose.targetOmegaRadS;
+    chunk.actions[static_cast<size_t>(i)].ax = 0.f;
+    chunk.actions[static_cast<size_t>(i)].ay = 0.f;
+    chunk.actions[static_cast<size_t>(i)].alpha = 0.f;
+  }
+}
+
+void applyTerminalVelocity(PlannedChunk& chunk, const OffensePoseResult& offensePose,
+                           float headingDeg) {
+  if (!offensePose.usesTerminalVelocity || chunk.actions.empty()) return;
+  float vxBody = 0.f;
+  float vyBody = 0.f;
+  fieldVelToBody(offensePose.targetVxFieldMps * 1000.f, offensePose.targetVyFieldMps * 1000.f,
+                 headingDeg, vxBody, vyBody);
+  const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
+  for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
+       i < static_cast<int>(chunk.actions.size()); ++i) {
+    chunk.actions[static_cast<size_t>(i)].vx = vxBody;
+    chunk.actions[static_cast<size_t>(i)].vy = vyBody;
+    chunk.actions[static_cast<size_t>(i)].omega = offensePose.targetOmegaRadS;
     chunk.actions[static_cast<size_t>(i)].ax = 0.f;
     chunk.actions[static_cast<size_t>(i)].ay = 0.f;
     chunk.actions[static_cast<size_t>(i)].alpha = 0.f;
@@ -233,6 +255,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     }
     interceptTimeS = nextInterceptTimeS;
   }
+  applyTerminalVelocity(debug.chunk, debug.offensePose, headingDeg);
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
 }

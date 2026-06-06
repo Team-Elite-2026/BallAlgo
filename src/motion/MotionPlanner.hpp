@@ -70,6 +70,9 @@ struct BallPlanDebug {
   float targetXMm = 0;
   float targetYMm = 0;
   float targetHeadingDeg = 0;
+  float targetVxFieldMps = 0;
+  float targetVyFieldMps = 0;
+  float targetOmegaRadS = 0;
   float targetErrMm = 0;
   bool withinTargetTolerance = false;
   PlannedChunk chunk;

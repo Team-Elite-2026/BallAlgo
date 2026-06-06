@@ -11,12 +11,14 @@ enum class OffensePoseState {
   CollectBallNearEnemyGoalLine,
   CollectBallBehindRobotNearOurGoalLine,
   CollectBallAtBoundary,
+  CollectBallInCorner,
 };
 
 struct OffensePoseResult {
   bool valid = false;
   OffensePoseState state = OffensePoseState::Invalid;
   bool usesDirectBallPose = false;
+  bool usesTerminalVelocity = false;
   bool ballInFrontOfRobot = false;
   bool ballPastEnemyGoalLine = false;
   bool ballPastOurGoalLine = false;
@@ -32,6 +34,9 @@ struct OffensePoseResult {
   float targetXMm = 0;
   float targetYMm = 0;
   float targetHeadingDeg = 0;
+  float targetVxFieldMps = 0;
+  float targetVyFieldMps = 0;
+  float targetOmegaRadS = 0;
   float strikeTargetBodyXM = 0;
   float strikeTargetBodyYM = 0;
 };

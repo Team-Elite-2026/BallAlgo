@@ -59,9 +59,14 @@ inline constexpr float kBallKfProcessPosVar = 0.5f;
 inline constexpr float kBallKfProcessVelVar = 2.f;
 inline constexpr float kStrikeOffsetM = 0.12f;
 inline constexpr float kBallPredictionDamping = 0.96f;
-inline constexpr float kStrikeInterceptMaxTimeS = 2.0f;
+inline constexpr float kStrikeInterceptMaxTimeS = 1.0f;
 inline constexpr int kStrikeInterceptMaxIterations = 5;
 inline constexpr float kStrikeInterceptConvergeS = 0.025f;
+inline constexpr float kOffenseRobotDiameterMm = 180.f;
+inline constexpr float kOffenseRobotRadiusMm = 0.5f * kOffenseRobotDiameterMm;
+inline constexpr float kOffenseBallDiameterMm = 42.67f;
+inline constexpr float kOffenseBallRadiusMm = 0.5f * kOffenseBallDiameterMm;
+inline constexpr float kOffenseIntakeOffsetMm = 90.f;
 // Assumes yellow-goal attack runs in the +X field direction.
 // Move this inset to push both offense full-field goal-line guards forward/back together.
 inline constexpr float kOffenseGoalLineInsetXMm = 140.f;

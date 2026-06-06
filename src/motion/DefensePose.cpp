@@ -12,6 +12,14 @@ namespace ballalgo {
 namespace {
 
 constexpr float kMmPerCm = 10.f;
+constexpr float kDefenseArcCenterXCm = 40.f;
+constexpr float kDefenseArcCenterYCm = 25.f;
+
+enum class DefenseGoalLineSegment {
+  TopLine = 0,
+  SideLine,
+  Arc,
+};
 
 float signNonZero(float value) { return value < 0.f ? -1.f : 1.f; }
 
@@ -35,16 +43,19 @@ void fieldBallFromBody(const PoseState& pose, const BallState& ball, float headi
 }
 
 void goalLinePointFromBall(float ballRelXCm, float ballRelYCm, float& targetRelXCm,
-                           float& targetRelYCm) {
+                           float& targetRelYCm, DefenseGoalLineSegment& segment) {
   const float absX = std::max(std::fabs(ballRelXCm), 1e-3f);
   const float m = ballRelYCm / absX;
   if (m >= 1.f) {
+    segment = DefenseGoalLineSegment::TopLine;
     targetRelXCm = config::kDefenseGoalLineYMinCm / m;
     targetRelYCm = config::kDefenseGoalLineYMinCm;
   } else if (m <= -5.f / 11.f) {
+    segment = DefenseGoalLineSegment::SideLine;
     targetRelXCm = config::kDefenseGoalLineXMaxCm;
     targetRelYCm = config::kDefenseGoalLineXMaxCm * m;
   } else {
+    segment = DefenseGoalLineSegment::Arc;
     const float a = 1.f + m * m;
     const float b = -2.f * (config::kDefenseGoalLineYMinCm + 25.f * m);
     const float c = config::kDefenseGoalLineQuadraticC;
@@ -53,6 +64,34 @@ void goalLinePointFromBall(float ballRelXCm, float ballRelYCm, float& targetRelX
     targetRelYCm = m * targetRelXCm;
   }
   targetRelXCm *= signNonZero(ballRelXCm);
+}
+
+void goalLineTangentUnitFromTarget(float targetRelXCm, float targetRelYCm,
+                                   DefenseGoalLineSegment segment, float& pathUx,
+                                   float& pathUy) {
+  if (segment == DefenseGoalLineSegment::TopLine) {
+    pathUx = 1.f;
+    pathUy = 0.f;
+    return;
+  }
+  if (segment == DefenseGoalLineSegment::SideLine) {
+    pathUx = 0.f;
+    pathUy = 1.f;
+    return;
+  }
+
+  const float centerXCm = signNonZero(targetRelXCm) * kDefenseArcCenterXCm;
+  const float radialX = targetRelXCm - centerXCm;
+  const float radialY = targetRelYCm - kDefenseArcCenterYCm;
+  const float radialLen = std::hypot(radialX, radialY);
+  if (radialLen <= 1e-5f) {
+    pathUx = 0.f;
+    pathUy = 1.f;
+    return;
+  }
+
+  pathUx = -radialY / radialLen;
+  pathUy = radialX / radialLen;
 }
 
 DefensePoseResult blockPoseForBall(float ballXMm, float ballYMm, float ballVxMps,
@@ -64,7 +103,8 @@ DefensePoseResult blockPoseForBall(float ballXMm, float ballYMm, float ballVxMps
 
   float targetRelXCm = 0.f;
   float targetRelYCm = 0.f;
-  goalLinePointFromBall(ballRelXCm, ballRelYCm, targetRelXCm, targetRelYCm);
+  DefenseGoalLineSegment unusedSegment = DefenseGoalLineSegment::TopLine;
+  goalLinePointFromBall(ballRelXCm, ballRelYCm, targetRelXCm, targetRelYCm, unusedSegment);
 
   result.valid = true;
   result.targetXMm = defendedGoal.xMm + targetRelXCm * kMmPerCm;
@@ -145,8 +185,18 @@ void maybeApplyInterceptVelocity(DefensePoseResult& result,
 
   const float rayUx = targetRelX / targetRelLen;
   const float rayUy = targetRelY / targetRelLen;
-  const float pathUx = -rayUy;
-  const float pathUy = rayUx;
+  const float targetRelXCm = targetRelX / kMmPerCm;
+  const float targetRelYCm = targetRelY / kMmPerCm;
+  DefenseGoalLineSegment targetSegment = DefenseGoalLineSegment::Arc;
+  if (std::fabs(targetRelYCm - config::kDefenseGoalLineYMinCm) <= 1e-3f) {
+    targetSegment = DefenseGoalLineSegment::TopLine;
+  } else if (std::fabs(std::fabs(targetRelXCm) - config::kDefenseGoalLineXMaxCm) <= 1e-3f) {
+    targetSegment = DefenseGoalLineSegment::SideLine;
+  }
+
+  float pathUx = 0.f;
+  float pathUy = 0.f;
+  goalLineTangentUnitFromTarget(targetRelXCm, targetRelYCm, targetSegment, pathUx, pathUy);
   const float denom = rayUy * pathUx - rayUx * pathUy;
   if (std::fabs(denom) <= 1e-5f) return;
 

@@ -8,22 +8,38 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #f7f7f5;
+      background: #f4f5f1;
       color: #1f2933;
     }
     main {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 360px 1fr;
       min-height: 100vh;
     }
     aside {
       padding: 18px;
       background: #ffffff;
-      border-right: 1px solid #d8d8d2;
+      border-right: 1px solid #d7dbdf;
+      overflow: auto;
+    }
+    section {
+      padding: 18px;
+      overflow: auto;
     }
     h1 {
-      font-size: 20px;
-      margin: 0 0 14px;
+      margin: 0 0 10px;
+      font-size: 22px;
+    }
+    p {
+      margin: 0 0 10px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #536171;
+    }
+    h2 {
+      margin: 18px 0 8px;
+      font-size: 14px;
+      color: #536171;
     }
     label {
       display: grid;
@@ -33,44 +49,49 @@
     }
     input {
       font: inherit;
-      padding: 7px 8px;
-      border: 1px solid #b8b8b0;
+      padding: 8px 9px;
+      border: 1px solid #b9c0c8;
       border-radius: 4px;
     }
     button {
-      margin-top: 10px;
-      padding: 8px 10px;
+      margin-top: 12px;
+      padding: 9px 11px;
       border: 1px solid #1f2933;
       border-radius: 4px;
       background: #1f2933;
-      color: white;
+      color: #ffffff;
       cursor: pointer;
     }
     pre {
       white-space: pre-wrap;
       font-size: 12px;
-      background: #f1f1ed;
-      padding: 10px;
+      background: #f0f2f4;
+      padding: 11px;
       border-radius: 4px;
       line-height: 1.45;
     }
-    section {
-      padding: 18px;
-      overflow: auto;
-    }
     canvas {
+      display: block;
       background: #ffffff;
-      border: 1px solid #d8d8d2;
+      border: 1px solid #d7dbdf;
       max-width: 100%;
       height: auto;
     }
-    @media (max-width: 800px) {
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin: 4px 0 10px;
+    }
+    @media (max-width: 980px) {
       main {
         grid-template-columns: 1fr;
       }
       aside {
         border-right: 0;
-        border-bottom: 1px solid #d8d8d2;
+        border-bottom: 1px solid #d7dbdf;
       }
     }
   </style>
@@ -79,217 +100,485 @@
   <main>
     <aside>
       <h1>Defense Pose Visualizer</h1>
+      <p>This view matches the current defense code: it predicts the future ball, computes the block point on the curved goal boundary, and only activates target velocity in the non-emergency intercept branch.</p>
+      <div id="modeBadge" class="pill"></div>
+
+      <h2>Ball</h2>
       <label>Ball X centered cm <input id="ballX" type="number" value="25" step="1"></label>
       <label>Ball Y centered cm <input id="ballY" type="number" value="45" step="1"></label>
-      <label>Ball VX cm/s <input id="ballVx" type="number" value="-30" step="1"></label>
-      <label>Ball VY cm/s <input id="ballVy" type="number" value="-120" step="1"></label>
+      <label>Ball VX field cm/s <input id="ballVx" type="number" value="-30" step="1"></label>
+      <label>Ball VY field cm/s <input id="ballVy" type="number" value="-120" step="1"></label>
+
+      <h2>Defense</h2>
       <label>Defended goal X centered cm <input id="goalX" type="number" value="0" step="1"></label>
       <label>Defended goal Y centered cm <input id="goalY" type="number" value="-121.5" step="1"></label>
       <label>A* travel time tau seconds <input id="tau" type="number" value="0.45" step="0.05"></label>
+
       <button id="draw">Redraw</button>
       <pre id="debug"></pre>
     </aside>
+
     <section>
-      <canvas id="field" width="780" height="980"></canvas>
+      <canvas id="field" width="980" height="1260"></canvas>
     </section>
   </main>
 
   <script>
     const fieldW = 1820;
     const fieldH = 2430;
+    const wallThicknessMm = 22;
+    const whiteInsetX = 100;
+    const whiteInsetY = 100;
+    const chamferMm = 120;
+    const centerCircleRadiusMm = 300;
+
     const fps = 120;
     const gamma = 0.96;
     const yMinCm = 40;
     const xMaxCm = 55;
+    const arcCenterXCm = 40;
+    const arcCenterYCm = 25;
+    const arcRadiusCm = 15;
     const quadraticC = 2000;
     const futureMaxS = 0.5;
     const impactMarginS = 0.08;
     const vMaxX = 0.8;
     const vMaxY = 0.6;
     const omegaMax = 6.0;
+    const goalSlotWidthMm = 580;
+    const goalSlotDepthMm = 100;
+    const ballRadiusMm = 42.67 * 0.5;
 
-    function centeredCmToFieldMm(v, axis) {
-      return v * 10 + axis * 0.5;
+    function centeredCmToFieldMm(valueCm, axisMm) {
+      return valueCm * 10 + axisMm * 0.5;
     }
-    function fieldMmToCenteredCm(v, axis) {
-      return (v - axis * 0.5) / 10;
+
+    function fieldMmToCenteredCm(valueMm, axisMm) {
+      return (valueMm - axisMm * 0.5) / 10;
     }
-    function predictDamped(x, y, vx, vy, t) {
+
+    function clamp(value, lo, hi) {
+      return Math.max(lo, Math.min(hi, value));
+    }
+
+    function signNonZero(value) {
+      return value < 0 ? -1 : 1;
+    }
+
+    function predictDamped(ballX, ballY, ballVx, ballVy, timeS) {
       const dt = 1 / fps;
-      const n = Math.max(0, t / dt);
-      const dampedTime = Math.abs(1 - gamma) <= 1e-5 ? t : dt * (1 - Math.pow(gamma, n)) / (1 - gamma);
-      const vg = Math.pow(gamma, n);
-      return { x: x + vx * dampedTime * 1000, y: y + vy * dampedTime * 1000, vx: vx * vg, vy: vy * vg };
+      const samples = Math.max(0, timeS / dt);
+      const dampedTime = Math.abs(1 - gamma) <= 1e-5
+        ? timeS
+        : dt * (1 - Math.pow(gamma, samples)) / (1 - gamma);
+      const velocityScale = Math.pow(gamma, samples);
+      return {
+        x: ballX + ballVx * dampedTime * 1000,
+        y: ballY + ballVy * dampedTime * 1000,
+        vx: ballVx * velocityScale,
+        vy: ballVy * velocityScale
+      };
     }
+
     function goalLinePoint(ballX, ballY, goalX, goalY) {
-      const xb = (ballX - goalX) / 10;
-      const yb = (ballY - goalY) / 10;
-      const m = yb / Math.max(Math.abs(xb), 1e-3);
-      let xt;
-      let yt;
+      const ballRelXCm = (ballX - goalX) / 10;
+      const ballRelYCm = (ballY - goalY) / 10;
+      const absX = Math.max(Math.abs(ballRelXCm), 1e-3);
+      const m = ballRelYCm / absX;
+
+      let targetRelXCm = 0;
+      let targetRelYCm = 0;
+      let segment = "top";
+
       if (m >= 1) {
-        xt = yMinCm / m;
-        yt = yMinCm;
+        segment = "top";
+        targetRelXCm = yMinCm / m;
+        targetRelYCm = yMinCm;
       } else if (m <= -5 / 11) {
-        xt = xMaxCm;
-        yt = xMaxCm * m;
+        segment = "side";
+        targetRelXCm = xMaxCm;
+        targetRelYCm = xMaxCm * m;
       } else {
+        segment = "arc";
         const a = 1 + m * m;
-        const b = -2 * (yMinCm + 25 * m);
+        const b = -2 * (yMinCm + arcCenterYCm * m);
         const disc = Math.max(0, b * b - 4 * a * quadraticC);
-        xt = (-b + Math.sqrt(disc)) / (2 * a);
-        yt = m * xt;
+        targetRelXCm = (-b + Math.sqrt(disc)) / (2 * a);
+        targetRelYCm = m * targetRelXCm;
       }
-      xt *= xb < 0 ? -1 : 1;
-      return { x: goalX + xt * 10, y: goalY + yt * 10, headingDeg: Math.atan2(yb, xb) * 180 / Math.PI };
+
+      targetRelXCm *= signNonZero(ballRelXCm);
+      return {
+        x: goalX + targetRelXCm * 10,
+        y: goalY + targetRelYCm * 10,
+        headingDeg: Math.atan2(ballRelYCm, ballRelXCm) * 180 / Math.PI,
+        segment,
+        targetRelXCm,
+        targetRelYCm,
+        ballRelXCm,
+        ballRelYCm
+      };
     }
+
+    function goalLineTangentUnit(targetRelXCm, targetRelYCm, segment) {
+      if (segment === "top") {
+        return { x: 1, y: 0 };
+      }
+      if (segment === "side") {
+        return { x: 0, y: 1 };
+      }
+
+      const centerXCm = signNonZero(targetRelXCm) * arcCenterXCm;
+      const radialX = targetRelXCm - centerXCm;
+      const radialY = targetRelYCm - arcCenterYCm;
+      const radialLen = Math.hypot(radialX, radialY);
+      if (radialLen <= 1e-5) {
+        return { x: 0, y: 1 };
+      }
+
+      return {
+        x: -radialY / radialLen,
+        y: radialX / radialLen
+      };
+    }
+
     function vMaxDir(phi) {
       const c = Math.cos(phi);
       const s = Math.sin(phi);
-      const d = (c / vMaxX) ** 2 + (s / vMaxY) ** 2;
-      return d < 1e-9 ? Math.max(vMaxX, vMaxY) : 1 / Math.sqrt(d);
+      const denom = (c / vMaxX) ** 2 + (s / vMaxY) ** 2;
+      return denom < 1e-9 ? Math.max(vMaxX, vMaxY) : 1 / Math.sqrt(denom);
     }
-    function clamp(v, lo, hi) {
-      return Math.max(lo, Math.min(hi, v));
+
+    function impactTimeForDampedTravel(distanceMm, approachSpeedMps) {
+      const distanceM = distanceMm / 1000;
+      const dtCam = 1 / fps;
+      if (distanceM <= 1e-6) return 0;
+      if (approachSpeedMps <= 1e-6) return null;
+      if (Math.abs(1 - gamma) <= 1e-5) return distanceM / approachSpeedMps;
+
+      const maxDistanceM = approachSpeedMps * dtCam / (1 - gamma);
+      if (maxDistanceM < distanceM) return null;
+
+      const inside = 1 - distanceM * (1 - gamma) / (approachSpeedMps * dtCam);
+      if (inside <= 0) return null;
+      return Math.log(inside) / Math.log(gamma) * dtCam;
     }
+
     function defensePose(ballX, ballY, ballVx, ballVy, goalX, goalY, tau) {
       const initial = goalLinePoint(ballX, ballY, goalX, goalY);
       const future = predictDamped(ballX, ballY, ballVx, ballVy, Math.min(tau, futureMaxS));
       const target = goalLinePoint(future.x, future.y, goalX, goalY);
-      const bgx = future.x - goalX;
-      const bgy = future.y - goalY;
-      const bgLen = Math.hypot(bgx, bgy);
+
+      const ballGoalX = future.x - goalX;
+      const ballGoalY = future.y - goalY;
+      const ballGoalLen = Math.hypot(ballGoalX, ballGoalY);
+      const scoreDistanceMm = Math.hypot(future.x - target.x, future.y - target.y);
+
+      let approachSpeed = null;
+      let maxApproachDistanceMm = null;
+      let impactTime = null;
+      let usesInterceptVelocity = false;
       let targetVx = 0;
       let targetVy = 0;
-      let omega = 0;
-      let impact = null;
-      let usesIntercept = false;
-      const scoreDist = Math.hypot(future.x - target.x, future.y - target.y);
-      let approach = null;
-      let maxDist = null;
-      let interceptReason = "ball is not yet in the intercept branch";
-      if (bgLen > 1e-3) {
-        const ux = bgx / bgLen;
-        const uy = bgy / bgLen;
-        approach = -(future.vx * ux + future.vy * uy);
-        maxDist = approach * (1 / fps) / Math.max(1e-5, 1 - gamma) * 1000;
-        if (approach > 1e-6 && maxDist >= scoreDist) {
-          const inside = 1 - (scoreDist / 1000) * (1 - gamma) / (approach * (1 / fps));
-          if (inside > 0) impact = Math.log(inside) / Math.log(gamma) / fps;
-          else interceptReason = "damped impact equation has no real solution";
-        } else if (approach <= 1e-6) {
-          interceptReason = "future ball is not moving into the goal strongly enough";
+      let targetOmega = 0;
+      let omegaRay = null;
+      let vScalar = null;
+      let interceptReason = "non-emergency branch not active";
+
+      if (tau <= 0) {
+        interceptReason = "tau is zero so only the normal block pose is used";
+      } else if (ballGoalLen <= 1e-3) {
+        interceptReason = "future ball is too close to the defended goal center";
+      } else {
+        const uxBallGoalX = ballGoalX / ballGoalLen;
+        const uxBallGoalY = ballGoalY / ballGoalLen;
+        approachSpeed = -(future.vx * uxBallGoalX + future.vy * uxBallGoalY);
+
+        if (approachSpeed <= 1e-6) {
+          interceptReason = "future ball is not moving into goal enough for intercept velocity";
         } else {
-          interceptReason = "future ball cannot reach the block point before slowing down";
-        }
-        if (impact !== null && impact <= tau + impactMarginS) {
-          const rx = target.x - goalX;
-          const ry = target.y - goalY;
-          const rLen = Math.hypot(rx, ry);
-          if (rLen > 1e-3) {
-            const rayUx = rx / rLen;
-            const rayUy = ry / rLen;
-            const pathUx = -rayUy;
-            const pathUy = rayUx;
-            const denom = rayUy * pathUx - rayUx * pathUy;
-            if (Math.abs(denom) > 1e-5) {
-              const bgxm = bgx / 1000;
-              const bgym = bgy / 1000;
-              const omegaRay = (future.vx * bgym - future.vy * bgxm) / Math.max(1e-6, bgxm * bgxm + bgym * bgym);
-              const maxV = vMaxDir(Math.atan2(pathUy, pathUx));
-              const scalar = clamp(omegaRay * (rLen / 1000) / denom, -maxV, maxV);
-              targetVx = scalar * pathUx;
-              targetVy = scalar * pathUy;
-              const dx = (future.x - target.x) / 1000;
-              const dy = (future.y - target.y) / 1000;
-              const lenSq = dx * dx + dy * dy;
-              if (lenSq > 1e-6) {
-                omega = clamp((dy * (future.vx - targetVx) - dx * (future.vy - targetVy)) / lenSq, -omegaMax, omegaMax);
+          maxApproachDistanceMm = approachSpeed * (1 / fps) / Math.max(1e-5, 1 - gamma) * 1000;
+          if (maxApproachDistanceMm < scoreDistanceMm) {
+            interceptReason = "future ball cannot travel far enough to reach the block point";
+          } else {
+            impactTime = impactTimeForDampedTravel(scoreDistanceMm, approachSpeed);
+            if (impactTime === null) {
+              interceptReason = "damped impact equation has no real solution";
+            } else if (impactTime > tau + impactMarginS) {
+              interceptReason = "impact is later than tau plus margin, so normal block stays active";
+            } else {
+              const targetRelX = target.x - goalX;
+              const targetRelY = target.y - goalY;
+              const targetRelLen = Math.hypot(targetRelX, targetRelY);
+              if (targetRelLen <= 1e-3) {
+                interceptReason = "target lies too close to the defended goal center";
+              } else {
+                const rayUx = targetRelX / targetRelLen;
+                const rayUy = targetRelY / targetRelLen;
+                const pathU = goalLineTangentUnit(target.targetRelXCm, target.targetRelYCm, target.segment);
+                const denom = rayUy * pathU.x - rayUx * pathU.y;
+
+                if (Math.abs(denom) <= 1e-5) {
+                  interceptReason = "ray and path tangent are too parallel";
+                } else {
+                  omegaRay = (future.vx * (ballGoalY / 1000) - future.vy * (ballGoalX / 1000)) /
+                    Math.max(1e-6, (ballGoalX / 1000) ** 2 + (ballGoalY / 1000) ** 2);
+                  const maxV = vMaxDir(Math.atan2(pathU.y, pathU.x));
+                  vScalar = clamp(omegaRay * (targetRelLen / 1000) / denom, -maxV, maxV);
+                  targetVx = vScalar * pathU.x;
+                  targetVy = vScalar * pathU.y;
+
+                  const dRelX = (future.x - target.x) / 1000;
+                  const dRelY = (future.y - target.y) / 1000;
+                  const dRelLenSq = dRelX * dRelX + dRelY * dRelY;
+                  if (dRelLenSq > 1e-6) {
+                    const vRelX = future.vx - targetVx;
+                    const vRelY = future.vy - targetVy;
+                    targetOmega = clamp((dRelY * vRelX - dRelX * vRelY) / dRelLenSq, -omegaMax, omegaMax);
+                  }
+
+                  usesInterceptVelocity = true;
+                  interceptReason = "non-emergency intercept branch active";
+                }
               }
-              usesIntercept = true;
-              interceptReason = "intercept branch active";
             }
           }
-        } else if (impact !== null) {
-          interceptReason = "impact is later than tau plus margin, so use normal block pose";
         }
       }
+
       return {
         initial,
         future,
-        target: { ...target, vx: targetVx, vy: targetVy, omega },
-        impact,
-        scoreDist,
-        usesIntercept,
-        approach,
-        maxDist,
+        target: {
+          ...target,
+          vx: targetVx,
+          vy: targetVy,
+          omega: targetOmega
+        },
+        scoreDistanceMm,
+        approachSpeed,
+        maxApproachDistanceMm,
+        impactTime,
+        usesInterceptVelocity,
+        omegaRay,
+        vScalar,
         interceptReason
       };
     }
-    function drawArrow(ctx, x1, y1, x2, y2, color) {
+
+    function modeBadgeStyle(active) {
+      return active
+        ? { label: "Intercept Velocity Active", bg: "#e7f5ea", fg: "#2f7d32" }
+        : { label: "Normal Block Pose", bg: "#edf2f7", fg: "#475569" };
+    }
+
+    function drawArrow(ctx, x1, y1, x2, y2, color, width = 3, headLength = 11) {
       const angle = Math.atan2(y2 - y1, x2 - x1);
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = width;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.lineTo(x2, y2);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - 12 * Math.cos(angle - 0.45), y2 - 12 * Math.sin(angle - 0.45));
-      ctx.lineTo(x2 - 12 * Math.cos(angle + 0.45), y2 - 12 * Math.sin(angle + 0.45));
+      ctx.lineTo(x2 - headLength * Math.cos(angle - 0.45), y2 - headLength * Math.sin(angle - 0.45));
+      ctx.lineTo(x2 - headLength * Math.cos(angle + 0.45), y2 - headLength * Math.sin(angle + 0.45));
       ctx.closePath();
       ctx.fill();
     }
-    function draw() {
-      const canvas = document.getElementById("field");
-      const ctx = canvas.getContext("2d");
-      const pad = 60;
-      const scale = Math.min((canvas.width - pad * 2) / fieldW, (canvas.height - pad * 2) / fieldH);
-      const ox = (canvas.width - fieldW * scale) / 2;
-      const oy = (canvas.height + fieldH * scale) / 2;
-      const sx = x => ox + x * scale;
-      const sy = y => oy - y * scale;
-      const ballX = centeredCmToFieldMm(Number(document.getElementById("ballX").value), fieldW);
-      const ballY = centeredCmToFieldMm(Number(document.getElementById("ballY").value), fieldH);
-      const ballVx = Number(document.getElementById("ballVx").value) / 100;
-      const ballVy = Number(document.getElementById("ballVy").value) / 100;
-      const goalX = centeredCmToFieldMm(Number(document.getElementById("goalX").value), fieldW);
-      const goalY = centeredCmToFieldMm(Number(document.getElementById("goalY").value), fieldH);
-      const tau = Number(document.getElementById("tau").value);
-      const r = defensePose(ballX, ballY, ballVx, ballVy, goalX, goalY, tau);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = "#1f2933";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sx(0), sy(fieldH), fieldW * scale, fieldH * scale);
-      ctx.setLineDash([8, 6]);
-      ctx.strokeStyle = "#4c78a8";
+
+    function drawPathFromFieldPoints(ctx, sx, sy, points) {
       ctx.beginPath();
-      for (let i = -80; i <= 80; i++) {
-        const p = goalLinePoint(goalX + i * 20, goalY + (Math.abs(i) * 0.8 + 20) * 10, goalX, goalY);
-        if (i === -80) ctx.moveTo(sx(p.x), sy(p.y));
-        else ctx.lineTo(sx(p.x), sy(p.y));
+      points.forEach((point, index) => {
+        if (index === 0) ctx.moveTo(sx(point.x), sy(point.y));
+        else ctx.lineTo(sx(point.x), sy(point.y));
+      });
+      ctx.stroke();
+    }
+
+    function sampleArcPoints(centerX, centerY, radius, startDeg, endDeg, steps = 18) {
+      const points = [];
+      const startRad = startDeg * Math.PI / 180;
+      const endRad = endDeg * Math.PI / 180;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const angle = startRad + (endRad - startRad) * t;
+        points.push({
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle)
+        });
       }
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.strokeStyle = "#999";
-      ctx.beginPath();
-      ctx.moveTo(sx(goalX), sy(goalY));
-      ctx.lineTo(sx(ballX), sy(ballY));
-      ctx.moveTo(sx(goalX), sy(goalY));
-      ctx.lineTo(sx(r.future.x), sy(r.future.y));
-      ctx.stroke();
-      drawArrow(ctx, sx(ballX), sy(ballY), sx(ballX + ballVx * 700), sy(ballY + ballVy * 700), "#f58518");
-      drawArrow(ctx, sx(r.future.x), sy(r.future.y), sx(r.future.x + r.future.vx * 700), sy(r.future.y + r.future.vy * 700), "#e45756");
-      if (r.usesIntercept) drawArrow(ctx, sx(r.target.x), sy(r.target.y), sx(r.target.x + r.target.vx * 900), sy(r.target.y + r.target.vy * 900), "#54a24b");
+      return points;
+    }
+
+    function goalCurvePoints(goalX, goalY, direction) {
+      const topY = goalY + direction * (yMinCm * 10);
+      const legTopY = goalY + direction * (arcCenterYCm * 10);
+      const leftLegX = goalX - xMaxCm * 10;
+      const rightLegX = goalX + xMaxCm * 10;
+      const leftArcCenterX = goalX - arcCenterXCm * 10;
+      const rightArcCenterX = goalX + arcCenterXCm * 10;
+      const arcCenterY = goalY + direction * (arcCenterYCm * 10);
+      const radius = arcRadiusCm * 10;
+
+      const leftArc = direction > 0
+        ? sampleArcPoints(leftArcCenterX, arcCenterY, radius, 180, 90)
+        : sampleArcPoints(leftArcCenterX, arcCenterY, radius, 180, 270);
+      const rightArc = direction > 0
+        ? sampleArcPoints(rightArcCenterX, arcCenterY, radius, 90, 0)
+        : sampleArcPoints(rightArcCenterX, arcCenterY, radius, 270, 360);
+
       const points = [
-        [goalX, goalY, "#222", "goal", 10, -10],
-        [ballX, ballY, "#f58518", "ball", 10, -12],
-        [r.future.x, r.future.y, "#e45756", "future", 10, -12],
-        [r.initial.x, r.initial.y, "#72b7b2", "initial block", 10, 18],
-        [r.target.x, r.target.y, "#54a24b", "final target", 10, -16]
+        { x: leftLegX, y: goalY },
+        { x: leftLegX, y: legTopY },
+        ...leftArc,
+        { x: goalX + arcCenterXCm * 10, y: topY },
+        ...rightArc,
+        { x: rightLegX, y: legTopY },
+        { x: rightLegX, y: goalY }
       ];
+      return points;
+    }
+
+    function drawGoalSlot(ctx, sx, sy, goalX, goalY, direction, color) {
+      const topY = direction > 0 ? goalY : goalY - goalSlotDepthMm;
+      ctx.fillStyle = color;
+      ctx.fillRect(
+        sx(goalX - goalSlotWidthMm * 0.5),
+        sy(topY + goalSlotDepthMm),
+        goalSlotWidthMm * scaleValue,
+        goalSlotDepthMm * scaleValue
+      );
+    }
+
+    let scaleValue = 1;
+
+    function drawField(ctx, sx, sy, scale, defendedGoal, result) {
+      scaleValue = scale;
+      ctx.fillStyle = "#050608";
+      ctx.fillRect(sx(0), sy(fieldH), fieldW * scale, fieldH * scale);
+
+      ctx.fillStyle = "#11c53b";
+      ctx.beginPath();
+      ctx.moveTo(sx(chamferMm), sy(fieldH));
+      ctx.lineTo(sx(fieldW - chamferMm), sy(fieldH));
+      ctx.lineTo(sx(fieldW), sy(fieldH - chamferMm));
+      ctx.lineTo(sx(fieldW), sy(chamferMm));
+      ctx.lineTo(sx(fieldW - chamferMm), sy(0));
+      ctx.lineTo(sx(chamferMm), sy(0));
+      ctx.lineTo(sx(0), sy(chamferMm));
+      ctx.lineTo(sx(0), sy(fieldH - chamferMm));
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(
+        sx(whiteInsetX),
+        sy(fieldH - whiteInsetY),
+        (fieldW - 2 * whiteInsetX) * scale,
+        (fieldH - 2 * whiteInsetY) * scale
+      );
+
+      ctx.beginPath();
+      ctx.moveTo(sx(whiteInsetX), sy(fieldH * 0.5));
+      ctx.lineTo(sx(fieldW - whiteInsetX), sy(fieldH * 0.5));
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(sx(fieldW * 0.5), sy(fieldH * 0.5), centerCircleRadiusMm * scale, 0, Math.PI * 2);
+      ctx.stroke();
+
+      drawGoalSlot(ctx, sx, sy, fieldW * 0.5, fieldH, -1, "#2563eb");
+      drawGoalSlot(ctx, sx, sy, fieldW * 0.5, 0, 1, "#eab308");
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 4;
+      drawPathFromFieldPoints(ctx, sx, sy, goalCurvePoints(fieldW * 0.5, 0, 1));
+      drawPathFromFieldPoints(ctx, sx, sy, goalCurvePoints(fieldW * 0.5, fieldH, -1));
+
+      ctx.fillStyle = "#1f2933";
+      ctx.font = "12px Arial";
+      ctx.fillText("Blue Goal", sx(fieldW * 0.5 - 38), sy(fieldH) + 22);
+      ctx.fillText("Yellow Goal", sx(fieldW * 0.5 - 48), sy(0) - 10);
+
+      ctx.setLineDash([9, 7]);
+      ctx.strokeStyle = "#60a5fa";
+      ctx.lineWidth = 3;
+      const defendedDirection = defendedGoal.y <= fieldH * 0.5 ? 1 : -1;
+      drawPathFromFieldPoints(ctx, sx, sy, goalCurvePoints(defendedGoal.x, defendedGoal.y, defendedDirection));
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(sx(defendedGoal.x), sy(defendedGoal.y));
+      ctx.lineTo(sx(result.future.x), sy(result.future.y));
+      ctx.moveTo(sx(defendedGoal.x), sy(defendedGoal.y));
+      ctx.lineTo(sx(result.initial.x), sy(result.initial.y));
+      ctx.stroke();
+
+      drawArrow(
+        ctx,
+        sx(defendedGoal.x),
+        sy(defendedGoal.y),
+        sx(result.future.x),
+        sy(result.future.y),
+        "#8b949e",
+        2,
+        9
+      );
+
+      drawArrow(
+        ctx,
+        sx(result.initial.x),
+        sy(result.initial.y),
+        sx(defendedGoal.x + (result.future.x - defendedGoal.x) * 0.24),
+        sy(defendedGoal.y + (result.future.y - defendedGoal.y) * 0.24),
+        "#72b7b2",
+        2,
+        9
+      );
+
+      drawArrow(
+        ctx,
+        sx(result.future.x),
+        sy(result.future.y),
+        sx(result.future.x + result.future.vx * 850),
+        sy(result.future.y + result.future.vy * 850),
+        "#ef4444"
+      );
+
+      drawArrow(
+        ctx,
+        sx(values.ballX),
+        sy(values.ballY),
+        sx(values.ballX + values.ballVx * 850),
+        sy(values.ballY + values.ballVy * 850),
+        "#f97316"
+      );
+
+      if (result.usesInterceptVelocity) {
+        drawArrow(
+          ctx,
+          sx(result.target.x),
+          sy(result.target.y),
+          sx(result.target.x + result.target.vx * 900),
+          sy(result.target.y + result.target.vy * 900),
+          "#22c55e"
+        );
+      }
+
+      const ballDrawR = Math.max(5, ballRadiusMm * scale);
+      const points = [
+        [defendedGoal.x, defendedGoal.y, "#111827", "goal", 10, -10],
+        [result.initial.x, result.initial.y, "#72b7b2", "initial block", 10, 18],
+        [result.target.x, result.target.y, "#22c55e", result.usesInterceptVelocity ? "final target" : "block target", 10, -16],
+        [result.future.x, result.future.y, "#ef4444", "future ball", 10, -12]
+      ];
+
       ctx.font = "13px Arial";
       for (const [x, y, color, label, dx, dy] of points) {
         ctx.fillStyle = color;
@@ -298,20 +587,74 @@
         ctx.fill();
         ctx.fillText(label, sx(x) + dx, sy(y) + dy);
       }
-      document.getElementById("debug").textContent =
-        `target centered cm=(${fieldMmToCenteredCm(r.target.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(r.target.y, fieldH).toFixed(1)})\n` +
-        `initial block centered cm=(${fieldMmToCenteredCm(r.initial.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(r.initial.y, fieldH).toFixed(1)})\n` +
-        `future ball centered cm=(${fieldMmToCenteredCm(r.future.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(r.future.y, fieldH).toFixed(1)})\n` +
-        `target heading=${r.target.headingDeg.toFixed(1)} deg\n` +
-        `target velocity=(${r.target.vx.toFixed(2)}, ${r.target.vy.toFixed(2)}) m/s\n` +
-        `target omega=${r.target.omega.toFixed(2)} rad/s\n` +
-        `approach speed=${r.approach === null ? "n/a" : r.approach.toFixed(2) + " m/s"}\n` +
-        `max damped approach distance=${r.maxDist === null ? "n/a" : r.maxDist.toFixed(0) + " mm"}\n` +
-        `impact time=${r.impact === null ? "n/a" : r.impact.toFixed(3) + " s"}\n` +
-        `score distance=${r.scoreDist.toFixed(0)} mm\n` +
-        `intercept velocity=${r.usesIntercept}\n` +
-        `why=${r.interceptReason}`;
+
+      ctx.fillStyle = "#f97316";
+      ctx.beginPath();
+      ctx.arc(sx(values.ballX), sy(values.ballY), ballDrawR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillText("ball now", sx(values.ballX) + 10, sy(values.ballY) - 12);
     }
+
+    let values = null;
+
+    function draw() {
+      values = {
+        ballX: centeredCmToFieldMm(Number(document.getElementById("ballX").value), fieldW),
+        ballY: centeredCmToFieldMm(Number(document.getElementById("ballY").value), fieldH),
+        ballVx: Number(document.getElementById("ballVx").value) / 100,
+        ballVy: Number(document.getElementById("ballVy").value) / 100,
+        goalX: centeredCmToFieldMm(Number(document.getElementById("goalX").value), fieldW),
+        goalY: centeredCmToFieldMm(Number(document.getElementById("goalY").value), fieldH),
+        tau: Number(document.getElementById("tau").value)
+      };
+
+      const result = defensePose(
+        values.ballX,
+        values.ballY,
+        values.ballVx,
+        values.ballVy,
+        values.goalX,
+        values.goalY,
+        values.tau
+      );
+
+      const canvas = document.getElementById("field");
+      const ctx = canvas.getContext("2d");
+      const pad = 60;
+      const scale = Math.min((canvas.width - pad * 2) / fieldW, (canvas.height - pad * 2) / fieldH);
+      const ox = (canvas.width - fieldW * scale) / 2;
+      const oy = (canvas.height + fieldH * scale) / 2;
+      const sx = x => ox + x * scale;
+      const sy = y => oy - y * scale;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawField(ctx, sx, sy, scale, { x: values.goalX, y: values.goalY }, result);
+
+      const badge = document.getElementById("modeBadge");
+      const badgeStyle = modeBadgeStyle(result.usesInterceptVelocity);
+      badge.textContent = badgeStyle.label;
+      badge.style.background = badgeStyle.bg;
+      badge.style.color = badgeStyle.fg;
+
+      document.getElementById("debug").textContent =
+        `target segment=${result.target.segment}\n` +
+        `target centered cm=(${fieldMmToCenteredCm(result.target.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(result.target.y, fieldH).toFixed(1)})\n` +
+        `initial block centered cm=(${fieldMmToCenteredCm(result.initial.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(result.initial.y, fieldH).toFixed(1)})\n` +
+        `future ball centered cm=(${fieldMmToCenteredCm(result.future.x, fieldW).toFixed(1)}, ${fieldMmToCenteredCm(result.future.y, fieldH).toFixed(1)})\n` +
+        `target heading=${result.target.headingDeg.toFixed(1)} deg\n` +
+        `target velocity=(${result.target.vx.toFixed(2)}, ${result.target.vy.toFixed(2)}) m/s\n` +
+        `target omega=${result.target.omega.toFixed(2)} rad/s\n` +
+        `omega_ray=${result.omegaRay === null ? "n/a" : result.omegaRay.toFixed(3) + " rad/s"}\n` +
+        `v_scalar=${result.vScalar === null ? "n/a" : result.vScalar.toFixed(3) + " m/s"}\n` +
+        `approach speed=${result.approachSpeed === null ? "n/a" : result.approachSpeed.toFixed(2) + " m/s"}\n` +
+        `max damped approach distance=${result.maxApproachDistanceMm === null ? "n/a" : result.maxApproachDistanceMm.toFixed(0) + " mm"}\n` +
+        `impact time=${result.impactTime === null ? "n/a" : result.impactTime.toFixed(3) + " s"}\n` +
+        `score distance=${result.scoreDistanceMm.toFixed(0)} mm\n` +
+        `future prediction clamp=${futureMaxS.toFixed(2)} s\n` +
+        `intercept velocity active=${result.usesInterceptVelocity}\n` +
+        `why=${result.interceptReason}`;
+    }
+
     document.getElementById("draw").addEventListener("click", draw);
     document.querySelectorAll("input").forEach(input => input.addEventListener("input", draw));
     draw();
