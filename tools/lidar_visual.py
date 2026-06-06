@@ -177,7 +177,7 @@ def run():
             lidar_yaw_offset_deg=cfg.LIDAR_YAW_OFFSET_DEG,
         )
 
-    points_window = deque(maxlen=60)
+    points_window = deque(maxlen=cfg.LIDAR_POINTS_WINDOW)
     last_pose = {"valid": False, "x_mm": None, "y_mm": None}
 
     print("LiDAR visual running. q=quit  +/- or [/]=heading")
