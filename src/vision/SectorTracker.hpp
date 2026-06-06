@@ -21,6 +21,10 @@ struct BallTrackResult {
 struct GoalTrackResult {
   double blueAngle = -5;
   double yellowAngle = -5;
+  // Visibility certainty c in [0,1] derived from the detected goal blob area.
+  // Feeds the Step 1b bearing-EKF measurement variance R = base + pen*(1-c)^2.
+  double blueCertainty = 0;
+  double yellowCertainty = 0;
 };
 
 class SectorTracker {
@@ -31,6 +35,8 @@ class SectorTracker {
 
  private:
   std::optional<cv::Point> findLargestContour(const cv::Mat& bin, int minArea) const;
+  std::optional<cv::Point> findLargestContour(const cv::Mat& bin, int minArea,
+                                              double& areaOut) const;
   int sectorFromAngle(double angleDeg) const;
   std::vector<int> ringSectors(int seed, int radius) const;
 

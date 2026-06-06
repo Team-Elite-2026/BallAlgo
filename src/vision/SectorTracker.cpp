@@ -3,6 +3,7 @@
 #include "config.hpp"
 
 #include <opencv2/imgproc.hpp>
+#include <algorithm>
 #include <cmath>
 
 namespace ballalgo {
@@ -43,6 +44,12 @@ void SectorTracker::buildRoi(const cv::Size& frameSize, const ThresholdsData& th
 }
 
 std::optional<cv::Point> SectorTracker::findLargestContour(const cv::Mat& bin, int minArea) const {
+  double area = 0;
+  return findLargestContour(bin, minArea, area);
+}
+
+std::optional<cv::Point> SectorTracker::findLargestContour(const cv::Mat& bin, int minArea,
+                                                           double& areaOut) const {
   std::vector<std::vector<cv::Point>> contours;
   cv::findContours(bin, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
   double best = 0;
@@ -55,6 +62,7 @@ std::optional<cv::Point> SectorTracker::findLargestContour(const cv::Mat& bin, i
       if (m.m00 > 0) center = cv::Point(static_cast<int>(m.m10 / m.m00), static_cast<int>(m.m01 / m.m00));
     }
   }
+  areaOut = best;
   return center;
 }
 
@@ -151,11 +159,15 @@ BallTrackResult SectorTracker::trackBall(const cv::Mat& binBall, int xoff, int y
 GoalTrackResult SectorTracker::trackGoals(const cv::Mat& binYellow, const cv::Mat& binBlue, int xoff,
                                          int yoff) {
   GoalTrackResult g;
-  if (auto c = findLargestContour(binYellow, config::kMinAreaPix)) {
+  const double refArea = static_cast<double>(config::kGoalCertaintyRefAreaPix);
+  double area = 0;
+  if (auto c = findLargestContour(binYellow, config::kMinAreaPix, area)) {
     g.yellowAngle = angleAndDistance(c->x, c->y, xoff, yoff).angleDeg;
+    g.yellowCertainty = std::min(1.0, area / refArea);
   }
-  if (auto c = findLargestContour(binBlue, config::kMinAreaPix)) {
+  if (auto c = findLargestContour(binBlue, config::kMinAreaPix, area)) {
     g.blueAngle = angleAndDistance(c->x, c->y, xoff, yoff).angleDeg;
+    g.blueCertainty = std::min(1.0, area / refArea);
   }
   return g;
 }

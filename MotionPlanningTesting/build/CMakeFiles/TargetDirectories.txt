@@ -1,3 +1,0 @@
-/home/aniket/BallAlgo/MotionPlanningTesting/build/CMakeFiles/motion_planning.dir
-/home/aniket/BallAlgo/MotionPlanningTesting/build/CMakeFiles/edit_cache.dir
-/home/aniket/BallAlgo/MotionPlanningTesting/build/CMakeFiles/rebuild_cache.dir

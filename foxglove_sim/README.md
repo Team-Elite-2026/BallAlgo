@@ -1,7 +1,6 @@
 # BallAlgo Foxglove Sim
 
-This folder is the live-debugging replacement for the custom visualization role
-of `sim/`.
+Live-debugging observability for the production `ballalgo` runtime.
 
 The v1 goal is:
 
@@ -9,10 +8,9 @@ The v1 goal is:
 2. record the same topics to MCAP for replay
 3. keep BallAlgo's control loop isolated from Foxglove I/O
 
-## What Foxglove Should Replace
+## What Foxglove Provides
 
-Instead of maintaining separate custom plotting and animation scripts, Foxglove
-should become the primary viewer for:
+Foxglove is the primary viewer for:
 
 - generated splines and planned paths on the field
 - LiDAR visualization
@@ -20,9 +18,7 @@ should become the primary viewer for:
 - recorded replay/debug sessions
 - camera streams with detections and annotations
 
-The current `sim/` folder still remains the source of truth for offline
-planner-only testing. This folder is for the live/debugging observability
-pipeline.
+Use `foxglove_sim/fake/run_demo.py` for local development without hardware.
 
 ## Recommended Architecture
 

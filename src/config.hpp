@@ -34,6 +34,9 @@ inline constexpr const char* kThresholdsJson = "thresholds.json";
 inline constexpr int kNumSectors = 12;
 inline constexpr int kSectorAngleDeg = 30;
 inline constexpr int kMinAreaPix = 5;
+// Goal blob area (px) treated as "fully visible" (certainty c = 1) for the
+// Step 1b bearing-EKF occlusion model. Smaller blobs scale c down linearly.
+inline constexpr int kGoalCertaintyRefAreaPix = 1200;
 inline constexpr bool kUseMorph = true;
 inline constexpr int kMorphIters = 1;
 inline constexpr int kBallCloseIters = 1;
@@ -53,10 +56,59 @@ inline constexpr float kPoseKfProcessVelVar = 200.f;
 inline constexpr float kPoseKfMeasPosVar = 400.f;
 inline constexpr double kPoseMaxStaleS = 0.18;
 
+// Step 1a — mouse-sensor dead-reckoning (1 kHz predict between LiDAR frames).
+// Process acceleration noise (DWNA sigma_a, mm/s^2) and the mouse velocity
+// measurement variance ((mm/s)^2). Lower meas var = trust the mouse more.
+inline constexpr bool kEnableMouseFusion = true;
+inline constexpr float kPoseKfMouseAccelVar = 250000.f;  // (mm/s^2)^2
+inline constexpr float kPoseKfMouseMeasVar = 2500.f;     // (mm/s)^2
+
+// Step 1b — dual-goal bearing-only EKF correction.
+// R_i = base^2 + penalty * (1 - c)^2 (radians^2). Skip the update entirely when
+// the vision certainty c falls below the threshold.
+inline constexpr bool kEnableGoalBearingFusion = true;
+inline constexpr float kGoalBearingBaseVarRad2 = 0.0035f;   // ~3.4 deg sigma
+inline constexpr float kGoalBearingPenaltyRad2 = 0.5f;      // blows up under occlusion
+inline constexpr float kGoalCertaintyThreshold = 0.25f;
+// Absolute field positions of the two goal centres (mm, corner origin).
+// Yellow defended/attack split is handled by the caller; these are fixed posts.
+inline constexpr float kBlueGoalXMm = kFieldWidthMm * 0.5f;
+inline constexpr float kBlueGoalYMm = 0.f;
+inline constexpr float kYellowGoalXMm = kFieldWidthMm * 0.5f;
+inline constexpr float kYellowGoalYMm = kFieldHeightMm;
+
+// Shared asymmetric drivetrain / motor model (Steps 3 & 4). Holonomic 4-wheel
+// layout, wheel axis angles measured from robot-forward (0 = +y). Convention:
+// v_wheel_i = sin(alpha_i)*vx + cos(alpha_i)*vy - R_chassis*omega.
+inline constexpr float kMotorNoLoadRpm = 1620.f;
+inline constexpr float kMotorLoadCompOmega = 50.f;  // rad/s deducted for load
+inline constexpr float kWheelRadiusM = 0.025f;
+inline constexpr float kChassisRadiusM = 0.090f;
+inline constexpr float kMotorKs = 0.5f;    // static-friction voltage (V)
+inline constexpr float kMotorKv = 0.08f;   // back-EMF (V per rad/s)
+inline constexpr float kMotorKa = 0.02f;   // accel (V per rad/s^2)
+inline constexpr float kMotorVBus = 12.0f;
+inline constexpr float kAMaxGripAccel = 1.5f;  // total traction budget (m/s^2)
+inline constexpr float kProfilerJMax = 10.0f;  // path jerk limit (1/s^3)
+inline constexpr float kWheelAngle0 = -2.5307f;
+inline constexpr float kWheelAngle1 = -0.6109f;
+inline constexpr float kWheelAngle2 = 0.6109f;
+inline constexpr float kWheelAngle3 = 2.5307f;
+
 inline constexpr float kBallDistToM = 0.001f;
 inline constexpr float kBallKfMeasVar = 0.02f;
 inline constexpr float kBallKfProcessPosVar = 0.5f;
 inline constexpr float kBallKfProcessVelVar = 2.f;
+// Step 1 (ball KF): viscous-friction damping applied to the ball velocity states
+// each camera frame. F couples position with gamma-damped velocity:
+//   x_{k+1} = x_k + v_k * dt,  v_{k+1} = gamma^(dt/dt_cam) * v_k.
+// gamma in (0,1): closer to 1 = less rolling resistance. Spec value 0.95.
+inline constexpr float kBallKfFrictionGamma = 0.95f;
+// Camera frame period used to normalise the per-frame friction decay.
+inline constexpr float kBallKfCamDtS = 1.0f / static_cast<float>(kCameraFps);
+// High process noise on the velocity states (spec: "high measurement noise for
+// velocity") so the filter reacts quickly to real ball acceleration / kicks.
+inline constexpr float kBallKfVelInitVar = 4.0f;
 inline constexpr float kStrikeOffsetM = 0.12f;
 inline constexpr float kBallPredictionDamping = 0.96f;
 inline constexpr float kStrikeInterceptMaxTimeS = 1.0f;
@@ -95,14 +147,25 @@ inline constexpr float kVMaxY = 0.6f;
 inline constexpr float kAMaxX = 1.2f;
 inline constexpr float kAMaxY = 1.0f;
 
-inline constexpr float kAMaxLateral = 0.8f;
-inline constexpr float kKCurve = 0.15f;
-inline constexpr float kJMaxTangential = 4.0f;
-inline constexpr int kAstarCellMm = 80;
+// Spec Step 3: 5 cm grid. Heading split into 8 x 45-degree slices.
+inline constexpr int kAstarCellMm = 50;
 inline constexpr int kAstarHeadingBins = 8;
+// Heading-change (K_rot) and travel-direction-change (K_curve) cost penalties.
+// Units: seconds per radian. Tunable; keep small so time dominates.
+inline constexpr float kAstarKRotSPerRad = 0.08f;
+inline constexpr float kAstarKCurveSPerRad = 0.05f;
+// Ball is inflated as a circular obstacle of this radius (mm). Must be smaller
+// than the strike offset so the approach pose is reachable.
+inline constexpr float kAstarBallClearMm = 80.f;
 inline constexpr float kReplanHz = 15.f;
 inline constexpr float kCommandGoalPositionToleranceMm = 60.f;
 inline constexpr float kCommandGoalHeadingToleranceDeg = 5.f;
+
+// Step 2 — trajectory look-ahead pipelining. Constant compute+serial latency
+// measured on the Pi (us) and the acceptable tracking-error sigma (mm) used to
+// blend the chunk-predicted start state against the live EKF state.
+inline constexpr uint64_t kPipelineLatencyUs = 8000;
+inline constexpr float kTrackingSigmaMm = 40.f;
 
 inline constexpr bool kEnableActionChunks = false;
 inline constexpr bool kEnablePlannerCompare = false;

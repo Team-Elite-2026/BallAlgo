@@ -77,15 +77,16 @@ void fillBallDebugFromOffensePose(BallPlanDebug& debug, const OffensePoseResult&
 void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
                            float headingDeg) {
   if (!defensePose.usesInterceptVelocity || chunk.actions.empty()) return;
-  float vxBody = 0.f;
-  float vyBody = 0.f;
-  fieldVelToBody(defensePose.targetVxFieldMps * 1000.f, defensePose.targetVyFieldMps * 1000.f,
-                 headingDeg, vxBody, vyBody);
+  (void)headingDeg;
+  // Chunks carry GLOBAL-frame targets (the Teensy rotates into the body frame),
+  // so write the field-frame intercept velocity directly.
+  const float vxField = defensePose.targetVxFieldMps;
+  const float vyField = defensePose.targetVyFieldMps;
   const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
   for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
        i < static_cast<int>(chunk.actions.size()); ++i) {
-    chunk.actions[static_cast<size_t>(i)].vx = vxBody;
-    chunk.actions[static_cast<size_t>(i)].vy = vyBody;
+    chunk.actions[static_cast<size_t>(i)].vx = vxField;
+    chunk.actions[static_cast<size_t>(i)].vy = vyField;
     chunk.actions[static_cast<size_t>(i)].omega = defensePose.targetOmegaRadS;
     chunk.actions[static_cast<size_t>(i)].ax = 0.f;
     chunk.actions[static_cast<size_t>(i)].ay = 0.f;
@@ -96,15 +97,14 @@ void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defense
 void applyTerminalVelocity(PlannedChunk& chunk, const OffensePoseResult& offensePose,
                            float headingDeg) {
   if (!offensePose.usesTerminalVelocity || chunk.actions.empty()) return;
-  float vxBody = 0.f;
-  float vyBody = 0.f;
-  fieldVelToBody(offensePose.targetVxFieldMps * 1000.f, offensePose.targetVyFieldMps * 1000.f,
-                 headingDeg, vxBody, vyBody);
+  (void)headingDeg;
+  const float vxField = offensePose.targetVxFieldMps;
+  const float vyField = offensePose.targetVyFieldMps;
   const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
   for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
        i < static_cast<int>(chunk.actions.size()); ++i) {
-    chunk.actions[static_cast<size_t>(i)].vx = vxBody;
-    chunk.actions[static_cast<size_t>(i)].vy = vyBody;
+    chunk.actions[static_cast<size_t>(i)].vx = vxField;
+    chunk.actions[static_cast<size_t>(i)].vy = vyField;
     chunk.actions[static_cast<size_t>(i)].omega = offensePose.targetOmegaRadS;
     chunk.actions[static_cast<size_t>(i)].ax = 0.f;
     chunk.actions[static_cast<size_t>(i)].ay = 0.f;
@@ -129,19 +129,30 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
   std::vector<ProfileSample>& profileRef = profile != nullptr ? *profile : localProfile;
 
   astar.plan(pose.xMm, pose.yMm, st, goalXMm, goalYMm, gt, waypointsRef, astarCostS);
-  pathRef = spline.fit(waypointsRef, goalHeadingDeg);
 
-  float vStart = 0;
-  if (pathRef.size() >= 2) {
-    float phi0 = std::atan2(pathRef[1].yMm - pathRef[0].yMm, pathRef[1].xMm - pathRef[0].xMm);
-    const float vxField = pose.vxMmS / 1000.f;
-    const float vyField = pose.vyMmS / 1000.f;
-    vStart = vxField * std::cos(phi0) + vyField * std::sin(phi0);
+  // Step 4.1: analytic Hermite spline with boundary tangent = current velocity
+  // (field mm/s) so S'(0) matches the robot's real direction of travel.
+  HermiteSplineData data = spline.buildData(waypointsRef, goalHeadingDeg, pose.vxMmS, pose.vyMmS,
+                                            0.f, 0.f, 10);
+  pathRef = data.samples;
+
+  // Step 4.3: motor-model 3-pass S-curve profile (global-frame commands).
+  const float vStartMps = std::hypot(pose.vxMmS, pose.vyMmS) / 1000.f;
+  const int numSteps = std::max(50, static_cast<int>(pathRef.size()));
+  std::vector<ProfilePointS> motorProfile =
+      profiler.computeMotorModel(data, vStartMps, 0.f, numSteps);
+
+  // Step 4.4: slice into fixed-dt GLOBAL-frame action chunk.
+  chunk.actions = profiler.discretizeGlobal(motorProfile, chunk.dtMs, config::kChunkMaxActions);
+
+  // Keep a lightweight ProfileSample track for duration fallback / telemetry.
+  profileRef.clear();
+  profileRef.reserve(motorProfile.size());
+  for (const auto& p : motorProfile) {
+    ProfileSample ps{};
+    ps.v = std::hypot(p.vx, p.vy);
+    profileRef.push_back(ps);
   }
-
-  profileRef = profiler.build(pathRef, std::max(0.f, vStart));
-  chunk.actions =
-      profiler.discretize(profileRef, pathRef, headingDeg, chunk.dtMs, config::kChunkMaxActions);
 }
 
 }  // namespace
@@ -218,8 +229,16 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     float sp = std::min(0.3f, dist * 0.5f);
     MotionAction action{};
     if (dist > 1e-3f) {
-      action.vx = sp * ball.xM / dist;
-      action.vy = sp * ball.yM / dist;
+      // Body-frame chase direction toward the ball, rotated into the GLOBAL
+      // frame (chunks are global; the Teensy rotates back to body using its
+      // heading). Body->world per production convention.
+      const float bvx = sp * ball.xM / dist;
+      const float bvy = sp * ball.yM / dist;
+      const float h = headingDeg * static_cast<float>(M_PI / 180.0);
+      const float c = std::cos(h);
+      const float s = std::sin(h);
+      action.vx = c * bvx - s * bvy;
+      action.vy = s * bvx + c * bvy;
     }
     debug.chunk.actions.assign(config::kChunkMaxActions, action);
     return debug;
@@ -241,10 +260,14 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     debug.withinTargetTolerance =
         debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
 
+    // Step 3: inflate the (predicted) ball as a circular obstacle so the path
+    // curves around it to the behind-ball strike pose.
+    astar_.setObstacle(debug.ballFieldXMm, debug.ballFieldYMm, config::kAstarBallClearMm);
     float astarCostS = 0.f;
     buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
                        astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
                        &debug.profile, &astarCostS);
+    astar_.clearObstacle();
     const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(debug.profile);
     const float nextInterceptTimeS =
         std::clamp(pathTimeS, 0.f, config::kStrikeInterceptMaxTimeS);

@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(BALLALGO_ENABLE_LIDAR "Enable LD19 lidar" ON)
 option(BALLALGO_BUILD_APP "Build production ballalgo runtime" ON)
-option(BALLALGO_BUILD_TESTING "Build planner testing tools" ON)
 
 find_package(Eigen3 REQUIRED)
 set(BALLALGO_MOTION_CORE_SOURCES
@@ -20,23 +19,10 @@ set(BALLALGO_MOTION_CORE_SOURCES
   src/vision/VisionMath.cpp
 )
 
-set(BALLALGO_SIM_CORE_SOURCES
-  sim/SimulationCore.cpp
-  sim/SimulationCli.cpp
-  sim/SimulationMath.cpp
-  sim/SimulationRunner.cpp
-  sim/SimulationArtifactWriter.cpp
-)
-
 add_library(ballalgo_motion_core STATIC ${BALLALGO_MOTION_CORE_SOURCES})
 target_include_directories(ballalgo_motion_core PUBLIC src)
 target_link_libraries(ballalgo_motion_core PUBLIC Eigen3::Eigen)
 target_compile_options(ballalgo_motion_core PRIVATE -O3 -Wall -Wextra)
-
-add_library(ballalgo_sim_core STATIC ${BALLALGO_SIM_CORE_SOURCES})
-target_include_directories(ballalgo_sim_core PUBLIC src ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(ballalgo_sim_core PUBLIC ballalgo_motion_core Eigen3::Eigen)
-target_compile_options(ballalgo_sim_core PRIVATE -O3 -Wall -Wextra)
 
 if(BALLALGO_BUILD_APP)
 find_package(OpenCV REQUIRED)
@@ -84,16 +70,4 @@ target_compile_options(ballalgo PRIVATE -O3 -Wall -Wextra)
 
 install(TARGETS ballalgo RUNTIME DESTINATION bin)
 install(FILES thresholds.json DESTINATION share/ballalgo OPTIONAL)
-endif()
-
-if(BALLALGO_BUILD_TESTING)
-add_executable(ballalgo_sim sim/ballalgo_sim.cpp)
-target_link_libraries(ballalgo_sim PRIVATE ballalgo_sim_core Eigen3::Eigen)
-target_include_directories(ballalgo_sim PRIVATE src)
-target_compile_options(ballalgo_sim PRIVATE -O3 -Wall -Wextra)
-
-add_executable(ballalgo_planner_bench testing/planner_bench.cpp)
-target_link_libraries(ballalgo_planner_bench PRIVATE ballalgo_sim_core Eigen3::Eigen)
-target_include_directories(ballalgo_planner_bench PRIVATE src)
-target_compile_options(ballalgo_planner_bench PRIVATE -O3 -Wall -Wextra)
 endif()

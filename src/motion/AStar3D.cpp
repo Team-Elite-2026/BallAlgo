@@ -24,11 +24,11 @@ int headingBinFromRadians(float radians, int bins) {
   return static_cast<int>(wrapped / stepDeg) % bins;
 }
 
+// Heading-change penalty (seconds). Δθ in radians times the K_rot weight.
 float rotationCost(int from, int to, int bins) {
-  constexpr float kQuarterTurnCostS = 0.08f;
-  const int quarterTurnBins = std::max(1, bins / 4);
-  return kQuarterTurnCostS * static_cast<float>(wrapBinDistance(from, to, bins)) /
-         static_cast<float>(quarterTurnBins);
+  const float dThetaRad = static_cast<float>(wrapBinDistance(from, to, bins)) *
+                          (2.0f * static_cast<float>(M_PI) / static_cast<float>(bins));
+  return config::kAstarKRotSPerRad * dThetaRad;
 }
 
 }  // namespace
@@ -37,6 +37,25 @@ AStar3D::AStar3D(float fieldW, float fieldH, int cellMm, int headingBins)
     : fieldW_(fieldW), fieldH_(fieldH), cellMm_(cellMm), hBins_(headingBins) {
   cols_ = static_cast<int>(fieldW / cellMm) + 1;
   rows_ = static_cast<int>(fieldH / cellMm) + 1;
+  maxStraightVMps_ = std::max(0.05f, motion::wheelProjVMaxStraight());
+}
+
+void AStar3D::setObstacle(float xMm, float yMm, float clearMm) {
+  hasObstacle_ = clearMm > 0.f;
+  obsXMm_ = xMm;
+  obsYMm_ = yMm;
+  obsClearMm_ = clearMm;
+}
+
+void AStar3D::clearObstacle() { hasObstacle_ = false; }
+
+bool AStar3D::blocked(int ix, int iy) const {
+  if (!hasObstacle_) return false;
+  const float wx = ix * cellMm_;
+  const float wy = iy * cellMm_;
+  const float dx = wx - obsXMm_;
+  const float dy = wy - obsYMm_;
+  return (dx * dx + dy * dy) < (obsClearMm_ * obsClearMm_);
 }
 
 int AStar3D::index(int ix, int iy, int it) const {
@@ -46,8 +65,9 @@ int AStar3D::index(int ix, int iy, int it) const {
 float AStar3D::heuristic(int ix, int iy, int it, int gx, int gy, int gt) const {
   float dx = (gx - ix) * cellMm_;
   float dy = (gy - iy) * cellMm_;
-  return std::hypot(dx, dy) / 1000.f / std::max(config::kVMaxX, config::kVMaxY) +
-         rotationCost(it, gt, hBins_);
+  // Time-to-go assuming straight-line travel at the absolute max speed
+  // (independent of drive angle) plus the minimum rotation cost.
+  return std::hypot(dx, dy) / 1000.f / maxStraightVMps_ + rotationCost(it, gt, hBins_);
 }
 
 bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gtheta,
@@ -98,15 +118,47 @@ bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gthet
       }
     }
 
+    // Travel direction used to ARRIVE at this node (for the K_curve penalty).
+    const int parIdx = parent_[cur];
+    bool hasTravelIn = false;
+    float phiInSpec = 0.f;
+    if (parIdx >= 0) {
+      const int pix = parIdx % cols_;
+      const int piy = (parIdx / cols_) % rows_;
+      if (pix != ix || piy != iy) {
+        phiInSpec = std::atan2(static_cast<float>(ix - pix), static_cast<float>(iy - piy));
+        hasTravelIn = true;
+      }
+    }
+
     for (int k = 0; k < 8; ++k) {
       int nix = ix + dx[k], niy = iy + dy[k];
       if (nix < 0 || niy < 0 || nix >= cols_ || niy >= rows_) continue;
+      if (blocked(nix, niy)) continue;  // ball / enemy inflation
       float wx1 = nix * cellMm_, wy1 = niy * cellMm_;
-      float phi = std::atan2(wy1 - wy0, wx1 - wx0);
-      float dist = std::hypot(wx1 - wx0, wy1 - wy0) / 1000.f;
-      float vlim = motion::vMaxDir(phi, config::kVMaxX, config::kVMaxY);
-      int nit = headingBinFromRadians(phi, hBins_);
-      float step = dist / std::max(vlim, 0.05f) + rotationCost(it, nit, hBins_);
+      const float dxw = wx1 - wx0;
+      const float dyw = wy1 - wy0;
+      float dist = std::hypot(dxw, dyw) / 1000.f;
+
+      // Asymmetric velocity ceiling: travel direction mapped into the robot
+      // body frame at node A (spec: phi_local = phi_global + theta_A).
+      const float phiTravelSpec = std::atan2(dxw, dyw);  // 0 = +y forward
+      const float thetaA = static_cast<float>(it) * (2.0f * static_cast<float>(M_PI) /
+                                                     static_cast<float>(hBins_));
+      const float vlim = motion::wheelProjVMax(phiTravelSpec + thetaA);
+
+      int nit = headingBinFromRadians(std::atan2(dyw, dxw), hBins_);
+
+      // Curve penalty: change in travel direction from the incoming move.
+      float curveCost = 0.f;
+      if (hasTravelIn) {
+        float dphi = phiTravelSpec - phiInSpec;
+        while (dphi > static_cast<float>(M_PI)) dphi -= 2.0f * static_cast<float>(M_PI);
+        while (dphi < -static_cast<float>(M_PI)) dphi += 2.0f * static_cast<float>(M_PI);
+        curveCost = config::kAstarKCurveSPerRad * std::fabs(dphi);
+      }
+
+      float step = dist / std::max(vlim, 0.05f) + rotationCost(it, nit, hBins_) + curveCost;
       int nb = index(nix, niy, nit);
       if (closed_[nb]) continue;
       float tg = gScore_[cur] + step;

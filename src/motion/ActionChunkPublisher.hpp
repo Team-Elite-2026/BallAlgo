@@ -34,10 +34,40 @@ class ActionChunkPublisher {
   const PlannerDebugSnapshot& latestDebugSnapshot() const { return latestDebug_; }
 
  private:
+  // Step 2: snapshot of the last chunk we sent, used to roll the executing
+  // trajectory forward to the look-ahead horizon when (re)planning.
+  struct LastChunk {
+    bool valid = false;
+    std::vector<MotionAction> actions;  // GLOBAL-frame targets
+    uint16_t dtMs = 0;
+    uint64_t startTimePi = 0;
+    float startXMm = 0;
+    float startYMm = 0;
+    float startHeadingDeg = 0;
+  };
+
+  // Integrated global state predicted from the executing chunk at a query time.
+  struct PredictedState {
+    float xMm = 0;
+    float yMm = 0;
+    float vxMmS = 0;
+    float vyMmS = 0;
+  };
+
+  PredictedState predictChunkState(uint64_t queryPi) const;
+
+  // Returns the look-ahead-blended start pose to feed the planner and the
+  // absolute Pi time at which the new chunk should begin executing.
+  PoseState computeStartState(const PoseState& ekf, float headingDeg, uint64_t nowPi,
+                              uint64_t& startTimePiOut) const;
+
+  void recordChunk(const PlannedChunk& chunk, const PoseState& startPose, float headingDeg);
+
   ClockSync clock_;
   MotionPlanner planner_;
   double lastPublish_ = 0;
   PlannerDebugSnapshot latestDebug_;
+  LastChunk lastChunk_;
 };
 
 }  // namespace ballalgo

@@ -78,25 +78,61 @@ bool RobotSerial::writeAscii(const std::string& s) {
   return writeAll(reinterpret_cast<const uint8_t*>(s.data()), s.size());
 }
 
-void RobotSerial::pollHeading(float& headingDeg) {
+void RobotSerial::consumeAscii(TeensyOdometry& odo) {
   std::vector<uint8_t> chunk;
   readSome(chunk);
+  auto flush = [&](char tag) {
+    if (headingBuf_.empty()) return;
+    float value = 0;
+    try {
+      value = std::stof(headingBuf_);
+    } catch (...) {
+      headingBuf_.clear();
+      return;
+    }
+    switch (tag) {
+      case 'h':
+        odo.headingDeg = value;
+        break;
+      case 'x':
+        odo.mouseVxBodyMmS = value;
+        odo.mouseFresh = true;
+        break;
+      case 'y':
+        odo.mouseVyBodyMmS = value;
+        odo.mouseFresh = true;
+        break;
+      case 'w':
+        odo.omegaRadS = value;
+        break;
+      default:
+        break;
+    }
+    headingBuf_.clear();
+  };
   for (uint8_t b : chunk) {
     char ch = static_cast<char>(b);
-    if (ch == 'h') {
-      if (!headingBuf_.empty()) {
-        try {
-          headingDeg = std::stof(headingBuf_);
-        } catch (...) {
-        }
-      }
-      headingBuf_.clear();
+    if (ch == 'h' || ch == 'x' || ch == 'y' || ch == 'w') {
+      flush(ch);
     } else if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '.') {
       headingBuf_ += ch;
     } else if (ch != '\xFE') {
       headingBuf_.clear();
     }
   }
+}
+
+void RobotSerial::pollHeading(float& headingDeg) {
+  odoCache_.mouseFresh = false;
+  odoCache_.headingDeg = headingDeg;
+  consumeAscii(odoCache_);
+  headingDeg = odoCache_.headingDeg;
+}
+
+void RobotSerial::pollOdometry(TeensyOdometry& odo) {
+  odoCache_.mouseFresh = false;
+  consumeAscii(odoCache_);
+  odo = odoCache_;
 }
 
 }  // namespace ballalgo

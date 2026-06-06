@@ -1,122 +1,258 @@
 #include "motion/VelocityProfile.hpp"
 
 #include "config.hpp"
-#include "motion/MotionLimits.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace ballalgo {
 
+// ── Motor-model S-curve profiler (Step 4.3) ────────────────────────────────
+
 namespace {
 
-float solveSevenPhaseReach(float v0, float v1, float dist, float aMax, float jMax) {
-  if (dist < 1e-6f) return v1;
-  float v0sq = v0 * v0, v1sq = v1 * v1;
-  float delta = v1sq - v0sq;
-  float aEff = std::min(aMax, std::sqrt(std::max(0.f, jMax * dist)));
-  if (std::fabs(delta) < 2.f * aEff * dist) {
-    float vm = std::sqrt(std::max(0.f, 0.5f * (v0sq + v1sq + 2.f * aEff * dist * (delta > 0 ? 1 : -1))));
-    return std::clamp(vm, std::min(v0, v1), std::max(v0, v1));
+struct MotorModel {
+  float maxWheelVel;  // m/s
+  std::array<float, 4> alpha;
+};
+
+MotorModel makeMotorModel() {
+  MotorModel m;
+  const float omegaNoLoad =
+      (config::kMotorNoLoadRpm * 2.0f * static_cast<float>(M_PI)) / 60.0f;
+  m.maxWheelVel = (omegaNoLoad - config::kMotorLoadCompOmega) * config::kWheelRadiusM;
+  m.alpha = {config::kWheelAngle0, config::kWheelAngle1, config::kWheelAngle2,
+             config::kWheelAngle3};
+  return m;
+}
+
+// Hard ceiling on path speed s_dot: min of per-wheel back-EMF limit and the
+// centripetal traction limit.
+float calcCeiling(const SplineDerivState& st, const MotorModel& m) {
+  float sDotLim = 9999.0f;
+  for (int i = 0; i < 4; ++i) {
+    const float projTrans = std::sin(m.alpha[i]) * static_cast<float>(st.dx_ds) +
+                            std::cos(m.alpha[i]) * static_cast<float>(st.dy_ds);
+    const float projRot = -config::kChassisRadiusM * static_cast<float>(st.dtheta_ds);
+    const float Ki = projTrans + projRot;
+    if (std::fabs(Ki) > 0.001f) sDotLim = std::min(sDotLim, m.maxWheelVel / std::fabs(Ki));
   }
-  if (delta > 0) return std::sqrt(std::max(v0sq + 2.f * aEff * dist, v1sq));
-  return std::sqrt(std::max(v1sq, v0sq - 2.f * aEff * dist));
+  if (std::fabs(st.kappa) > 0.001f) {
+    const float vCurve = std::sqrt(config::kAMaxGripAccel / static_cast<float>(std::fabs(st.kappa)));
+    const float pathRatio =
+        std::sqrt(static_cast<float>(st.dx_ds * st.dx_ds + st.dy_ds * st.dy_ds));
+    if (pathRatio > 0.001f) sDotLim = std::min(sDotLim, vCurve / pathRatio);
+  }
+  return sDotLim;
+}
+
+struct DynLimits {
+  float accel;
+  float decel;
+};
+
+DynLimits calcDynLimits(const SplineDerivState& st, float sDot, float vx, float vy, float omega,
+                        const MotorModel& m) {
+  DynLimits lim{999.0f, 999.0f};
+  const float sDotSq = sDot * sDot;
+  constexpr float EPS = 0.001f;
+  for (int i = 0; i < 4; ++i) {
+    const float vWheel = std::sin(m.alpha[i]) * vx + std::cos(m.alpha[i]) * vy -
+                         config::kChassisRadiusM * omega;
+    const float wMotor = vWheel / config::kWheelRadiusM;
+    const float vEmf = config::kMotorKv * wMotor;
+    const float friction =
+        (wMotor > EPS) ? config::kMotorKs : (wMotor < -EPS) ? -config::kMotorKs : 0.0f;
+    const float vPos = config::kMotorVBus - friction - vEmf;
+    const float vNeg = -config::kMotorVBus - friction - vEmf;
+    const float aWhPos = (vPos * config::kWheelRadiusM) / config::kMotorKa;
+    const float aWhNeg = (vNeg * config::kWheelRadiusM) / config::kMotorKa;
+
+    const float Ki = std::sin(m.alpha[i]) * static_cast<float>(st.dx_ds) +
+                     std::cos(m.alpha[i]) * static_cast<float>(st.dy_ds) -
+                     config::kChassisRadiusM * static_cast<float>(st.dtheta_ds);
+    const float Ci = std::sin(m.alpha[i]) * static_cast<float>(st.d2x_ds2) +
+                     std::cos(m.alpha[i]) * static_cast<float>(st.d2y_ds2) -
+                     config::kChassisRadiusM * static_cast<float>(st.d2theta_ds2);
+    const float curveTerm = Ci * sDotSq;
+    if (std::fabs(Ki) > EPS) {
+      const float b1 = (aWhPos - curveTerm) / Ki;
+      const float b2 = (aWhNeg - curveTerm) / Ki;
+      const float localMax = std::max(b1, b2);
+      const float localMin = std::min(b1, b2);
+      lim.accel = (localMax > 0.0f) ? std::min(lim.accel, localMax) : 0.0f;
+      lim.decel = (localMin < 0.0f) ? std::min(lim.decel, std::fabs(localMin)) : 0.0f;
+    } else if (curveTerm > aWhPos || curveTerm < aWhNeg) {
+      lim.accel = 0.0f;
+      lim.decel = 0.0f;
+    }
+  }
+  const float pathRatio =
+      std::sqrt(static_cast<float>(st.dx_ds * st.dx_ds + st.dy_ds * st.dy_ds));
+  if (pathRatio > EPS) {
+    const float vSq = vx * vx + vy * vy;
+    const float aLat = std::min(vSq * static_cast<float>(std::fabs(st.kappa)),
+                                config::kAMaxGripAccel);
+    const float aTang = std::sqrt(std::max(
+        0.0f, config::kAMaxGripAccel * config::kAMaxGripAccel - aLat * aLat));
+    const float sDdotTr = aTang / pathRatio;
+    lim.accel = std::min(lim.accel, sDdotTr);
+    lim.decel = std::min(lim.decel, sDdotTr);
+  }
+  return lim;
 }
 
 }  // namespace
 
-std::vector<ProfileSample> VelocityProfile::build(const std::vector<PathSample>& path,
-                                                  float vStart) {
-  std::vector<ProfileSample> prof;
-  if (path.size() < 2) return prof;
-  const int n = static_cast<int>(path.size());
-  prof.resize(n);
-  for (int i = 0; i < n; ++i) {
-    prof[i].sMm = path[i].sMm;
-    float phi = 0;
-    if (i < n - 1) {
-      phi = std::atan2(path[i + 1].yMm - path[i].yMm, path[i + 1].xMm - path[i].xMm);
-    } else if (i > 0) {
-      phi = std::atan2(path[i].yMm - path[i - 1].yMm, path[i].xMm - path[i - 1].xMm);
+std::vector<ProfilePointS> VelocityProfile::computeMotorModel(const HermiteSplineData& spline,
+                                                              float vStartMps, float vEndMps,
+                                                              int numSteps) {
+  if (spline.numSegments == 0 || spline.nodes.empty()) return {};
+  const MotorModel m = makeMotorModel();
+  const int N = std::max(numSteps, 2);
+  const float ds = 1.0f / (N - 1);
+  constexpr float EPS = 1e-6f;
+
+  std::vector<SplineDerivState> states(N);
+  for (int i = 0; i < N; ++i) states[i] = spline.evalState(static_cast<double>(i) / (N - 1));
+
+  std::vector<float> ceiling(N);
+  for (int i = 0; i < N; ++i) ceiling[i] = calcCeiling(states[i], m);
+
+  auto pathRatio = [&](int i) {
+    return std::sqrt(
+        static_cast<float>(states[i].dx_ds * states[i].dx_ds + states[i].dy_ds * states[i].dy_ds));
+  };
+
+  const float pr0 = pathRatio(0);
+  float sDotStart = (pr0 > EPS) ? vStartMps / pr0 : 0.0f;
+  sDotStart = std::min(sDotStart, ceiling[0]);
+  const float prN = pathRatio(N - 1);
+  float sDotEnd = (prN > EPS) ? vEndMps / prN : 0.0f;
+  sDotEnd = std::min(sDotEnd, ceiling[N - 1]);
+
+  // Forward pass.
+  std::vector<float> fwd(N);
+  {
+    float sDot = sDotStart;
+    float sDdot = 0.0f;
+    for (int i = 0; i < N; ++i) {
+      fwd[i] = sDot;
+      if (i == N - 1) break;
+      const auto& st = states[i];
+      const float vx = static_cast<float>(st.dx_ds) * sDot;
+      const float vy = static_cast<float>(st.dy_ds) * sDot;
+      const float omega = static_cast<float>(st.dtheta_ds) * sDot;
+      const DynLimits dl = calcDynLimits(st, sDot, vx, vy, omega, m);
+      const float sdotSafe = std::max(sDot, EPS);
+      const float dSdot = config::kProfilerJMax * ds / sdotSafe;
+      sDdot += (sDdot < dl.accel) ? dSdot : -dSdot;
+      sDdot = std::clamp(sDdot, 0.0f, dl.accel);
+      const float v2 = sDot * sDot + 2.0f * sDdot * ds;
+      sDot = std::sqrt(std::max(0.0f, v2));
+      sDot = std::min(sDot, ceiling[i + 1]);
     }
-    prof[i].phi = phi;
-    prof[i].kappa = 0;
-    if (i >= 2) {
-      float dx1 = path[i].xMm - path[i - 1].xMm;
-      float dy1 = path[i].yMm - path[i - 1].yMm;
-      float dx2 = path[i - 1].xMm - path[i - 2].xMm;
-      float dy2 = path[i - 1].yMm - path[i - 2].yMm;
-      float cross = std::fabs(dx1 * dy2 - dy1 * dx2);
-      float denom = std::hypot(dx1, dy1) * std::hypot(dx2, dy2) * std::hypot(dx1 + dx2, dy1 + dy2);
-      // Geometry is in millimeters; convert curvature from 1/mm to 1/m so
-      // the lateral-acceleration speed cap stays dimensionally correct.
-      if (denom > 1e-3f) prof[i].kappa = 1000.f * cross / (denom + 1e-9f);
+  }
+
+  // Backward pass.
+  std::vector<float> bwd(N);
+  {
+    float sDot = sDotEnd;
+    float sDdotDecel = 0.0f;
+    bwd[N - 1] = sDot;
+    for (int i = N - 2; i >= 0; --i) {
+      const auto& st = states[i + 1];
+      const float vx = static_cast<float>(st.dx_ds) * sDot;
+      const float vy = static_cast<float>(st.dy_ds) * sDot;
+      const float omega = static_cast<float>(st.dtheta_ds) * sDot;
+      const DynLimits dl = calcDynLimits(st, sDot, vx, vy, omega, m);
+      const float sdotSafe = std::max(sDot, EPS);
+      const float dSdot = config::kProfilerJMax * ds / sdotSafe;
+      sDdotDecel += dSdot;
+      sDdotDecel = std::clamp(sDdotDecel, 0.0f, dl.decel);
+      const float v2 = sDot * sDot + 2.0f * sDdotDecel * ds;
+      sDot = std::sqrt(std::max(0.0f, v2));
+      sDot = std::min(sDot, ceiling[i]);
+      bwd[i] = sDot;
     }
-    float vcurve = (prof[i].kappa > 1e-6f)
-                       ? std::sqrt(config::kAMaxLateral / prof[i].kappa)
-                       : config::kVMaxX;
-    prof[i].vCap = std::min(motion::vMaxDir(phi, config::kVMaxX, config::kVMaxY), vcurve);
-    prof[i].v = prof[i].vCap;
   }
-  prof[n - 1].v = 0;
-  for (int i = n - 2; i >= 0; --i) {
-    float ds = (prof[i + 1].sMm - prof[i].sMm) / 1000.f;
-    float am = motion::aMaxDir(prof[i].phi, config::kAMaxX, config::kAMaxY);
-    float reachable = solveSevenPhaseReach(prof[i + 1].v, prof[i].vCap, ds, am, config::kJMaxTangential);
-    prof[i].v = std::min(prof[i].vCap, reachable);
+
+  // Intersection + physical command derivation.
+  std::vector<ProfilePointS> out(N);
+  for (int i = 0; i < N; ++i) {
+    const float sDot = std::min({fwd[i], bwd[i], ceiling[i]});
+    float sDdot = 0.0f;
+    if (i < N - 1) {
+      const float sDotNext = std::min({fwd[i + 1], bwd[i + 1], ceiling[i + 1]});
+      sDdot = (sDotNext * sDotNext - sDot * sDot) / (2.0f * ds);
+    }
+    const auto& st = states[i];
+    ProfilePointS p;
+    p.s = static_cast<float>(i) / (N - 1);
+    p.sDot = sDot;
+    p.sDdot = sDdot;
+    p.vx = static_cast<float>(st.dx_ds) * sDot;
+    p.vy = static_cast<float>(st.dy_ds) * sDot;
+    p.omega = static_cast<float>(st.dtheta_ds) * sDot;
+    p.ax = static_cast<float>(st.d2x_ds2) * sDot * sDot + static_cast<float>(st.dx_ds) * sDdot;
+    p.ay = static_cast<float>(st.d2y_ds2) * sDot * sDot + static_cast<float>(st.dy_ds) * sDdot;
+    p.alpha =
+        static_cast<float>(st.d2theta_ds2) * sDot * sDot + static_cast<float>(st.dtheta_ds) * sDdot;
+    out[i] = p;
   }
-  prof[0].v = std::min(prof[0].vCap, vStart);
-  for (int i = 0; i < n - 1; ++i) {
-    float ds = (prof[i + 1].sMm - prof[i].sMm) / 1000.f;
-    float am = motion::aMaxDir(prof[i].phi, config::kAMaxX, config::kAMaxY);
-    float reachable = solveSevenPhaseReach(prof[i].v, prof[i + 1].v, ds, am, config::kJMaxTangential);
-    if (reachable < prof[i + 1].v) prof[i + 1].v = reachable;
-    prof[i].a = (ds > 1e-6f) ? (prof[i + 1].v * prof[i + 1].v - prof[i].v * prof[i].v) / (2.f * ds) : 0;
-  }
-  return prof;
+  return out;
 }
 
-std::vector<MotionAction> VelocityProfile::discretize(const std::vector<ProfileSample>& prof,
-                                                      const std::vector<PathSample>& path,
-                                                      float headingDeg, int dtMs, int maxActions) {
-  (void)path;
+std::vector<MotionAction> VelocityProfile::discretizeGlobal(const std::vector<ProfilePointS>& prof,
+                                                            int dtMs, int maxActions) {
   std::vector<MotionAction> actions;
-  if (prof.empty()) {
+  if (prof.size() < 2) {
     actions.push_back({});
+    while (static_cast<int>(actions.size()) < maxActions) actions.push_back({});
     return actions;
   }
-  const float dt = dtMs / 1000.f;
-  float t = 0;
-  size_t seg = 0;
-  const double h = headingDeg * M_PI / 180.0;
-  const double c = std::cos(h), s = std::sin(h);
-  while (static_cast<int>(actions.size()) < maxActions && seg < prof.size() - 1) {
-    float v = prof[seg].v;
-    float phi = prof[seg].phi;
-    float vxF = v * std::cos(phi);
-    float vyF = v * std::sin(phi);
-    MotionAction a;
-    a.vx = static_cast<float>(c * vxF + s * vyF);
-    a.vy = static_cast<float>(-s * vxF + c * vyF);
-    a.ax = static_cast<float>(prof[seg].a * std::cos(phi));
-    a.ay = static_cast<float>(prof[seg].a * std::sin(phi));
-    a.omega = 0;
-    a.alpha = 0;
-    actions.push_back(a);
-    float ds = (prof[seg + 1].sMm - prof[seg].sMm) / 1000.f;
-    float segT = (v > 0.05f) ? ds / v : dt;
-    t += dt;
-    if (t >= segT) {
-      t = 0;
-      ++seg;
-    }
+  const int N = static_cast<int>(prof.size());
+  const float ds = 1.0f / (N - 1);
+  const float dt = dtMs / 1000.0f;
+
+  // Build cumulative time at each s node from dt = ds / s_dot_avg.
+  std::vector<float> tAtNode(N, 0.0f);
+  for (int i = 1; i < N; ++i) {
+    const float avg = 0.5f * (prof[i - 1].sDot + prof[i].sDot);
+    const float segDt = (avg > 1e-4f) ? ds / avg : dt;
+    tAtNode[i] = tAtNode[i - 1] + segDt;
   }
-  MotionAction hold = actions.empty() ? MotionAction{} : actions.back();
-  // Hold terminal velocity without repeating the last segment's acceleration
-  // spike into padded trailing actions.
-  hold.ax = 0;
-  hold.ay = 0;
-  hold.alpha = 0;
+  const float totalT = tAtNode[N - 1];
+
+  auto sampleAt = [&](float tQuery) -> MotionAction {
+    // Find the node interval containing tQuery and linearly interpolate.
+    int hi = 1;
+    while (hi < N && tAtNode[hi] < tQuery) ++hi;
+    if (hi >= N) hi = N - 1;
+    const int lo = hi - 1;
+    const float span = std::max(1e-6f, tAtNode[hi] - tAtNode[lo]);
+    const float frac = std::clamp((tQuery - tAtNode[lo]) / span, 0.0f, 1.0f);
+    MotionAction a;
+    a.vx = prof[lo].vx + frac * (prof[hi].vx - prof[lo].vx);
+    a.vy = prof[lo].vy + frac * (prof[hi].vy - prof[lo].vy);
+    a.omega = prof[lo].omega + frac * (prof[hi].omega - prof[lo].omega);
+    a.ax = prof[lo].ax + frac * (prof[hi].ax - prof[lo].ax);
+    a.ay = prof[lo].ay + frac * (prof[hi].ay - prof[lo].ay);
+    a.alpha = prof[lo].alpha + frac * (prof[hi].alpha - prof[lo].alpha);
+    return a;
+  };
+
+  for (int k = 0; k < maxActions; ++k) {
+    const float tQuery = k * dt;
+    if (tQuery > totalT) break;
+    actions.push_back(sampleAt(tQuery));
+  }
+  if (actions.empty()) actions.push_back(sampleAt(0.0f));
+
+  // Pad: hold terminal velocity, zero feed-forward accel.
+  MotionAction hold = actions.back();
+  hold.ax = hold.ay = hold.alpha = 0.0f;
   while (static_cast<int>(actions.size()) < maxActions) actions.push_back(hold);
   return actions;
 }

@@ -1,6 +1,13 @@
 *.mp4
-build-test
+build/
+build-test/
 *.pyc
 env/
 foxglove_sim/recordings/
 __pycache__/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.a
+performance_comparison.png

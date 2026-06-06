@@ -10,6 +10,7 @@
 #include "motion/MotionPipeline.hpp"
 #include "vision/SectorTracker.hpp"
 #include "vision/Thresholds.hpp"
+#include "vision/VisionMath.hpp"
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -223,7 +224,15 @@ int main(int argc, char** argv) {
     auto ball = tracker.trackBall(binBall, thr.xoffset, thr.yoffset);
     auto goals = tracker.trackGoals(binY, binB, thr.xoffset, thr.yoffset);
 
-    if (serial.isOpen()) serial.pollHeading(headingDeg);
+    TeensyOdometry odo;
+    odo.headingDeg = headingDeg;
+    if (serial.isOpen()) {
+      serial.pollOdometry(odo);
+      headingDeg = odo.headingDeg;
+    }
+
+    // Step 1a: high-frequency dead-reckoning predict (mouse + IMU when fresh).
+    motion.predictStep(odo, dt);
 
     PoseState pose;
 #ifdef BALLALGO_ENABLE_LIDAR
@@ -235,12 +244,34 @@ int main(int argc, char** argv) {
           if (static_cast<int>(lidarWindow.size()) > config::kLidarPointsWindow) lidarWindow.pop_front();
         }
         std::vector<LidarPoint> window(lidarWindow.begin(), lidarWindow.end());
-        pose = motion.updateLidar(window, headingDeg, dt);
+        pose = motion.updateLidar(window, headingDeg);  // Step 1a map snap
       } else {
-        pose = motion.updateLidar({}, headingDeg, dt);
+        pose = motion.poseState(headingDeg);
       }
     }
 #endif
+
+    // Step 1b: dual-goal bearing-only correction of lateral (x,y) drift.
+    {
+      GoalBearingObs obs[2];
+      auto fillObs = [&](GoalBearingObs& o, double angleDeg, double certainty, float gx, float gy) {
+        if (angleDeg < 0) return;  // sentinel: goal not seen this frame
+        double bodyX = 0;
+        double bodyY = 0;
+        polarToBodyXY(angleDeg, 1.0, bodyX, bodyY);
+        o.bearingRad = std::atan2(bodyX, bodyY);
+        o.goalXMm = gx;
+        o.goalYMm = gy;
+        o.certainty = certainty;
+        o.valid = true;
+      };
+      fillObs(obs[0], goals.yellowAngle, goals.yellowCertainty, config::kYellowGoalXMm,
+              config::kYellowGoalYMm);
+      fillObs(obs[1], goals.blueAngle, goals.blueCertainty, config::kBlueGoalXMm,
+              config::kBlueGoalYMm);
+      motion.updateGoalBearings(obs, 2, headingDeg);
+      pose = motion.poseState(headingDeg);
+    }
 
     auto ballState = motion.updateBall(ball.angleDeg, ball.distCal, ball.found, dt);
 
