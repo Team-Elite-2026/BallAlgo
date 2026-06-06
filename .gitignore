@@ -3,3 +3,4 @@ build-test
 *.pyc
 env/
 foxglove_sim/recordings/
+__pycache__/

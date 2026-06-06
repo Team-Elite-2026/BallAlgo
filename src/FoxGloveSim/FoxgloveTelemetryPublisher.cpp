@@ -9,8 +9,10 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
+#include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -122,6 +124,43 @@ std::string base64Encode(const uint8_t* data, size_t size) {
     out += (i + 2 < size) ? kChars[n & 63] : '=';
   }
   return out;
+}
+
+std::string joinMessages(const std::vector<std::string>& messages) {
+  std::ostringstream out;
+  for (size_t i = 0; i < messages.size(); ++i) {
+    if (i != 0) out << "; ";
+    out << messages[i];
+  }
+  return out.str();
+}
+
+std::string formatPlannerSummary(const PlannerDebugSnapshot& planner) {
+  std::ostringstream out;
+  out << "trajectory=" << planner.trajectoryId << " target=("
+      << std::lround(planner.targetXMm) << ", " << std::lround(planner.targetYMm)
+      << ")mm heading=" << std::fixed << std::setprecision(1) << planner.targetHeadingDeg
+      << "deg";
+  if (planner.commandedGoalMode) {
+    out << " mode=commanded_goal";
+  } else if (planner.usedStrikePosePlan) {
+    out << " mode=strike_pose";
+  } else if (planner.usedBodyChaseFallback) {
+    out << " mode=body_chase_fallback";
+  } else if (planner.usedCenterFallback) {
+    out << " mode=center_fallback";
+  }
+  if (planner.withinTolerance) out << " within_tolerance=true";
+  return out.str();
+}
+
+std::string formatPeriodicStatus(const FoxgloveTelemetryFrame& frame) {
+  std::ostringstream out;
+  out << "loop=" << frame.loopCount << " heading=" << std::fixed << std::setprecision(2)
+      << frame.headingDeg << " pose_valid=" << (frame.pose.valid ? "true" : "false")
+      << " ball_visible=" << (frame.ball.visible ? "true" : "false")
+      << " failures=" << frame.frameGrabFailures;
+  return out.str();
 }
 
 }  // namespace
@@ -254,12 +293,47 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
                         frame.planner.valid &&
                         frame.planner.trajectoryId != lastPathTrajectoryId_ &&
                         due(config_.pathsHz, timestampNs, lastPathNs_);
-  const bool sendLog = config_.streamLogs && due(config_.logsHz, timestampNs, lastLogNs_);
   const bool sendCamera = config_.streamCamera &&
                           !frame.cameraJpegBytes.empty() &&
                           due(config_.cameraHz, timestampNs, lastCameraNs_);
+  std::vector<std::string> logEvents;
+  int logLevel = 2;
 
-  if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendLog && !sendCamera) return;
+  if (!havePrevPoseValidity_ || frame.pose.valid != prevPoseValid_) {
+    logEvents.push_back(frame.pose.valid ? "pose acquired" : "pose lost");
+    havePrevPoseValidity_ = true;
+    prevPoseValid_ = frame.pose.valid;
+    if (!frame.pose.valid) logLevel = 3;
+  }
+
+  if (!havePrevBallVisibility_ || frame.ball.visible != prevBallVisible_) {
+    logEvents.push_back(frame.ball.visible ? "ball acquired" : "ball lost");
+    havePrevBallVisibility_ = true;
+    prevBallVisible_ = frame.ball.visible;
+    if (!frame.ball.visible) logLevel = 3;
+  }
+
+  if (frame.frameGrabFailures > prevFrameGrabFailures_) {
+    std::ostringstream out;
+    out << "camera grab failures increased to " << frame.frameGrabFailures;
+    logEvents.push_back(out.str());
+    prevFrameGrabFailures_ = frame.frameGrabFailures;
+    logLevel = 3;
+  } else {
+    prevFrameGrabFailures_ = frame.frameGrabFailures;
+  }
+
+  if (sendPath) {
+    logEvents.push_back("planner updated: " + formatPlannerSummary(frame.planner));
+  }
+
+  const bool sendEventLog = config_.streamLogs && !logEvents.empty();
+  const bool sendPeriodicLog = config_.streamLogs && due(config_.logsHz, timestampNs, lastLogNs_);
+
+  if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendEventLog && !sendPeriodicLog &&
+      !sendCamera) {
+    return;
+  }
 
   if (sendPath) lastPathTrajectoryId_ = frame.planner.trajectoryId;
 
@@ -436,18 +510,14 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
     out << '}';
   }
 
-  if (sendLog) {
+  if (sendEventLog || sendPeriodicLog) {
     addFieldPrefix(out, root, "log");
     out << '{';
     JsonObjectState state;
-    addNumber(out, state, "level", 2);
+    addNumber(out, state, "level", sendEventLog ? logLevel : 2);
     addString(out, state, "name", "ballalgo");
     addString(out, state, "message",
-              "loop=" + std::to_string(frame.loopCount) + " heading=" +
-                  std::to_string(frame.headingDeg) + " pose_valid=" +
-                  std::string(frame.pose.valid ? "true" : "false") + " ball_visible=" +
-                  std::string(frame.ball.visible ? "true" : "false") + " failures=" +
-                  std::to_string(frame.frameGrabFailures));
+              sendEventLog ? joinMessages(logEvents) : formatPeriodicStatus(frame));
     out << '}';
   }
 

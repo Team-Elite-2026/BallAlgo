@@ -410,10 +410,14 @@ Important knobs:
 - `stream_logs`
 - `stream_lidar`
 - `stream_camera`
-- `stream_annotations`
 - `socket_path`
 - `websocket_host`
 - `websocket_port`
+
+Camera annotations are part of the camera stream. When `stream_camera = true`,
+the sidecar will publish `/camera/front/image` and, when detection metadata is
+available and the installed `foxglove-sdk` supports image annotations,
+`/camera/front/annotations`.
 
 ## Running v1
 
@@ -444,11 +448,20 @@ When `record_mcap = true`, recordings are written under the configured
 
 Open those `.mcap` files directly in Foxglove for replay.
 
+The MCAP contains exactly the topics the sidecar received and published during
+that run. It will replay the live Foxglove session faithfully, but it will not
+invent unpublished topics or internal runtime state that never entered the
+telemetry stream.
+
 ## Testing Without The Pi
 
 You can exercise the full Foxglove sidecar locally with deterministic fake data
 that uses the **same Unix socket payload format and framing** as the real `BallAlgo`
 runtime.
+
+Fake data is never used automatically in normal live mode. The sidecar stays
+idle until a real runtime or an explicitly launched fake runtime connects to
+its Unix socket.
 
 ### Fake runtime only
 

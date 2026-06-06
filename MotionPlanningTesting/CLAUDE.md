@@ -361,4 +361,3 @@ When integrating into `ballalgo`:
 7. Re-plan every camera frame or whenever ball position changes significantly
 8. Constants to tune on physical hardware: `J_max`, `a_max_grip_accel`, `load_comp_omega`, `kS/kV/kA`, `approach_cm`, `BALL_CLEAR_CM`
 
-

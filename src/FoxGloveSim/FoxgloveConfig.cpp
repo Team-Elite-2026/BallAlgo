@@ -88,8 +88,6 @@ FoxgloveConfig FoxgloveConfig::loadFromFile(const std::string& path) {
       parseBool(value, cfg.streamLidar);
     } else if (key == "stream_camera") {
       parseBool(value, cfg.streamCamera);
-    } else if (key == "stream_annotations") {
-      parseBool(value, cfg.streamAnnotations);
     } else if (key == "stream_logs") {
       parseBool(value, cfg.streamLogs);
     } else if (key == "paths_hz") {
