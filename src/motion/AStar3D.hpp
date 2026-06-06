@@ -13,7 +13,7 @@ class AStar3D {
  public:
   AStar3D(float fieldW, float fieldH, int cellMm, int headingBins);
   bool plan(float sx, float sy, int stheta, float gx, float gy, int gtheta,
-            std::vector<Waypoint3>& out);
+            std::vector<Waypoint3>& out, float* costS = nullptr);
 
  private:
   struct Node {

@@ -11,7 +11,9 @@ option(BALLALGO_BUILD_TESTING "Build planner testing tools" ON)
 find_package(Eigen3 REQUIRED)
 set(BALLALGO_MOTION_CORE_SOURCES
   src/motion/AStar3D.cpp
+  src/motion/DefensePose.cpp
   src/motion/HermiteSpline.cpp
+  src/motion/OffensePose.cpp
   src/motion/VelocityProfile.cpp
   src/motion/StrikePose.cpp
   src/motion/MotionPlanner.cpp
