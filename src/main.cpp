@@ -12,7 +12,6 @@
 #include "vision/Thresholds.hpp"
 #include "vision/VisionMath.hpp"
 
-#include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -200,8 +199,6 @@ int main(int argc, char** argv) {
       frame.copyTo(maskedFrame, roiMask);
     }
     const cv::Mat& displayFrame = maskedFrame.empty() ? frame : maskedFrame;
-    cv::imshow("Camera", displayFrame);
-    cv::waitKey(1);
 
     cv::Mat hsv;
     cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);

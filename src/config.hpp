@@ -49,7 +49,7 @@ inline constexpr int kLookaheadMin = 1;
 inline constexpr int kLookaheadMax = 3;
 inline constexpr float kLookaheadSpeedThresh = 12.f;
 
-inline constexpr int kLidarPointsWindow = 720;
+inline constexpr int kLidarPointsWindow = 440;
 
 inline constexpr float kPoseKfProcessPosVar = 50.f;
 inline constexpr float kPoseKfProcessVelVar = 200.f;

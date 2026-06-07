@@ -1,5 +1,8 @@
-from dataclasses import dataclass
+import copy
 import math
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional, Tuple
 
 import serial
 
@@ -31,74 +34,599 @@ class LidarPoint:
     angle_cd: int
 
 
+# ---------------------------------------------------------------------------
+# Internal localizer types
+# ---------------------------------------------------------------------------
+
+class CandidateSource(Enum):
+    POINTS = 0
+    LINE = 1
+    HOUGH = 2
+
+
+@dataclass
+class Ray:
+    angle_cd: int
+    distance_mm: float
+    dx: float
+    dy: float
+    rel_x_mm: float
+    rel_y_mm: float
+
+
+@dataclass
+class HoughAngle:
+    angle_deg: float
+    cos_value: float
+    sin_value: float
+
+
+@dataclass
+class AxisCandidate:
+    median: float = 0.0
+    count: int = 0
+    spread: float = 0.0
+    line_extent_mm: float = 0.0
+    line_offset_mm: float = 0.0
+    wall_position_mm: float = 0.0
+    line_angle_deg: float = 0.0
+    hough_votes: int = 0
+    source: CandidateSource = CandidateSource.POINTS
+    has_wall_position: bool = False
+
+
+@dataclass
+class PoseScore:
+    inliers: int = 0
+    x_inliers: int = 0
+    y_inliers: int = 0
+    median_residual_mm: float = float('inf')
+    mean_residual_mm: float = float('inf')
+
+
+@dataclass
+class PoseCandidate:
+    x_mm: float = 0.0
+    y_mm: float = 0.0
+    x_cluster: Optional[AxisCandidate] = None
+    y_cluster: Optional[AxisCandidate] = None
+    score: Optional[PoseScore] = None
+
+
+# ---------------------------------------------------------------------------
+# LidarLocalizer — mirrors LidarLocalizer.cpp exactly
+# ---------------------------------------------------------------------------
+
 class LidarLocalizer:
-    def __init__(self, field_width_mm, field_height_mm, lidar_yaw_offset_deg=0.0):
+    def __init__(self, field_width_mm: float, field_height_mm: float,
+                 lidar_yaw_offset_deg: float = 0.0):
         self.field_width_mm = field_width_mm
         self.field_height_mm = field_height_mm
         self.lidar_yaw_offset_deg = lidar_yaw_offset_deg
-        self.min_distance_mm = 80.0
-        self.max_distance_mm = 6000.0
-        self.min_intensity = 20
 
-    def update(self, points, heading_deg):
-        x_estimates = []
-        y_estimates = []
+        # Parameters — kept in sync with LidarLocalizer.hpp
+        self._min_dist = 80.0
+        self._max_dist = 6000.0
+        self._min_intensity = 20
+        self._min_axis_samples = 12
+        self._cluster_gap_mm = 140.0
+        self._cluster_match_radius_mm = 260.0
+        self._min_line_samples = 10
+        self._line_cluster_gap_mm = 90.0
+        self._min_line_extent_mm = 260.0
+        self._hough_angle_step_deg = 2.0
+        self._hough_tilt_deg = 14.0
+        self._hough_bin_mm = 24.0
+        self._hough_line_tolerance_mm = 85.0
+        self._hough_min_votes = 9
+        self._hough_peak_suppress_bins = 5
+        self._hough_peak_suppress_angles = 2
+        self._hough_max_lines_per_axis = 4
+        self._min_wall_component = 0.35
+        self._max_candidate_clusters = 4
+        self._neighbor_gap_mm = 260.0
+        self._wall_inlier_mm = 90.0
+        self._wall_axis_margin_mm = 180.0
+        self._min_pose_inliers = 28
+        self._min_pose_axis_inliers = 8
 
-        for point in points:
-            distance = float(point.distance_mm)
-            if distance < self.min_distance_mm or distance > self.max_distance_mm or point.intensity < self.min_intensity:
-                continue
+        self._hough_angles_x = self._build_hough_angles(0.0)
+        self._hough_angles_y = self._build_hough_angles(90.0)
+        self._prev_pose: Optional[Tuple[float, float]] = None
 
-            lidar_angle_deg = point.angle_cd * 0.01
-            field_angle_deg = heading_deg + self.lidar_yaw_offset_deg + lidar_angle_deg
-            radians = math.radians(field_angle_deg)
-            dx = math.cos(radians)
-            dy = math.sin(radians)
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
-            if abs(dx) >= abs(dy):
-                if abs(dx) < 1e-4:
-                    continue
-                x_est = (self.field_width_mm - distance * dx) if dx > 0.0 else (-distance * dx)
-                if -200.0 < x_est < (self.field_width_mm + 200.0):
+    def update(self, points: List[LidarPoint], heading_deg: float) -> dict:
+        rays = self._field_rays(points, heading_deg)
+
+        x_estimates: List[float] = []
+        y_estimates: List[float] = []
+        for ray in rays:
+            if abs(ray.dx) >= self._min_wall_component:
+                x_est = self._wall_axis_estimate(ray.distance_mm, ray.dx, self.field_width_mm)
+                if -200.0 < x_est < self.field_width_mm + 200.0:
                     x_estimates.append(x_est)
-            else:
-                if abs(dy) < 1e-4:
-                    continue
-                y_est = (self.field_height_mm - distance * dy) if dy > 0.0 else (-distance * dy)
-                if -200.0 < y_est < (self.field_height_mm + 200.0):
+            if abs(ray.dy) >= self._min_wall_component:
+                y_est = self._wall_axis_estimate(ray.distance_mm, ray.dy, self.field_height_mm)
+                if -200.0 < y_est < self.field_height_mm + 200.0:
                     y_estimates.append(y_est)
 
-        valid = (len(x_estimates) >= 4 and len(y_estimates) >= 4)
-        if not valid:
-            return {"valid": False, "x_mm": None, "y_mm": None, "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+        prev_x = self._prev_pose[0] if self._prev_pose else None
+        prev_y = self._prev_pose[1] if self._prev_pose else None
 
-        x_mm = self._clamp(self._robust_axis_estimate(x_estimates), 0.0, self.field_width_mm)
-        y_mm = self._clamp(self._robust_axis_estimate(y_estimates), 0.0, self.field_height_mm)
-        return {"valid": True, "x_mm": x_mm, "y_mm": y_mm, "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+        x_hough = self._candidate_hough_axis_clusters(rays, True, prev_x, self.field_width_mm)
+        y_hough = self._candidate_hough_axis_clusters(rays, False, prev_y, self.field_height_mm)
+        x_line = self._candidate_line_axis_clusters(rays, True, prev_x, self.field_width_mm)
+        y_line = self._candidate_line_axis_clusters(rays, False, prev_y, self.field_height_mm)
+        x_point = self._candidate_axis_clusters(x_estimates, prev_x, self.field_width_mm)
+        y_point = self._candidate_axis_clusters(y_estimates, prev_y, self.field_height_mm)
+
+        x_candidates = self._merge_axis_candidates(x_hough + x_line, x_point, prev_x, self.field_width_mm)
+        y_candidates = self._merge_axis_candidates(y_hough + y_line, y_point, prev_y, self.field_height_mm)
+
+        base = {"valid": False, "x_mm": None, "y_mm": None,
+                "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+        pose = self._choose_pose_from_candidates(x_candidates, y_candidates, rays, prev_x, prev_y)
+        if pose is None:
+            return base
+
+        self._prev_pose = (pose.x_mm, pose.y_mm)
+        return {"valid": True, "x_mm": pose.x_mm, "y_mm": pose.y_mm,
+                "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+    # ------------------------------------------------------------------
+    # Geometry helpers
+    # ------------------------------------------------------------------
+
+    def _build_hough_angles(self, center_angle_deg: float) -> List[HoughAngle]:
+        steps = int((self._hough_tilt_deg * 2.0) / self._hough_angle_step_deg) + 1
+        start = center_angle_deg - self._hough_tilt_deg
+        angles = []
+        for i in range(steps):
+            deg = start + i * self._hough_angle_step_deg
+            rad = math.radians(deg)
+            angles.append(HoughAngle(deg, math.cos(rad), math.sin(rad)))
+        return angles
+
+    def _field_rays(self, points: List[LidarPoint], heading_deg: float) -> List[Ray]:
+        rays = []
+        for p in points:
+            d = float(p.distance_mm)
+            if d < self._min_dist or d > self._max_dist or p.intensity < self._min_intensity:
+                continue
+            field_angle_deg = heading_deg + self.lidar_yaw_offset_deg + p.angle_cd * 0.01
+            rad = math.radians(field_angle_deg)
+            dx = math.cos(rad)
+            dy = math.sin(rad)
+            rays.append(Ray(p.angle_cd, d, dx, dy, d * dx, d * dy))
+        return self._filter_isolated_rays(rays)
+
+    def _filter_isolated_rays(self, rays: List[Ray]) -> List[Ray]:
+        if len(rays) < 3:
+            return rays
+        rays = sorted(rays, key=lambda r: r.angle_cd)
+        n = len(rays)
+        kept = []
+        for i in range(n):
+            prev_r = rays[(i - 1) % n]
+            next_r = rays[(i + 1) % n]
+            if (self._ray_gap(rays[i], prev_r) <= self._neighbor_gap_mm or
+                    self._ray_gap(rays[i], next_r) <= self._neighbor_gap_mm):
+                kept.append(rays[i])
+        return kept
 
     @staticmethod
-    def _clamp(value, lower, upper):
+    def _ray_gap(a: Ray, b: Ray) -> float:
+        return math.hypot(a.rel_x_mm - b.rel_x_mm, a.rel_y_mm - b.rel_y_mm)
+
+    @staticmethod
+    def _wall_axis_estimate(distance_mm: float, direction: float, axis_limit_mm: float) -> float:
+        return (axis_limit_mm - distance_mm * direction) if direction > 0.0 else (-distance_mm * direction)
+
+    @staticmethod
+    def _clamp(value: float, lower: float, upper: float) -> float:
         return max(lower, min(upper, value))
 
+    # ------------------------------------------------------------------
+    # Statistics helpers
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def _median(values):
+    def _median(values: List[float]) -> float:
         if not values:
-            return None
+            return float('nan')
         ordered = sorted(values)
         mid = len(ordered) // 2
         if len(ordered) % 2 == 0:
             return 0.5 * (ordered[mid - 1] + ordered[mid])
         return ordered[mid]
 
-    def _robust_axis_estimate(self, estimates):
-        med = self._median(estimates)
-        if med is None:
-            return None
-        filtered = [value for value in estimates if abs(value - med) < 180.0]
-        if len(filtered) >= 3:
-            return self._median(filtered)
-        return med
+    @staticmethod
+    def _percentile(values: List[float], fraction: float) -> float:
+        if not values:
+            return float('nan')
+        ordered = sorted(values)
+        if len(ordered) == 1:
+            return ordered[0]
+        pos = (len(ordered) - 1) * fraction
+        lo = int(math.floor(pos))
+        hi = int(math.ceil(pos))
+        if lo == hi:
+            return ordered[lo]
+        ratio = pos - lo
+        return ordered[lo] * (1.0 - ratio) + ordered[hi] * ratio
 
+    # ------------------------------------------------------------------
+    # Point-cluster pipeline
+    # ------------------------------------------------------------------
+
+    def _cluster_estimates(self, estimates: List[float]) -> List[AxisCandidate]:
+        if not estimates:
+            return []
+        ordered = sorted(estimates)
+        clusters = []
+        start = 0
+        for i in range(1, len(ordered) + 1):
+            if i < len(ordered) and (ordered[i] - ordered[i - 1]) <= self._cluster_gap_mm:
+                continue
+            vals = ordered[start:i]
+            q1 = vals[len(vals) // 4]
+            q3 = vals[(3 * len(vals)) // 4]
+            clusters.append(AxisCandidate(
+                median=self._median(vals),
+                count=len(vals),
+                spread=q3 - q1,
+            ))
+            start = i
+        return clusters
+
+    def _candidate_axis_clusters(self, estimates: List[float],
+                                  prev_value: Optional[float],
+                                  axis_limit_mm: float) -> List[AxisCandidate]:
+        if len(estimates) < self._min_axis_samples:
+            return []
+        clusters = [c for c in self._cluster_estimates(estimates)
+                    if c.count >= self._min_axis_samples]
+        if not clusters:
+            return []
+        center = axis_limit_mm * 0.5
+
+        def key(c: AxisCandidate):
+            cont = abs(c.median - prev_value) if prev_value is not None else abs(c.median - center)
+            return (-c.count, c.spread, cont)
+
+        clusters.sort(key=key)
+        return clusters[:self._max_candidate_clusters]
+
+    # ------------------------------------------------------------------
+    # Line-feature pipeline
+    # ------------------------------------------------------------------
+
+    def _line_feature_from_rays(self, rays: List[Ray], x_axis: bool) -> Optional[AxisCandidate]:
+        if len(rays) < self._min_line_samples:
+            return None
+        coords = sorted(r.rel_x_mm if x_axis else r.rel_y_mm for r in rays)
+        perps = sorted(r.rel_y_mm if x_axis else r.rel_x_mm for r in rays)
+        extent = self._percentile(perps, 0.90) - self._percentile(perps, 0.10)
+        if extent < self._min_line_extent_mm:
+            return None
+        q1 = coords[len(coords) // 4]
+        q3 = coords[(3 * len(coords)) // 4]
+        return AxisCandidate(
+            median=self._median(coords),
+            count=len(rays),
+            spread=q3 - q1,
+            line_extent_mm=extent,
+        )
+
+    def _candidate_line_axis_clusters(self, rays: List[Ray], x_axis: bool,
+                                       prev_value: Optional[float],
+                                       axis_limit_mm: float) -> List[AxisCandidate]:
+        if len(rays) < self._min_line_samples:
+            return []
+
+        ordered = sorted(rays, key=lambda r: r.rel_x_mm if x_axis else r.rel_y_mm)
+        features: List[AxisCandidate] = []
+        start = 0
+        for i in range(1, len(ordered) + 1):
+            if i < len(ordered):
+                cur = ordered[i].rel_x_mm if x_axis else ordered[i].rel_y_mm
+                prv = ordered[i - 1].rel_x_mm if x_axis else ordered[i - 1].rel_y_mm
+                if (cur - prv) <= self._line_cluster_gap_mm:
+                    continue
+            feat = self._line_feature_from_rays(ordered[start:i], x_axis)
+            if feat is not None:
+                features.append(feat)
+            start = i
+
+        candidates: List[AxisCandidate] = []
+        for feat in features:
+            # Mirror C++: `auto feature : features` copies feature, then feature.median is
+            # mutated in-place across the two wallPosition iterations.
+            feature = copy.copy(feat)
+            for wall_position in [0.0, axis_limit_mm]:
+                pose_value = wall_position - feature.median
+                if pose_value < 0.0 or pose_value > axis_limit_mm:
+                    continue
+                feature.median = pose_value
+                feature.line_offset_mm = wall_position - pose_value
+                feature.wall_position_mm = wall_position
+                feature.has_wall_position = True
+                feature.source = CandidateSource.LINE
+                candidates.append(copy.copy(feature))
+
+        if not candidates:
+            return []
+
+        center = axis_limit_mm * 0.5
+
+        def key(c: AxisCandidate):
+            cont = abs(c.median - prev_value) if prev_value is not None else abs(c.median - center)
+            return (-c.count, -c.line_extent_mm, c.spread, cont)
+
+        candidates.sort(key=key)
+        return candidates[:self._max_candidate_clusters]
+
+    # ------------------------------------------------------------------
+    # Hough pipeline
+    # ------------------------------------------------------------------
+
+    def _fit_hough_line(self, rays: List[Ray], x_axis: bool, angle: HoughAngle,
+                         peak_rho_mm: float, vote_count: int) -> Optional[AxisCandidate]:
+        inlier_rhos: List[float] = []
+        inlier_perps: List[float] = []
+        for ray in rays:
+            rho = ray.rel_x_mm * angle.cos_value + ray.rel_y_mm * angle.sin_value
+            if abs(rho - peak_rho_mm) > self._hough_line_tolerance_mm:
+                continue
+            inlier_rhos.append(rho)
+            inlier_perps.append(ray.rel_y_mm if x_axis else ray.rel_x_mm)
+
+        if len(inlier_rhos) < self._min_line_samples:
+            return None
+
+        med_rho = self._median(inlier_rhos)
+        filtered_rhos: List[float] = []
+        filtered_perps: List[float] = []
+        for rho, perp in zip(inlier_rhos, inlier_perps):
+            if abs(rho - med_rho) <= self._hough_line_tolerance_mm:
+                filtered_rhos.append(rho)
+                filtered_perps.append(perp)
+
+        if len(filtered_rhos) < self._min_line_samples:
+            return None
+
+        extent = self._percentile(filtered_perps, 0.90) - self._percentile(filtered_perps, 0.10)
+        if extent < self._min_line_extent_mm:
+            return None
+
+        axis_component = angle.cos_value if x_axis else angle.sin_value
+        if abs(axis_component) < 0.65:
+            return None
+
+        ordered_rhos = sorted(filtered_rhos)
+        q1 = ordered_rhos[len(ordered_rhos) // 4]
+        q3 = ordered_rhos[(3 * len(ordered_rhos)) // 4]
+
+        return AxisCandidate(
+            line_offset_mm=self._median(filtered_rhos) / axis_component,
+            line_angle_deg=angle.angle_deg,
+            count=len(filtered_rhos),
+            hough_votes=vote_count,
+            spread=q3 - q1,
+            line_extent_mm=extent,
+            source=CandidateSource.HOUGH,
+        )
+
+    def _hough_axis_lines(self, rays: List[Ray], x_axis: bool) -> List[AxisCandidate]:
+        if len(rays) < self._min_line_samples:
+            return []
+
+        angles = self._hough_angles_x if x_axis else self._hough_angles_y
+
+        # (angle_idx, bin_idx, votes)
+        peaks = []
+        for angle_idx, angle in enumerate(angles):
+            vote_bins: dict = {}
+            for ray in rays:
+                rho = ray.rel_x_mm * angle.cos_value + ray.rel_y_mm * angle.sin_value
+                bin_idx = int(round(rho / self._hough_bin_mm))
+                vote_bins[bin_idx] = vote_bins.get(bin_idx, 0) + 1
+            for bin_idx, votes in vote_bins.items():
+                if votes >= self._hough_min_votes:
+                    peaks.append((angle_idx, bin_idx, votes))
+
+        if not peaks:
+            return []
+
+        # C++: sort by tie(votes, angleIndex) descending
+        peaks.sort(key=lambda p: (p[2], p[0]), reverse=True)
+
+        accepted: List[AxisCandidate] = []
+        kept: List[Tuple[int, int]] = []  # (angle_idx, bin_idx)
+        for angle_idx, bin_idx, votes in peaks:
+            suppressed = any(
+                abs(bin_idx - ka) <= self._hough_peak_suppress_bins and
+                abs(angle_idx - ki) <= self._hough_peak_suppress_angles
+                for ki, ka in kept
+            )
+            if suppressed:
+                continue
+            peak_rho_mm = bin_idx * self._hough_bin_mm
+            line = self._fit_hough_line(rays, x_axis, angles[angle_idx], peak_rho_mm, votes)
+            if line is not None:
+                accepted.append(line)
+                kept.append((angle_idx, bin_idx))
+                if len(accepted) >= self._hough_max_lines_per_axis:
+                    break
+
+        return accepted
+
+    def _candidate_hough_axis_clusters(self, rays: List[Ray], x_axis: bool,
+                                        prev_value: Optional[float],
+                                        axis_limit_mm: float) -> List[AxisCandidate]:
+        lines = self._hough_axis_lines(rays, x_axis)
+        if not lines:
+            return []
+
+        candidates: List[AxisCandidate] = []
+        for line in lines:
+            for wall_position in [0.0, axis_limit_mm]:
+                pose_value = wall_position - line.line_offset_mm
+                if pose_value < 0.0 or pose_value > axis_limit_mm:
+                    continue
+                candidates.append(AxisCandidate(
+                    median=pose_value,
+                    count=line.count,
+                    spread=line.spread,
+                    line_extent_mm=line.line_extent_mm,
+                    line_offset_mm=line.line_offset_mm,
+                    wall_position_mm=wall_position,
+                    line_angle_deg=line.line_angle_deg,
+                    hough_votes=line.hough_votes,
+                    source=CandidateSource.HOUGH,
+                    has_wall_position=True,
+                ))
+
+        if not candidates:
+            return []
+
+        center = axis_limit_mm * 0.5
+
+        def key(c: AxisCandidate):
+            cont = abs(c.median - prev_value) if prev_value is not None else abs(c.median - center)
+            return (-c.hough_votes, -c.count, -c.line_extent_mm, c.spread, cont)
+
+        candidates.sort(key=key)
+        return candidates[:self._max_candidate_clusters]
+
+    # ------------------------------------------------------------------
+    # Merge + scoring
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _source_bonus(source: CandidateSource) -> int:
+        if source == CandidateSource.HOUGH:
+            return 2
+        if source == CandidateSource.LINE:
+            return 1
+        return 0
+
+    def _merge_axis_candidates(self, line_clusters: List[AxisCandidate],
+                                point_clusters: List[AxisCandidate],
+                                prev_value: Optional[float],
+                                axis_limit_mm: float) -> List[AxisCandidate]:
+        candidates = list(line_clusters)
+        for pc in point_clusters:
+            matched = any(
+                abs(pc.median - lc.median) <= self._cluster_match_radius_mm * 0.5
+                for lc in line_clusters
+            )
+            if matched:
+                continue
+            c = copy.copy(pc)
+            c.source = CandidateSource.POINTS
+            c.line_extent_mm = 0.0
+            c.line_offset_mm = 0.0
+            c.has_wall_position = False
+            candidates.append(c)
+
+        if not candidates:
+            return []
+
+        center = axis_limit_mm * 0.5
+
+        def key(c: AxisCandidate):
+            cont = abs(c.median - prev_value) if prev_value is not None else abs(c.median - center)
+            bonus = self._source_bonus(c.source)
+            return (-bonus, -c.line_extent_mm, -c.count, c.spread, cont)
+
+        candidates.sort(key=key)
+        return candidates[:self._max_candidate_clusters]
+
+    def _score_pose_against_walls(self, robot_x_mm: float, robot_y_mm: float,
+                                   rays: List[Ray]) -> PoseScore:
+        residuals: List[float] = []
+        x_residuals: List[float] = []
+        y_residuals: List[float] = []
+
+        for ray in rays:
+            hit_x = robot_x_mm + ray.rel_x_mm
+            hit_y = robot_y_mm + ray.rel_y_mm
+
+            if -self._wall_axis_margin_mm <= hit_y <= self.field_height_mm + self._wall_axis_margin_mm:
+                x_res = min(abs(hit_x), abs(self.field_width_mm - hit_x))
+                if x_res <= self._wall_inlier_mm:
+                    x_residuals.append(x_res)
+                    residuals.append(x_res)
+
+            if -self._wall_axis_margin_mm <= hit_x <= self.field_width_mm + self._wall_axis_margin_mm:
+                y_res = min(abs(hit_y), abs(self.field_height_mm - hit_y))
+                if y_res <= self._wall_inlier_mm:
+                    y_residuals.append(y_res)
+                    residuals.append(y_res)
+
+        score = PoseScore(
+            inliers=len(residuals),
+            x_inliers=len(x_residuals),
+            y_inliers=len(y_residuals),
+        )
+        if residuals:
+            score.median_residual_mm = self._median(residuals)
+            score.mean_residual_mm = sum(residuals) / len(residuals)
+        return score
+
+    def _choose_pose_from_candidates(self,
+                                      x_clusters: List[AxisCandidate],
+                                      y_clusters: List[AxisCandidate],
+                                      rays: List[Ray],
+                                      prev_x: Optional[float],
+                                      prev_y: Optional[float]) -> Optional[PoseCandidate]:
+        if not x_clusters or not y_clusters or not rays:
+            return None
+
+        best_pose: Optional[PoseCandidate] = None
+        best_key = None
+
+        for xc in x_clusters:
+            for yc in y_clusters:
+                x_mm = self._clamp(xc.median, 0.0, self.field_width_mm)
+                y_mm = self._clamp(yc.median, 0.0, self.field_height_mm)
+                score = self._score_pose_against_walls(x_mm, y_mm, rays)
+
+                if score.inliers < self._min_pose_inliers:
+                    continue
+                if score.x_inliers < self._min_pose_axis_inliers or score.y_inliers < self._min_pose_axis_inliers:
+                    continue
+
+                if prev_x is not None and prev_y is not None:
+                    cont = math.hypot(x_mm - prev_x, y_mm - prev_y)
+                else:
+                    cont = math.hypot(x_mm - self.field_width_mm * 0.5, y_mm - self.field_height_mm * 0.5)
+
+                key = (
+                    score.inliers,
+                    min(score.x_inliers, score.y_inliers),
+                    -cont,
+                    xc.line_extent_mm + yc.line_extent_mm,
+                    xc.count + yc.count,
+                    -score.median_residual_mm,
+                    -score.mean_residual_mm,
+                )
+
+                if best_pose is None or key > best_key:
+                    best_key = key
+                    best_pose = PoseCandidate(x_mm, y_mm, xc, yc, score)
+
+        return best_pose
+
+
+# ---------------------------------------------------------------------------
+# LD19 frame reader — unchanged
+# ---------------------------------------------------------------------------
 
 def ld19_crc8(payload):
     crc = 0

@@ -333,7 +333,7 @@ bool CameraCapture::Impl::copyRequestToMat(libcamera::Request* request, cv::Mat&
 
   if (pixelFormat_ == libcamera::formats::BGR888) {
     const cv::Mat wrapped(height_, width_, CV_8UC3, mappedPlanes[0].data, stride_);
-    wrapped.copyTo(bgrOut);
+    cv::cvtColor(wrapped, bgrOut, cv::COLOR_BGR2RGB);
     return true;
   }
 
