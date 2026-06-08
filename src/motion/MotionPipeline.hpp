@@ -3,8 +3,10 @@
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
 #include "io/RobotSerial.hpp"
+#include "lidar/LidarDeskewer.hpp"
 #include "lidar/LidarLocalizer.hpp"
 
+#include <cstdint>
 #include <vector>
 
 namespace ballalgo {
@@ -25,7 +27,7 @@ class MotionPipeline {
   // Step 1a high-frequency predict. Uses body-frame mouse velocities rotated by
   // the IMU heading when fresh odometry is available; otherwise a plain
   // constant-velocity propagation.
-  void predictStep(const TeensyOdometry& odo, double dtS);
+  void predictStep(const TeensyOdometry& odo, double dtS, uint64_t timestampUs);
 
   // Step 1a map update: LiDAR absolute position snap. Returns the fused pose.
   PoseState updateLidar(const std::vector<LidarPoint>& pts, float headingDeg);
@@ -38,6 +40,7 @@ class MotionPipeline {
   BallState updateBall(double angleDeg, double distCal, bool found, double dtS);
 
  private:
+  LidarDeskewer deskewer_;
   LidarLocalizer localizer_;
   PoseKalman poseKf_;
   BallKalman ballKf_;

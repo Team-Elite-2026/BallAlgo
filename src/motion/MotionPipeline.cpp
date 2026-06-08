@@ -8,16 +8,22 @@ namespace ballalgo {
 MotionPipeline::MotionPipeline()
     : localizer_(config::kFieldWidthMm, config::kFieldHeightMm, config::kLidarYawOffsetDeg) {}
 
-void MotionPipeline::predictStep(const TeensyOdometry& odo, double dtS) {
+void MotionPipeline::predictStep(const TeensyOdometry& odo, double dtS, uint64_t timestampUs) {
   if (config::kEnableMouseFusion && odo.mouseFresh) {
     poseKf_.predictMouse(odo.mouseVxBodyMmS, odo.mouseVyBodyMmS, odo.headingDeg, dtS);
   } else {
     poseKf_.predict(dtS);
   }
+  deskewer_.addMotionSample(timestampUs,
+                            odo.mouseVxBodyMmS,
+                            odo.mouseVyBodyMmS,
+                            odo.omegaRadS);
 }
 
 PoseState MotionPipeline::updateLidar(const std::vector<LidarPoint>& pts, float headingDeg) {
-  auto est = localizer_.update(pts, headingDeg);
+  std::vector<LidarPoint> corrected = pts;
+  deskewer_.deskew(corrected);
+  auto est = localizer_.update(corrected, headingDeg);
   poseKf_.update(est, headingDeg);
   return poseKf_.state(headingDeg);
 }

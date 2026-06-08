@@ -173,4 +173,14 @@ inline constexpr const char* kFoxgloveConfigPath = "foxglove_sim/foxglove.conf";
 
 inline constexpr int kLostSentinel = -5;
 
+// LiDAR scan deskewing (2D SE(2) motion compensation)
+inline constexpr bool  kEnableLidarDeskew  = true;
+inline constexpr int   kDeskewRefTimeMode  = 1;      // 0=scan start, 1=midpoint, 2=scan end
+inline constexpr float kLidarScanPeriodS   = 0.1f;   // LD19 nominal 10 Hz; fallback only
+inline constexpr float kMaxMotionDataAgeS  = 0.5f;   // stale motion → fallback to raw scan
+inline constexpr float kMaxExtrapolationS  = 0.020f; // max extrapolation beyond history edges
+inline constexpr bool  kDebugDeskew        = false;
+inline constexpr bool  kUseLinearAccel     = false;  // reserved, not yet implemented
+inline constexpr bool  kUseAngularAccel    = false;  // reserved, not yet implemented
+
 }  // namespace ballalgo::config

@@ -39,6 +39,7 @@ set(BALLALGO_APP_SOURCES
   src/vision/VisionMath.cpp
   src/camera/CameraCapture.cpp
   src/lidar/Ld19Reader.cpp
+  src/lidar/LidarDeskewer.cpp
   src/lidar/LidarLocalizer.cpp
   src/estimation/PoseKalman.cpp
   src/estimation/BallKalman.cpp

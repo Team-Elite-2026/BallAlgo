@@ -6,10 +6,19 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 
 namespace ballalgo {
+
+namespace {
+static uint64_t steadyClockUs() {
+  return static_cast<uint64_t>(
+      std::chrono::duration_cast<std::chrono::microseconds>(
+          std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+}  // namespace
 
 static const uint8_t kCrcTable[256] = {
     0x00, 0x4d, 0x9a, 0xd7, 0x79, 0x34, 0xe3, 0xae, 0xf2, 0xbf, 0x68, 0x25, 0x8b, 0xc6, 0x11, 0x5c,
@@ -76,20 +85,60 @@ int Ld19Reader::angleStep(uint16_t start, uint16_t end, int lenMinusOne) {
   return (36000 + end - start) / lenMinusOne;
 }
 
-std::vector<LidarPoint> Ld19Reader::parseFrame(const uint8_t* frame, size_t len) const {
+std::vector<LidarPoint> Ld19Reader::parseFrame(const uint8_t* frame, size_t len) {
   std::vector<LidarPoint> pts;
   if (len != 47 || frame[0] != 0x54 || frame[1] != 0x2C) return pts;
   if (crc8(frame, len - 1) != frame[len - 1]) return pts;
   uint16_t start = frame[4] | (frame[5] << 8);
-  uint16_t end = frame[42] | (frame[43] << 8);
+  uint16_t end   = frame[42] | (frame[43] << 8);
   int step = angleStep(start, end, 11);
+
+  // Extract LD19 protocol fields: speed (bytes 2-3) and hardware timestamp (bytes 44-45).
+  const uint16_t speedDegS = static_cast<uint16_t>(frame[2] | (frame[3] << 8));
+  const uint16_t hwMs      = static_cast<uint16_t>(frame[44] | (frame[45] << 8));
+
+  // Align hardware timestamp to monotonic wall-clock on first frame.
+  if (!hwTimestampInited_) {
+    epochBaseUs_       = steadyClockUs();
+    hwBaseMs_          = static_cast<uint32_t>(hwMs);
+    hwPrevMs_          = static_cast<uint32_t>(hwMs);
+    wrapCount_         = 0;
+    hwTimestampInited_ = true;
+  }
+
+  // Detect 30000 ms hardware counter wrap-around.
+  const uint32_t hwMsU = static_cast<uint32_t>(hwMs);
+  if (hwPrevMs_ > hwMsU && (hwPrevMs_ - hwMsU) > 15000u) {
+    ++wrapCount_;
+  }
+  hwPrevMs_ = hwMsU;
+
+  const uint32_t monotonicMs = wrapCount_ * 30000u + hwMsU;
+  const uint32_t deltaMs     = monotonicMs - hwBaseMs_;
+  uint64_t frameEndUs = epochBaseUs_ + static_cast<uint64_t>(deltaMs) * 1000ULL;
+
+  // Monotonic guard: protect against corrupt frames causing time to go backward.
+  if (frameEndUs < lastFrameTimestampUs_) frameEndUs = lastFrameTimestampUs_;
+  lastFrameTimestampUs_ = frameEndUs;
+
+  // Estimate frame duration from speed field; fall back to LD19 nominal if invalid.
+  uint64_t frameDurationUs = 2667ULL;  // default: 12 pts / 4500 pts/s * 1e6
+  if (speedDegS > 100 && speedDegS < 7200) {
+    const float spanDeg = static_cast<float>(step * 11) * 0.01f;
+    uint64_t computed   = static_cast<uint64_t>((spanDeg / static_cast<float>(speedDegS)) * 1e6f);
+    if (computed >= 500 && computed <= 10000) frameDurationUs = computed;
+  }
+  const uint64_t frameStartUs = (frameEndUs >= frameDurationUs) ? (frameEndUs - frameDurationUs) : 0u;
+  const uint64_t stepUs       = frameDurationUs / 11u;
+
   for (int i = 0; i < 12; ++i) {
     int idx = 6 + i * 3;
     uint16_t dist = frame[idx] | (frame[idx + 1] << 8);
     LidarPoint p;
-    p.distanceMm = dist;
-    p.intensity = frame[idx + 2];
-    p.angleCd = static_cast<uint16_t>((start + step * i) % 36000);
+    p.distanceMm  = dist;
+    p.intensity   = frame[idx + 2];
+    p.angleCd     = static_cast<uint16_t>((start + step * i) % 36000);
+    p.timestampUs = frameStartUs + static_cast<uint64_t>(i) * stepUs;
     pts.push_back(p);
   }
   return pts;

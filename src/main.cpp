@@ -177,6 +177,9 @@ int main(int argc, char** argv) {
     ++loopCount;
     auto now = std::chrono::steady_clock::now();
     double dt = std::chrono::duration<double>(now - lastTime).count();
+    const uint64_t nowUs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            now.time_since_epoch()).count());
     lastTime = now;
 
     if (!camera.grab(frame)) {
@@ -239,7 +242,7 @@ int main(int argc, char** argv) {
     }
 
     // Step 1a: high-frequency dead-reckoning predict (mouse + IMU when fresh).
-    motion.predictStep(odo, dt);
+    motion.predictStep(odo, dt, nowUs);
 
     PoseState pose;
 #ifdef BALLALGO_ENABLE_LIDAR
