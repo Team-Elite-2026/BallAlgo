@@ -24,6 +24,7 @@ struct PlannerDebugSnapshot {
   float targetYMm = 0;
   float targetHeadingDeg = 0;
   std::vector<PathSample> path;
+  std::vector<TrajectorySpeedSample> trajectorySpeedProfile;
 };
 
 class ActionChunkPublisher {

@@ -69,6 +69,25 @@ SCHEMAS: dict[str, bytes] = {
         },
         required=["visible"],
     ),
+    "ballalgo.TrajectorySpeedProfile": _json_schema(
+        "TrajectorySpeedProfile",
+        {
+            "trajectory_id": {"type": "integer"},
+            "samples": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "progress_01": {"type": "number"},
+                        "speed_m_s": {"type": "number"},
+                    },
+                    "required": ["progress_01", "speed_m_s"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        required=["trajectory_id", "samples"],
+    ),
     "ballalgo.SessionInfo": _json_schema(
         "SessionInfo",
         {

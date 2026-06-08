@@ -117,6 +117,7 @@ DIRECT_CHANNELS: tuple[DirectChannel, ...] = (
     DirectChannel("/robot/angular", "robot_angular", "stream_velocity", "ballalgo.RobotAngularKinematics"),
     DirectChannel("/ball/twist",    "ball_twist",    "stream_velocity", "ballalgo.BallVelocity"),
     DirectChannel("/ball/range",    "ball_range",    "stream_ball",     "ballalgo.BallRange"),
+    DirectChannel("/planner/profile", "planner_profile", "stream_paths", "ballalgo.TrajectorySpeedProfile"),
 )
 
 

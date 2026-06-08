@@ -190,6 +190,11 @@ def build_replan_demo_snapshot(t_s: float, label: str) -> dict[str, Any]:
         target_heading_deg=point_heading_deg(target_x, target_y, ball_x, ball_y),
         points=path_points,
     )
+    planner_profile = make_planner_profile(
+        trajectory_id=planner["trajectory_id"],
+        points=path_points,
+        peak_speed_m_s=max(math.hypot(robot_vx_field, robot_vy_field) * 1.35, 0.45),
+    )
 
     return make_snapshot(
         timestamp_ns=now_timestamp_ns(),
@@ -218,6 +223,7 @@ def build_replan_demo_snapshot(t_s: float, label: str) -> dict[str, Any]:
             "vision_dist_cal": math.hypot(ball_body_x, ball_body_y),
         },
         planner_path=planner,
+        planner_profile=planner_profile,
         robot_twist=make_robot_twist(robot_vx_body, robot_vy_body, robot_vx_field, robot_vy_field),
         robot_accel=make_robot_accel(robot_ax_body, robot_ay_body, robot_ax_field, robot_ay_field),
         robot_angular={
@@ -257,6 +263,14 @@ def build_orbit_ball_snapshot(t_s: float, label: str) -> dict[str, Any]:
         (strike_x, strike_y),
         samples=16,
     )
+    trajectory_id = int(t_s * 4.0) + 1
+    planner_path = make_planner_path(
+        trajectory_id=trajectory_id,
+        target_x_mm=strike_x,
+        target_y_mm=strike_y,
+        target_heading_deg=point_heading_deg(strike_x, strike_y, ball_x, ball_y),
+        points=path_points,
+    )
 
     return make_snapshot(
         timestamp_ns=now_timestamp_ns(),
@@ -284,12 +298,11 @@ def build_orbit_ball_snapshot(t_s: float, label: str) -> dict[str, Any]:
             "vision_angle_deg": point_heading_deg(robot_x, robot_y, ball_x, ball_y),
             "vision_dist_cal": math.hypot(ball_x - robot_x, ball_y - robot_y) / 1000.0,
         },
-        planner_path=make_planner_path(
-            trajectory_id=int(t_s * 4.0) + 1,
-            target_x_mm=strike_x,
-            target_y_mm=strike_y,
-            target_heading_deg=point_heading_deg(strike_x, strike_y, ball_x, ball_y),
+        planner_path=planner_path,
+        planner_profile=make_planner_profile(
+            trajectory_id=trajectory_id,
             points=path_points,
+            peak_speed_m_s=max(math.hypot(robot_vx_field, robot_vy_field) * 1.25, 0.35),
         ),
         robot_twist=make_robot_twist(robot_vx_body, robot_vy_body, robot_vx_field, robot_vy_field),
         robot_accel=make_robot_accel(robot_ax_body, robot_ay_body, robot_ax_field, robot_ay_field),
@@ -328,6 +341,7 @@ def build_straight_line_snapshot(t_s: float, label: str) -> dict[str, Any]:
     ball_vx_body, ball_vy_body = field_to_body(ball_vx_field, ball_vy_field, heading_deg)
 
     path_points = [(robot_x, robot_y), ((robot_x + end_x) * 0.5, (robot_y + end_y) * 0.5), (end_x, end_y)]
+    trajectory_id = int(t_s * 2.0) + 1
     return make_snapshot(
         timestamp_ns=now_timestamp_ns(),
         pose={
@@ -355,11 +369,16 @@ def build_straight_line_snapshot(t_s: float, label: str) -> dict[str, Any]:
             "vision_dist_cal": math.hypot(ball_x - robot_x, ball_y - robot_y) / 1000.0,
         },
         planner_path=make_planner_path(
-            trajectory_id=int(t_s * 2.0) + 1,
+            trajectory_id=trajectory_id,
             target_x_mm=end_x,
             target_y_mm=end_y,
             target_heading_deg=heading_deg,
             points=path_points,
+        ),
+        planner_profile=make_planner_profile(
+            trajectory_id=trajectory_id,
+            points=path_points,
+            peak_speed_m_s=math.hypot(end_x - start_x, end_y - start_y) / 1000.0 * 0.5 * math.pi / duration_s,
         ),
         robot_twist=make_robot_twist(robot_vx_body, robot_vy_body, robot_vx_field, robot_vy_field),
         robot_accel=make_robot_accel(robot_ax_body, robot_ay_body, robot_ax_field, robot_ay_field),
@@ -374,6 +393,11 @@ def build_idle_snapshot(t_s: float, label: str) -> dict[str, Any]:
     ball_x, ball_y = centered_cm_to_mm(25.0, -10.0)
     heading_deg = 0.0
     ball_body_x, ball_body_y = field_to_body_position(ball_x - robot_x, ball_y - robot_y, heading_deg)
+    path_points = [
+        (robot_x, robot_y),
+        ((robot_x + ball_x) * 0.5, (robot_y + ball_y) * 0.5),
+        (ball_x - 120.0, ball_y),
+    ]
     return make_snapshot(
         timestamp_ns=now_timestamp_ns(),
         pose={
@@ -405,7 +429,12 @@ def build_idle_snapshot(t_s: float, label: str) -> dict[str, Any]:
             target_x_mm=ball_x - 120.0,
             target_y_mm=ball_y,
             target_heading_deg=0.0,
-            points=[(robot_x, robot_y), ((robot_x + ball_x) * 0.5, (robot_y + ball_y) * 0.5), (ball_x - 120.0, ball_y)],
+            points=path_points,
+        ),
+        planner_profile=make_planner_profile(
+            trajectory_id=1,
+            points=path_points,
+            peak_speed_m_s=0.0,
         ),
         robot_twist=make_robot_twist(0.0, 0.0, 0.0, 0.0),
         robot_accel=make_robot_accel(0.0, 0.0, 0.0, 0.0),
@@ -479,6 +508,31 @@ def make_planner_path(
         "target_y_mm": target_y_mm,
         "target_heading_deg": target_heading_deg,
         "points": path_points,
+    }
+
+
+def make_planner_profile(
+    *,
+    trajectory_id: int,
+    points: list[tuple[float, float]],
+    peak_speed_m_s: float,
+) -> dict[str, Any]:
+    samples = []
+    s_values = path_length_mm(points)
+    total_length_mm = s_values[-1] if s_values else 0.0
+    clamped_peak_speed_m_s = max(peak_speed_m_s, 0.0)
+    for s_mm in s_values:
+        progress_01 = 0.0 if total_length_mm <= 1e-6 else s_mm / total_length_mm
+        speed_m_s = clamped_peak_speed_m_s * math.sin(math.pi * progress_01)
+        samples.append(
+            {
+                "progress_01": progress_01,
+                "speed_m_s": max(speed_m_s, 0.0),
+            }
+        )
+    return {
+        "trajectory_id": trajectory_id,
+        "samples": samples,
     }
 
 

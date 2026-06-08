@@ -30,6 +30,7 @@ PlannerDebugSnapshot makeSnapshot(const CommandedPosePlanDebug& debug) {
   snapshot.targetYMm = debug.goal.yMm;
   snapshot.targetHeadingDeg = debug.goal.headingDeg;
   snapshot.path = debug.path;
+  snapshot.trajectorySpeedProfile = debug.trajectorySpeedProfile;
   return snapshot;
 }
 
@@ -48,6 +49,7 @@ PlannerDebugSnapshot makeSnapshot(const BallPlanDebug& debug) {
   snapshot.targetYMm = debug.targetYMm;
   snapshot.targetHeadingDeg = debug.targetHeadingDeg;
   snapshot.path = debug.path;
+  snapshot.trajectorySpeedProfile = debug.trajectorySpeedProfile;
   return snapshot;
 }
 

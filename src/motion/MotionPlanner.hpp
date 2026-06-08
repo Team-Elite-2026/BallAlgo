@@ -20,6 +20,11 @@ struct PlannedChunk {
   std::vector<MotionAction> actions;
 };
 
+struct TrajectorySpeedSample {
+  float progress01 = 0;
+  float speedMps = 0;
+};
+
 struct CommandedPoseGoal {
   float xMm = 0;
   float yMm = 0;
@@ -42,6 +47,7 @@ struct CommandedPosePlanDebug {
   std::vector<Waypoint3> waypoints;
   std::vector<PathSample> path;
   std::vector<ProfileSample> profile;
+  std::vector<TrajectorySpeedSample> trajectorySpeedProfile;
 };
 
 struct BallPlanDebug {
@@ -79,6 +85,7 @@ struct BallPlanDebug {
   std::vector<Waypoint3> waypoints;
   std::vector<PathSample> path;
   std::vector<ProfileSample> profile;
+  std::vector<TrajectorySpeedSample> trajectorySpeedProfile;
 };
 
 struct DefensePlanDebug {
@@ -93,6 +100,7 @@ struct DefensePlanDebug {
   std::vector<Waypoint3> waypoints;
   std::vector<PathSample> path;
   std::vector<ProfileSample> profile;
+  std::vector<TrajectorySpeedSample> trajectorySpeedProfile;
 };
 
 class MotionPlanner {

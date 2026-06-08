@@ -508,6 +508,23 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
     }
     out << ']';
     out << '}';
+
+    addFieldPrefix(out, root, "planner_profile");
+    out << '{';
+    JsonObjectState profileState;
+    addUnsigned(out, profileState, "trajectory_id", frame.planner.trajectoryId);
+    addFieldPrefix(out, profileState, "samples");
+    out << '[';
+    bool firstProfileSample = true;
+    for (const auto& sample : frame.planner.trajectorySpeedProfile) {
+      if (!firstProfileSample) out << ',';
+      firstProfileSample = false;
+      out << '{'
+          << "\"progress_01\":" << sample.progress01 << ','
+          << "\"speed_m_s\":" << sample.speedMps << '}';
+    }
+    out << ']';
+    out << '}';
   }
 
   if (sendEventLog || sendPeriodicLog) {

@@ -116,17 +116,22 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
                         float goalHeadingDeg, AStar3D& astar, HermiteSpline& spline,
                         VelocityProfile& profiler, PlannedChunk& chunk,
                         std::vector<Waypoint3>* waypoints, std::vector<PathSample>* path,
-                        std::vector<ProfileSample>* profile, float* astarCostS = nullptr) {
+                        std::vector<ProfileSample>* profile,
+                        std::vector<TrajectorySpeedSample>* trajectorySpeedProfile,
+                        float* astarCostS = nullptr) {
   int st = headingToBin(headingDeg, config::kAstarHeadingBins);
   int gt = headingToBin(goalHeadingDeg, config::kAstarHeadingBins);
 
   std::vector<Waypoint3> localWaypoints;
   std::vector<PathSample> localPath;
   std::vector<ProfileSample> localProfile;
+  std::vector<TrajectorySpeedSample> localTrajectorySpeedProfile;
 
   std::vector<Waypoint3>& waypointsRef = waypoints != nullptr ? *waypoints : localWaypoints;
   std::vector<PathSample>& pathRef = path != nullptr ? *path : localPath;
   std::vector<ProfileSample>& profileRef = profile != nullptr ? *profile : localProfile;
+  std::vector<TrajectorySpeedSample>& trajectorySpeedProfileRef =
+      trajectorySpeedProfile != nullptr ? *trajectorySpeedProfile : localTrajectorySpeedProfile;
 
   astar.plan(pose.xMm, pose.yMm, st, goalXMm, goalYMm, gt, waypointsRef, astarCostS);
 
@@ -152,6 +157,15 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
     ProfileSample ps{};
     ps.v = std::hypot(p.vx, p.vy);
     profileRef.push_back(ps);
+  }
+
+  trajectorySpeedProfileRef.clear();
+  trajectorySpeedProfileRef.reserve(motorProfile.size());
+  for (const auto& p : motorProfile) {
+    TrajectorySpeedSample sample{};
+    sample.progress01 = p.s;
+    sample.speedMps = p.sDot;
+    trajectorySpeedProfileRef.push_back(sample);
   }
 }
 
@@ -214,7 +228,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
           debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
       buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
                          astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
-                         &debug.profile);
+                         &debug.profile, &debug.trajectorySpeedProfile);
     }
     fillStopChunkIfEmpty(debug.chunk);
     return debug;
@@ -266,7 +280,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     float astarCostS = 0.f;
     buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
                        astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
-                       &debug.profile, &astarCostS);
+                       &debug.profile, &debug.trajectorySpeedProfile, &astarCostS);
     astar_.clearObstacle();
     const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(debug.profile);
     const float nextInterceptTimeS =
@@ -326,7 +340,7 @@ DefensePlanDebug MotionPlanner::debugPlanDefense(const PoseState& pose, const Ba
   buildChunkToTarget(pose, headingDeg, initialDefensePose.targetXMm,
                      initialDefensePose.targetYMm, initialDefensePose.targetHeadingDeg, astar_,
                      spline_, profiler_, initialChunk, &initialWaypoints, &initialPath,
-                     &initialProfile, &astarCostS);
+                     &initialProfile, nullptr, &astarCostS);
   const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(initialProfile);
 
   debug.defensePose =
@@ -342,7 +356,8 @@ DefensePlanDebug MotionPlanner::debugPlanDefense(const PoseState& pose, const Ba
 
   buildChunkToTarget(pose, headingDeg, debug.defensePose.targetXMm, debug.defensePose.targetYMm,
                      debug.defensePose.targetHeadingDeg, astar_, spline_, profiler_, debug.chunk,
-                     &debug.waypoints, &debug.path, &debug.profile);
+                     &debug.waypoints, &debug.path, &debug.profile,
+                     &debug.trajectorySpeedProfile);
   applyTerminalVelocity(debug.chunk, debug.defensePose, headingDeg);
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
@@ -375,7 +390,8 @@ CommandedPosePlanDebug MotionPlanner::debugPlanToPose(const PoseState& pose,
   }
 
   buildChunkToTarget(pose, headingDeg, goal.xMm, goal.yMm, goal.headingDeg, astar_, spline_,
-                     profiler_, debug.chunk, &debug.waypoints, &debug.path, &debug.profile);
+                     profiler_, debug.chunk, &debug.waypoints, &debug.path, &debug.profile,
+                     &debug.trajectorySpeedProfile);
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
 }

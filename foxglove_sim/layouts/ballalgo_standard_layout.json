@@ -86,7 +86,7 @@
                 "direction": "column",
                 "items": [
                   {
-                    "proportion": 3,
+                    "proportion": 2.45,
                     "content": {
                       "type": "split",
                       "direction": "row",
@@ -321,6 +321,49 @@
                               "followingViewWidth": 10.0
                             },
                             "title": "Ball Velocity",
+                            "version": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/planner/profile.samples[:].speed_m_s",
+                                  "color": "#4cf5ae",
+                                  "label": "path speed",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "xAxisVal": "custom",
+                              "xAxisPath": {
+                                "value": "/planner/profile.samples[:].progress_01"
+                              },
+                              "xAxisLabel": "Trajectory Progress (0-1)",
+                              "timeRange": "latest",
+                              "yAxisLabel": "m/s"
+                            },
+                            "title": "Trajectory Speed Profile",
                             "version": 1
                           }
                         }

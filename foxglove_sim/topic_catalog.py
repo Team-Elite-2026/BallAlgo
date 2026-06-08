@@ -104,6 +104,14 @@ TOPICS: tuple[FoxgloveTopic, ...] = (
                 "the primary graphable source for ball proximity and bearing.",
     ),
     FoxgloveTopic(
+        name="/planner/profile",
+        schema="ballalgo.TrajectorySpeedProfile",
+        panel="Plot panel",
+        nominal_hz=15.0,
+        producer="motion planner",
+        purpose="Plot the active trajectory's path-domain speed profile against normalized progress from 0 to 1.",
+    ),
+    FoxgloveTopic(
         name="/lidar/points",
         schema="foxglove.PointCloud",
         panel="3D panel (2D or 3D)",

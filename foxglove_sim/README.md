@@ -237,6 +237,7 @@ Implemented now:
 - `/robot/angular`
 - `/ball/twist`
 - `/ball/range`
+- `/planner/profile`
 - `/camera/front/image`
 - `/camera/front/annotations`
 - `/debug/log`
@@ -314,6 +315,7 @@ The imported layout gives you:
   - top-down field scene
   - robot acceleration plot
   - robot angular kinematics plot
+  - trajectory speed-vs-progress plot
   - robot velocity plot
   - ball velocity plot
   - debug log panel
@@ -378,6 +380,11 @@ Optional field-frame overlays:
 - `/robot/angular.heading_deg`
 - `/robot/angular.omega_deg_s`
 - `/robot/angular.alpha_deg_s2`
+
+#### Trajectory speed profile
+
+- x-axis: `/planner/profile.samples[:].progress_01`
+- y-axis: `/planner/profile.samples[:].speed_m_s`
 
 #### Ball velocity
 

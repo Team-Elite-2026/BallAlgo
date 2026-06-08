@@ -60,6 +60,32 @@ def timestamp_plot(
     )
 
 
+def latest_xy_plot(
+    title: str,
+    plot_series: list[fl.PlotSeries],
+    *,
+    x_axis_path: str,
+    x_axis_label: str,
+    y_axis_label: str | None = None,
+) -> fl.PlotPanel:
+    return fl.PlotPanel(
+        title=title,
+        config=fl.PlotConfig(
+            paths=plot_series,
+            x_axis_val="custom",
+            x_axis_path=fl.PlotXAxisPath(value=x_axis_path),
+            time_range="latest",
+            show_legend=True,
+            legend_display="floating",
+            show_plot_values_in_legend=True,
+            show_x_axis_labels=True,
+            show_y_axis_labels=True,
+            x_axis_label=x_axis_label,
+            y_axis_label=y_axis_label,
+        ),
+    )
+
+
 def field_panel() -> fl.ThreeDeePanel:
     return fl.ThreeDeePanel(
         title=FIELD_PANEL_TITLE,
@@ -218,6 +244,22 @@ def ball_velocity_panel() -> fl.PlotPanel:
     )
 
 
+def trajectory_speed_profile_panel() -> fl.PlotPanel:
+    return latest_xy_plot(
+        "Trajectory Speed Profile",
+        [
+            series(
+                "/planner/profile.samples[:].speed_m_s",
+                label="path speed",
+                color="#4cf5ae",
+            ),
+        ],
+        x_axis_path="/planner/profile.samples[:].progress_01",
+        x_axis_label="Trajectory Progress (0-1)",
+        y_axis_label="m/s",
+    )
+
+
 def ball_range_panel() -> fl.PlotPanel:
     return timestamp_plot(
         "Ball Range",
@@ -310,7 +352,7 @@ def overview_tab() -> fl.SplitContainer:
             fl.SplitItem(content=angular_panel()),
         ],
     )
-    bottom_row = fl.SplitContainer(
+    middle_row = fl.SplitContainer(
         direction="row",
         items=[
             fl.SplitItem(content=debug_log_panel()),
@@ -318,11 +360,18 @@ def overview_tab() -> fl.SplitContainer:
             fl.SplitItem(content=ball_velocity_panel()),
         ],
     )
+    bottom_row = fl.SplitContainer(
+        direction="row",
+        items=[
+            fl.SplitItem(content=trajectory_speed_profile_panel()),
+        ],
+    )
     right_column = fl.SplitContainer(
         direction="column",
         items=[
-            fl.SplitItem(proportion=3, content=top_row),
-            fl.SplitItem(proportion=1.45, content=bottom_row),
+            fl.SplitItem(proportion=2.45, content=top_row),
+            fl.SplitItem(proportion=1.45, content=middle_row),
+            fl.SplitItem(proportion=1.0, content=bottom_row),
         ],
     )
     return fl.SplitContainer(
