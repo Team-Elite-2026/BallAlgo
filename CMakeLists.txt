@@ -8,6 +8,14 @@ option(BALLALGO_ENABLE_LIDAR "Enable LD19 lidar" ON)
 option(BALLALGO_BUILD_APP "Build production ballalgo runtime" ON)
 
 find_package(Eigen3 REQUIRED)
+option(BALLALGO_BUILD_TESTS "Build focused BallAlgo unit tests" ON)
+
+set(BALLALGO_TEAM_CORE_SOURCES
+  src/team/RoleArbiter.cpp
+  src/team/TeamBallFilter.cpp
+  src/team/TeamProto.cpp
+)
+
 set(BALLALGO_MOTION_CORE_SOURCES
   src/motion/AStar3D.cpp
   src/motion/DefensePose.cpp
@@ -41,6 +49,7 @@ find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBCAMERA REQUIRED libcamera)
 pkg_check_modules(LIBGPiod libgpiod)
+pkg_check_modules(BLUEZ bluez)
 
 set(BALLALGO_APP_SOURCES
   src/main.cpp
@@ -61,6 +70,8 @@ set(BALLALGO_APP_SOURCES
   src/motion/MotionPipeline.cpp
   src/io/RobotSerial.cpp
   src/io/GpioLidar.cpp
+  ${BALLALGO_TEAM_CORE_SOURCES}
+  src/team/TeamLink.cpp
 )
 
 add_executable(ballalgo ${BALLALGO_APP_SOURCES})
@@ -74,6 +85,11 @@ if(LIBGPiod_FOUND)
   target_compile_definitions(ballalgo PRIVATE BALLALGO_HAS_GPIOD=1)
   target_link_libraries(ballalgo PRIVATE ${LIBGPiod_LIBRARIES})
 endif()
+if(BLUEZ_FOUND)
+  target_compile_definitions(ballalgo PRIVATE BALLALGO_ENABLE_BLUETOOTH=1)
+  target_include_directories(ballalgo PRIVATE ${BLUEZ_INCLUDE_DIRS})
+  target_link_libraries(ballalgo PRIVATE ${BLUEZ_LIBRARIES})
+endif()
 
 if(BALLALGO_ENABLE_LIDAR)
   target_compile_definitions(ballalgo PRIVATE BALLALGO_ENABLE_LIDAR=1)
@@ -83,4 +99,17 @@ target_compile_options(ballalgo PRIVATE -O3 -Wall -Wextra)
 
 install(TARGETS ballalgo RUNTIME DESTINATION bin)
 install(FILES thresholds.json DESTINATION share/ballalgo OPTIONAL)
+endif()
+
+if(BALLALGO_BUILD_TESTS)
+enable_testing()
+add_executable(ballalgo_team_tests
+  tests/TeamCoordinationTests.cpp
+  ${BALLALGO_TEAM_CORE_SOURCES}
+  src/vision/VisionMath.cpp
+)
+target_include_directories(ballalgo_team_tests PRIVATE src)
+target_link_libraries(ballalgo_team_tests PRIVATE Eigen3::Eigen)
+target_compile_options(ballalgo_team_tests PRIVATE -O2 -Wall -Wextra)
+add_test(NAME ballalgo_team_tests COMMAND ballalgo_team_tests)
 endif()

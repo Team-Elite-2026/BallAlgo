@@ -13,13 +13,11 @@ static uint64_t piTimeUs() {
       .count();
 }
 
-void ClockSync::processBuffer(RobotSerial& serial, std::vector<uint8_t>& rx) {
-  std::vector<std::pair<uint8_t, std::vector<uint8_t>>> frames;
-  unpackFrames(rx, frames);
-  for (auto& [type, payload] : frames) {
-    if (type == kMsgPing && payload.size() >= 8) {
+void ClockSync::processFrames(RobotSerial& serial, const std::vector<ProtocolFrame>& frames) {
+  for (const auto& frame : frames) {
+    if (frame.type == kMsgPing && frame.payload.size() >= 8) {
       uint64_t t0;
-      std::memcpy(&t0, payload.data(), 8);
+      std::memcpy(&t0, frame.payload.data(), 8);
       auto pong = packPong(t0, piTimeUs());
       serial.write(pong);
     }

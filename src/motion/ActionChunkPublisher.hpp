@@ -13,6 +13,7 @@ namespace ballalgo {
 struct PlannerDebugSnapshot {
   bool valid = false;
   bool commandedGoalMode = false;
+  bool defenseMode = false;
   bool withinTolerance = false;
   bool usedCenterFallback = false;
   bool usedBodyChaseFallback = false;
@@ -29,8 +30,9 @@ struct PlannerDebugSnapshot {
 
 class ActionChunkPublisher {
  public:
-  bool publish(RobotSerial& serial, std::vector<uint8_t>& rx, const PoseState& pose,
-               const BallState& ball, float goalDeg, float headingDeg, bool offenseActive,
+  bool publish(RobotSerial& serial, const PoseState& pose, const BallState& ball, float goalDeg,
+               float headingDeg, bool offenseActive,
+               const DefenseFieldTarget* defendedGoal = nullptr,
                const CommandedPoseGoal* commandedGoal = nullptr);
   const PlannerDebugSnapshot& latestDebugSnapshot() const { return latestDebug_; }
 

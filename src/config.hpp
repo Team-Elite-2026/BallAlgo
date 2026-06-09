@@ -138,6 +138,14 @@ inline constexpr int kChunkDtMs = 4;
 inline constexpr int kChunkMaxActions = 50;
 inline constexpr float kChunkPublishHz = 60.f;
 inline constexpr int kSerialLatencyMarginUs = 2000;
+inline constexpr bool kEnableLegacyAsciiPerception = false;
+inline constexpr uint32_t kRobotId = 0;
+inline constexpr const char* kPeerBtAddress = "";
+inline constexpr int kBtRfcommChannel = 1;
+inline constexpr float kTeamPacketHz = 30.f;
+inline constexpr uint32_t kPeerStaleMs = 300;
+inline constexpr float kRoleSwitchMarginCm = 15.f;
+inline constexpr int kRoleConfirmSamples = 3;
 
 //velocity
 inline constexpr float kVMaxX = 0.8f;
@@ -167,7 +175,7 @@ inline constexpr float kCommandGoalHeadingToleranceDeg = 5.f;
 inline constexpr uint64_t kPipelineLatencyUs = 8000;
 inline constexpr float kTrackingSigmaMm = 40.f;
 
-inline constexpr bool kEnableActionChunks = false;
+inline constexpr bool kEnableActionChunks = true;
 inline constexpr bool kEnablePlannerCompare = false;
 inline constexpr const char* kFoxgloveConfigPath = "foxglove_sim/foxglove.conf";
 

@@ -79,8 +79,17 @@ std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t
   return packFrame(kMsgActionChunk, pl);
 }
 
-bool unpackFrames(std::vector<uint8_t>& buffer,
-                  std::vector<std::pair<uint8_t, std::vector<uint8_t>>>& out) {
+bool parseTeensyTelemetry(const uint8_t* data, size_t len, TeensyTelemetryPayload& out) {
+  if (data == nullptr || len != sizeof(TeensyTelemetryPayload)) return false;
+  std::memcpy(&out, data, sizeof(out));
+  return true;
+}
+
+bool parseTeensyTelemetry(const std::vector<uint8_t>& payload, TeensyTelemetryPayload& out) {
+  return parseTeensyTelemetry(payload.data(), payload.size(), out);
+}
+
+bool unpackFrames(std::vector<uint8_t>& buffer, std::vector<ProtocolFrame>& out) {
   out.clear();
   size_t i = 0;
   while (i + 11 <= buffer.size()) {
@@ -101,8 +110,10 @@ bool unpackFrames(std::vector<uint8_t>& buffer,
       ++i;
       continue;
     }
-    std::vector<uint8_t> payload(buffer.begin() + i + 7, buffer.begin() + i + 7 + plen);
-    out.emplace_back(type, payload);
+    ProtocolFrame frame;
+    frame.type = type;
+    frame.payload.assign(buffer.begin() + i + 7, buffer.begin() + i + 7 + plen);
+    out.push_back(std::move(frame));
     buffer.erase(buffer.begin(), buffer.begin() + i + frameLen);
     i = 0;
   }

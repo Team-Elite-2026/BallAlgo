@@ -32,6 +32,24 @@ void polarToBodyXY(double angleDeg, double distM, float& xM, float& yM) {
   yM = static_cast<float>(y);
 }
 
+void bodyToFieldOffsetMm(float bodyXMm, float bodyYMm, float headingDeg, float& fieldDXMm,
+                         float& fieldDYMm) {
+  const double h = headingDeg * M_PI / 180.0;
+  const double c = std::cos(h);
+  const double s = std::sin(h);
+  fieldDXMm = static_cast<float>(c * bodyXMm - s * bodyYMm);
+  fieldDYMm = static_cast<float>(s * bodyXMm + c * bodyYMm);
+}
+
+void fieldToBodyOffsetMm(float fieldDXMm, float fieldDYMm, float headingDeg, float& bodyXMm,
+                         float& bodyYMm) {
+  const double h = headingDeg * M_PI / 180.0;
+  const double c = std::cos(h);
+  const double s = std::sin(h);
+  bodyXMm = static_cast<float>(c * fieldDXMm + s * fieldDYMm);
+  bodyYMm = static_cast<float>(-s * fieldDXMm + c * fieldDYMm);
+}
+
 void fieldVelToBody(float vxMmS, float vyMmS, float headingDeg, float& vxB, float& vyB) {
   const double h = headingDeg * M_PI / 180.0;
   const double c = std::cos(h), s = std::sin(h);
