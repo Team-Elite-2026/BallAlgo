@@ -39,6 +39,7 @@ try:
     from foxglove import Channel, Schema
     from foxglove.channels import (
         CompressedImageChannel,
+        FrameTransformChannel,
         LogChannel,
         PointCloudChannel,
         PoseInFrameChannel,
@@ -46,6 +47,7 @@ try:
     )
     from foxglove.messages import (
         Color,
+        FrameTransform,
         Log,
         LogLevel,
         PackedElementField,
@@ -87,12 +89,12 @@ except ImportError:  # pragma: no cover
     foxglove = None
     Channel = Schema = object
     CompressedImageChannel = LogChannel = PoseInFrameChannel = SceneUpdateChannel = object
-    PointCloudChannel = object
+    FrameTransformChannel = PointCloudChannel = object
     ImageAnnotationsChannel = None
     Log = LogLevel = object
     Color = Pose = PoseInFrame = Quaternion = object
     SceneUpdate = Timestamp = Vector3 = object
-    PackedElementField = PackedElementFieldNumericType = PointCloud = object
+    FrameTransform = PackedElementField = PackedElementFieldNumericType = PointCloud = object
     CircleAnnotation = ImageAnnotations = Point2 = None
     _HAS_IMAGE_ANNOTATIONS = False
     _LIDAR_FIELDS = []
@@ -221,6 +223,7 @@ class BallAlgoFoxgloveSidecar:
             "/robot/pose":          PoseInFrameChannel("/robot/pose"),
             "/ball/pose":           PoseInFrameChannel("/ball/pose"),
             "/lidar/scan":          PointCloudChannel("/lidar/scan"),
+            "/tf":                  FrameTransformChannel("/tf"),
             "/debug/log":           LogChannel("/debug/log"),
             "/session/info": Channel(
                 topic="/session/info",
@@ -408,6 +411,22 @@ class BallAlgoFoxgloveSidecar:
             message=str(payload.get("message", "")),
         ))
 
+    def _publish_tf(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
+        """Publish field→robot FrameTransform so lidar scan and field scene share a frame."""
+        pose = snapshot.get("pose")
+        if not pose or not pose.get("valid"):
+            return
+        field = FieldGeometry.from_snapshot(snapshot["field"])
+        cx_mm, cy_mm = center_field_mm(pose["x_mm"], pose["y_mm"], field)
+        heading_deg = pose["heading_deg"]
+        self.channels["/tf"].log(FrameTransform(
+            timestamp=_timestamp_from_ns(timestamp_ns),
+            parent_frame_id="field",
+            child_frame_id="robot",
+            translation=Vector3(x=cx_mm / 1000.0, y=cy_mm / 1000.0, z=0.0),
+            rotation=yaw_to_quaternion(heading_deg),
+        ))
+
     def _publish_lidar(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         lidar = snapshot.get("lidar")
         if not lidar or not lidar.get("data_b64"):
@@ -460,6 +479,8 @@ class BallAlgoFoxgloveSidecar:
         self.last_snapshot_ns = timestamp_ns
 
         self._publish_static_scene(snapshot["field"], timestamp_ns)
+        if self.cfg.stream_pose or self.cfg.stream_lidar:
+            self._publish_tf(snapshot, timestamp_ns)
         if self.cfg.stream_pose or self.cfg.stream_ball:
             self._publish_live_scene(snapshot, timestamp_ns)
         if self.cfg.stream_pose:
@@ -525,7 +546,11 @@ class BallAlgoFoxgloveSidecar:
                 stack.enter_context(nullcontext())
 
             self.server = (
-                foxglove.start_server(host=self.cfg.websocket_host, port=self.cfg.websocket_port)
+                foxglove.start_server(
+                    host=self.cfg.websocket_host,
+                    port=self.cfg.websocket_port,
+                    message_backlog_size=16,  # drop old data when client is slow → no delay buildup
+                )
                 if self.cfg.websocket_enabled
                 else None
             )
