@@ -3,6 +3,7 @@
 #include "FoxGloveSim/FoxgloveConfig.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
+#include "lidar/Ld19Reader.hpp"
 #include "motion/ActionChunkPublisher.hpp"
 
 #include <cstdint>
@@ -27,6 +28,9 @@ struct FoxgloveTelemetryFrame {
   bool ballPxFound = false;
   int ballPxCx = 0;
   int ballPxCy = 0;
+
+  // Lidar — deskewed scan, populated when streamLidar is enabled.
+  std::vector<LidarPoint> lidarScan;
 };
 
 class FoxgloveTelemetryPublisher {
@@ -61,6 +65,7 @@ class FoxgloveTelemetryPublisher {
   uint64_t lastPathNs_ = 0;
   uint64_t lastLogNs_ = 0;
   uint64_t lastCameraNs_ = 0;
+  uint64_t lastLidarNs_ = 0;
 
   bool havePrevRobotVel_ = false;
   float prevRobotVxBody_ = 0;

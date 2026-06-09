@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
+#include <cstdint>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -296,6 +297,9 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   const bool sendCamera = config_.streamCamera &&
                           !frame.cameraJpegBytes.empty() &&
                           due(config_.cameraHz, timestampNs, lastCameraNs_);
+  const bool sendLidar = config_.streamLidar &&
+                         !frame.lidarScan.empty() &&
+                         due(15.0, timestampNs, lastLidarNs_);
   std::vector<std::string> logEvents;
   int logLevel = 2;
 
@@ -331,7 +335,7 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   const bool sendPeriodicLog = config_.streamLogs && due(config_.logsHz, timestampNs, lastLogNs_);
 
   if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendEventLog && !sendPeriodicLog &&
-      !sendCamera) {
+      !sendCamera && !sendLidar) {
     return;
   }
 
@@ -554,6 +558,36 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
     addNumber(out, bpx, "cx", frame.ballPxCx);
     addNumber(out, bpx, "cy", frame.ballPxCy);
     out << '}';
+    out << '}';
+  }
+
+  if (sendLidar) {
+    // Pack each deskewed point as [float32 x_m, float32 y_m, float32 z_m=0, float32 intensity_01]
+    // 16 bytes per point — matches foxglove.PointCloud point_stride=16 with Float32 fields.
+    // Body-frame convention: angleCd=0 → forward (+y), angleCd=9000 → right (+x).
+    constexpr size_t kStride = 16;
+    std::vector<uint8_t> buf;
+    buf.reserve(frame.lidarScan.size() * kStride);
+    for (const auto& p : frame.lidarScan) {
+      const float angleRad = static_cast<float>(p.angleCd) * static_cast<float>(M_PI / 18000.0);
+      const float dist_m   = static_cast<float>(p.distanceMm) * 0.001f;
+      const float x_m      = dist_m * std::sin(angleRad);   // right
+      const float y_m      = dist_m * std::cos(angleRad);   // forward
+      const float z_m      = 0.f;
+      const float inten    = static_cast<float>(p.intensity) / 255.f;
+      auto appendF32 = [&](float v) {
+        uint8_t b[4];
+        std::memcpy(b, &v, 4);
+        buf.insert(buf.end(), b, b + 4);
+      };
+      appendF32(x_m); appendF32(y_m); appendF32(z_m); appendF32(inten);
+    }
+    addFieldPrefix(out, root, "lidar");
+    out << '{';
+    JsonObjectState state;
+    addString(out, state, "frame_id", "robot");
+    addNumber(out, state, "n_points", static_cast<double>(frame.lidarScan.size()));
+    addString(out, state, "data_b64", base64Encode(buf.data(), buf.size()));
     out << '}';
   }
 

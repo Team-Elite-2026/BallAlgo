@@ -33,11 +33,14 @@ from field_geometry import FieldGeometry, center_field_mm
 from schema_catalog import SCHEMAS
 
 try:
+    import struct
+
     import foxglove
     from foxglove import Channel, Schema
     from foxglove.channels import (
         CompressedImageChannel,
         LogChannel,
+        PointCloudChannel,
         PoseInFrameChannel,
         SceneUpdateChannel,
     )
@@ -45,6 +48,9 @@ try:
         Color,
         Log,
         LogLevel,
+        PackedElementField,
+        PackedElementFieldNumericType,
+        PointCloud,
         Pose,
         PoseInFrame,
         Quaternion,
@@ -68,16 +74,28 @@ try:
         CircleAnnotation = ImageAnnotations = Point2 = None
         _HAS_IMAGE_ANNOTATIONS = False
 
+    _F32 = PackedElementFieldNumericType.Float32
+    _LIDAR_FIELDS = [
+        PackedElementField(name="x",         offset=0,  type=_F32),
+        PackedElementField(name="y",         offset=4,  type=_F32),
+        PackedElementField(name="z",         offset=8,  type=_F32),
+        PackedElementField(name="intensity", offset=12, type=_F32),
+    ]
+
 except ImportError:  # pragma: no cover
+    struct = None
     foxglove = None
     Channel = Schema = object
     CompressedImageChannel = LogChannel = PoseInFrameChannel = SceneUpdateChannel = object
+    PointCloudChannel = object
     ImageAnnotationsChannel = None
     Log = LogLevel = object
     Color = Pose = PoseInFrame = Quaternion = object
     SceneUpdate = Timestamp = Vector3 = object
+    PackedElementField = PackedElementFieldNumericType = PointCloud = object
     CircleAnnotation = ImageAnnotations = Point2 = None
     _HAS_IMAGE_ANNOTATIONS = False
+    _LIDAR_FIELDS = []
     build_live_scene_entities = build_path_scene_entities = build_static_scene_entities = None
     yaw_to_quaternion = None
 
@@ -182,13 +200,7 @@ class BallAlgoFoxgloveSidecar:
             )
 
     def _warn_unimplemented_streams(self) -> None:
-        unimplemented = [
-            name
-            for flag, name in (
-                (self.cfg.stream_lidar, "stream_lidar"),
-            )
-            if flag
-        ]
+        unimplemented: list[str] = []
         if unimplemented:
             print(
                 f"Warning: stream flags enabled but not yet implemented in sidecar: "
@@ -208,6 +220,7 @@ class BallAlgoFoxgloveSidecar:
             "/planner/scene/path":  SceneUpdateChannel("/planner/scene/path"),
             "/robot/pose":          PoseInFrameChannel("/robot/pose"),
             "/ball/pose":           PoseInFrameChannel("/ball/pose"),
+            "/lidar/scan":          PointCloudChannel("/lidar/scan"),
             "/debug/log":           LogChannel("/debug/log"),
             "/session/info": Channel(
                 topic="/session/info",
@@ -395,6 +408,19 @@ class BallAlgoFoxgloveSidecar:
             message=str(payload.get("message", "")),
         ))
 
+    def _publish_lidar(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
+        lidar = snapshot.get("lidar")
+        if not lidar or not lidar.get("data_b64"):
+            return
+        raw = base64.b64decode(lidar["data_b64"])
+        self.channels["/lidar/scan"].log(PointCloud(
+            timestamp=_timestamp_from_ns(timestamp_ns),
+            frame_id=lidar.get("frame_id", "robot"),
+            point_stride=16,
+            fields=_LIDAR_FIELDS,
+            data=raw,
+        ))
+
     def _publish_camera(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         camera = snapshot.get("camera")
         if not camera or not camera.get("data_b64"):
@@ -443,6 +469,8 @@ class BallAlgoFoxgloveSidecar:
         if self.cfg.stream_paths:
             self._publish_path(snapshot, timestamp_ns)
         self._publish_direct_channels(snapshot)
+        if self.cfg.stream_lidar:
+            self._publish_lidar(snapshot, timestamp_ns)
         if self.cfg.stream_logs:
             self._publish_log(snapshot, timestamp_ns)
         if self.cfg.stream_camera:

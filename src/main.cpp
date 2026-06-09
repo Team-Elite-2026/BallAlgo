@@ -317,6 +317,11 @@ int main(int argc, char** argv) {
     telemetry.visionBallAngleDeg = ball.angleDeg;
     telemetry.visionBallDistance = ball.distCal;
     telemetry.planner = actionChunkPublisher.latestDebugSnapshot();
+#ifdef BALLALGO_ENABLE_LIDAR
+    if (foxglove.config().streamLidar) {
+      telemetry.lidarScan = motion.lastDeskewedScan();
+    }
+#endif
     if (foxglove.config().streamCamera && !frame.empty()) {
       cv::imencode(".jpg", displayFrame, telemetry.cameraJpegBytes,
                    {cv::IMWRITE_JPEG_QUALITY, 70});

@@ -39,11 +39,14 @@ class MotionPipeline {
 
   BallState updateBall(double angleDeg, double distCal, bool found, double dtS);
 
+  const std::vector<LidarPoint>& lastDeskewedScan() const { return lastDeskewedScan_; }
+
  private:
   LidarDeskewer deskewer_;
   LidarLocalizer localizer_;
   PoseKalman poseKf_;
   BallKalman ballKf_;
+  std::vector<LidarPoint> lastDeskewedScan_;
 };
 
 }  // namespace ballalgo

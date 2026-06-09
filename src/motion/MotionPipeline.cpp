@@ -23,6 +23,7 @@ void MotionPipeline::predictStep(const TeensyOdometry& odo, double dtS, uint64_t
 PoseState MotionPipeline::updateLidar(const std::vector<LidarPoint>& pts, float headingDeg) {
   std::vector<LidarPoint> corrected = pts;
   deskewer_.deskew(corrected);
+  lastDeskewedScan_ = corrected;
   auto est = localizer_.update(corrected, headingDeg);
   poseKf_.update(est, headingDeg);
   return poseKf_.state(headingDeg);
