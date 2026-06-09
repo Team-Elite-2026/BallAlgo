@@ -85,11 +85,11 @@ def build_static_scene_entities(field: dict[str, Any], timestamp: Timestamp) -> 
         entities.append(_line_entity(entity_id, geometry.frame_id, timestamp, points_mm, 0.014, FIELD_SECONDARY_COLOR))
 
     goal_colors = {
-        "goal-left": LEFT_GOAL_COLOR,
-        "goal-right": RIGHT_GOAL_COLOR,
+        "goal-blue":   LEFT_GOAL_COLOR,
+        "goal-yellow": RIGHT_GOAL_COLOR,
     }
     for entity_id, points_mm in goal_loops_mm(geometry).items():
-        entities.append(_line_entity(entity_id, geometry.frame_id, timestamp, points_mm, 0.02, goal_colors[entity_id]))
+        entities.append(_line_entity(entity_id, geometry.frame_id, timestamp, points_mm, 0.04, goal_colors[entity_id]))
 
     return entities
 

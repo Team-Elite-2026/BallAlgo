@@ -296,15 +296,20 @@ class BallAlgoFoxgloveSidecar:
         """Read and parse every complete newline-framed JSON snapshot in the buffer."""
         if self.client_socket is None:
             return []
-        readable, _, _ = select.select([self.client_socket], [], [], 0.25)
+        readable, _, _ = select.select([self.client_socket], [], [], 0.005)
         if not readable:
             return []
-        chunk = self.client_socket.recv(1 << 20)
-        if not chunk:
-            print("BallAlgo runtime disconnected from Foxglove sidecar socket.")
-            self._close_client()
-            return []
-        self.client_buffer.extend(chunk)
+        # Drain all bytes currently in the OS receive buffer in one pass.
+        while True:
+            try:
+                chunk = self.client_socket.recv(1 << 20)
+            except BlockingIOError:
+                break
+            if not chunk:
+                print("BallAlgo runtime disconnected from Foxglove sidecar socket.")
+                self._close_client()
+                return []
+            self.client_buffer.extend(chunk)
         snapshots: list[dict[str, Any]] = []
         while True:
             newline_index = self.client_buffer.find(b"\n")

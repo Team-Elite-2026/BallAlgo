@@ -571,8 +571,10 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
     for (const auto& p : frame.lidarScan) {
       const float angleRad = static_cast<float>(p.angleCd) * static_cast<float>(M_PI / 18000.0);
       const float dist_m   = static_cast<float>(p.distanceMm) * 0.001f;
-      const float x_m      = dist_m * std::sin(angleRad);   // right
-      const float y_m      = dist_m * std::cos(angleRad);   // forward
+      // Foxglove robot frame: +x = forward, +y = left, +z = up.
+      // Body convention: angleCd=0 → forward (+y body), angleCd=9000 → right (+x body).
+      const float x_m      = dist_m * std::cos(angleRad);   // forward  → Foxglove +x
+      const float y_m      = -dist_m * std::sin(angleRad);  // left     → Foxglove +y
       const float z_m      = 0.f;
       const float inten    = static_cast<float>(p.intensity) / 255.f;
       auto appendF32 = [&](float v) {

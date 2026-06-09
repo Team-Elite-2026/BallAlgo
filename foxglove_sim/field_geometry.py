@@ -62,8 +62,8 @@ def border_loop_mm(field: FieldGeometry) -> list[tuple[float, float]]:
 
 def center_line_mm(field: FieldGeometry) -> list[tuple[float, float]]:
     return [
-        (0.0, -field.half_height_mm),
-        (0.0, field.half_height_mm),
+        (-field.half_width_mm, 0.0),
+        (field.half_width_mm, 0.0),
     ]
 
 
@@ -76,19 +76,19 @@ def circle_polyline_mm(radius_mm: float, samples: int = 48) -> list[tuple[float,
 
 
 def penalty_box_loops_mm(field: FieldGeometry) -> dict[str, list[tuple[float, float]]]:
-    half_box_height = PENALTY_BOX_WIDTH_MM * 0.5
+    half_box_width = PENALTY_BOX_WIDTH_MM * 0.5
     return {
-        "field-left-penalty-box": rectangle_loop_mm(
-            min_x_mm=-field.half_width_mm,
-            max_x_mm=-field.half_width_mm + PENALTY_BOX_DEPTH_MM,
-            min_y_mm=-half_box_height,
-            max_y_mm=half_box_height,
+        "field-bottom-penalty-box": rectangle_loop_mm(
+            min_x_mm=-half_box_width,
+            max_x_mm=half_box_width,
+            min_y_mm=-field.half_height_mm,
+            max_y_mm=-field.half_height_mm + PENALTY_BOX_DEPTH_MM,
         ),
-        "field-right-penalty-box": rectangle_loop_mm(
-            min_x_mm=field.half_width_mm - PENALTY_BOX_DEPTH_MM,
-            max_x_mm=field.half_width_mm,
-            min_y_mm=-half_box_height,
-            max_y_mm=half_box_height,
+        "field-top-penalty-box": rectangle_loop_mm(
+            min_x_mm=-half_box_width,
+            max_x_mm=half_box_width,
+            min_y_mm=field.half_height_mm - PENALTY_BOX_DEPTH_MM,
+            max_y_mm=field.half_height_mm,
         ),
     }
 
@@ -100,18 +100,20 @@ def center_field_mm(x_mm: float, y_mm: float, field: FieldGeometry) -> tuple[flo
 
 
 def goal_loops_mm(field: FieldGeometry) -> dict[str, list[tuple[float, float]]]:
-    half_goal_height = GOAL_INNER_WIDTH_MM * 0.5
+    # Blue goal at bottom (y = -half_height), yellow goal at top (y = +half_height).
+    # Matches config.hpp: kBlueGoalYMm=0, kYellowGoalYMm=kFieldHeightMm.
+    half_goal_width = GOAL_INNER_WIDTH_MM * 0.5
     return {
-        "goal-left": rectangle_loop_mm(
-            min_x_mm=-field.half_width_mm - GOAL_DEPTH_MM,
-            max_x_mm=-field.half_width_mm,
-            min_y_mm=-half_goal_height,
-            max_y_mm=half_goal_height,
+        "goal-blue": rectangle_loop_mm(
+            min_x_mm=-half_goal_width,
+            max_x_mm=half_goal_width,
+            min_y_mm=-field.half_height_mm - GOAL_DEPTH_MM,
+            max_y_mm=-field.half_height_mm,
         ),
-        "goal-right": rectangle_loop_mm(
-            min_x_mm=field.half_width_mm,
-            max_x_mm=field.half_width_mm + GOAL_DEPTH_MM,
-            min_y_mm=-half_goal_height,
-            max_y_mm=half_goal_height,
+        "goal-yellow": rectangle_loop_mm(
+            min_x_mm=-half_goal_width,
+            max_x_mm=half_goal_width,
+            min_y_mm=field.half_height_mm,
+            max_y_mm=field.half_height_mm + GOAL_DEPTH_MM,
         ),
     }
