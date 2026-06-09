@@ -163,8 +163,9 @@ void TeamLink::ensureListener() {
   }
 
   sockaddr_rc localAddress{};
+  bdaddr_t anyAddress = {{0, 0, 0, 0, 0, 0}};
   localAddress.rc_family = AF_BLUETOOTH;
-  bacpy(&localAddress.rc_bdaddr, BDADDR_ANY);
+  bacpy(&localAddress.rc_bdaddr, &anyAddress);
   localAddress.rc_channel = rfcommChannel_;
 
   if (::bind(listenerFd_, reinterpret_cast<sockaddr*>(&localAddress), sizeof(localAddress)) != 0 ||
