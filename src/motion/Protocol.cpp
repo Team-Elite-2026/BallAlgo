@@ -3,6 +3,23 @@
 #include <cstring>
 
 namespace ballalgo {
+namespace {
+
+#pragma pack(push, 1)
+struct LegacyTeensyTelemetryPayload {
+  float headingDeg;
+  float mouseVxBodyMmS;
+  float mouseVyBodyMmS;
+  float omegaRadS;
+  uint8_t hasBall;
+  uint16_t serialLatencyUs;
+  uint8_t pad1;
+};
+#pragma pack(pop)
+static_assert(sizeof(LegacyTeensyTelemetryPayload) == 20,
+              "LegacyTeensyTelemetryPayload must match the prior Teensy telemetry wire format");
+
+}  // namespace
 
 static uint32_t crc32Update(uint32_t crc, uint8_t b) {
   crc ^= b;
@@ -80,9 +97,25 @@ std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t
 }
 
 bool parseTeensyTelemetry(const uint8_t* data, size_t len, TeensyTelemetryPayload& out) {
-  if (data == nullptr || len != sizeof(TeensyTelemetryPayload)) return false;
-  std::memcpy(&out, data, sizeof(out));
-  return true;
+  if (data == nullptr) return false;
+  if (len == sizeof(TeensyTelemetryPayload)) {
+    std::memcpy(&out, data, sizeof(out));
+    return true;
+  }
+  if (len == sizeof(LegacyTeensyTelemetryPayload)) {
+    LegacyTeensyTelemetryPayload legacy{};
+    std::memcpy(&legacy, data, sizeof(legacy));
+    out = {};
+    out.headingDeg = legacy.headingDeg;
+    out.mouseVxBodyMmS = legacy.mouseVxBodyMmS;
+    out.mouseVyBodyMmS = legacy.mouseVyBodyMmS;
+    out.omegaRadS = legacy.omegaRadS;
+    out.hasBall = legacy.hasBall;
+    out.serialLatencyUs = legacy.serialLatencyUs;
+    out.goalIsBlue = 1;
+    return true;
+  }
+  return false;
 }
 
 bool parseTeensyTelemetry(const std::vector<uint8_t>& payload, TeensyTelemetryPayload& out) {
