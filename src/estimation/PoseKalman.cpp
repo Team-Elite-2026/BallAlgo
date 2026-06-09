@@ -85,24 +85,24 @@ void PoseKalman::predictMouse(double vxBodyMmS, double vyBodyMmS, float headingD
 
 void PoseKalman::update(const PoseEstimate& meas, float headingDeg) {
   (void)headingDeg;
-  if (meas.valid) {
-    if (!init_) {
-      x_ << meas.xMm, meas.yMm, 0, 0;
-      P_ = Eigen::Matrix4d::Identity() * 100;
-      init_ = true;
-    } else {
-      Eigen::Matrix<double, 2, 4> H;
-      H << 1, 0, 0, 0, 0, 1, 0, 0;
-      Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * config::kPoseKfMeasPosVar;
-      Eigen::Vector2d z(meas.xMm, meas.yMm);
-      Eigen::Vector2d y = z - H * x_;
-      Eigen::Matrix2d S = H * P_ * H.transpose() + R;
-      Eigen::Matrix<double, 4, 2> K = P_ * H.transpose() * S.inverse();
-      x_ = x_ + K * y;
-      P_ = (Eigen::Matrix4d::Identity() - K * H) * P_;
-    }
-    ageSinceMeasurementS_ = 0;
+  if (!meas.valid || !meas.shouldFuse) return;
+
+  if (!init_) {
+    x_ << meas.xMm, meas.yMm, 0, 0;
+    P_ = Eigen::Matrix4d::Identity() * 100;
+    init_ = true;
+  } else {
+    Eigen::Matrix<double, 2, 4> H;
+    H << 1, 0, 0, 0, 0, 1, 0, 0;
+    Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * config::kPoseKfMeasPosVar;
+    Eigen::Vector2d z(meas.xMm, meas.yMm);
+    Eigen::Vector2d y = z - H * x_;
+    Eigen::Matrix2d S = H * P_ * H.transpose() + R;
+    Eigen::Matrix<double, 4, 2> K = P_ * H.transpose() * S.inverse();
+    x_ = x_ + K * y;
+    P_ = (Eigen::Matrix4d::Identity() - K * H) * P_;
   }
+  ageSinceMeasurementS_ = 0;
 }
 
 void PoseKalman::updateGoalBearing(double measBearingRad, double goalXMm, double goalYMm,

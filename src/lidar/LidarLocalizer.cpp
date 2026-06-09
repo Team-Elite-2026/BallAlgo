@@ -527,6 +527,18 @@ int LidarLocalizer::candidateSourceBonus(CandidateSource source) const {
   }
 }
 
+bool LidarLocalizer::shouldHoldPose(float innovationMm, const PoseScore& score) const {
+  if (innovationMm <= poseJumpRejectMm_) return false;
+  if (score.medianResidualMm <= goodResidualMm_ && prevPoseQuality_) {
+    return score.inliers < (prevPoseQuality_->inliers + 12);
+  }
+  return true;
+}
+
+float LidarLocalizer::poseAlpha(const PoseScore& score) const {
+  return (score.medianResidualMm <= goodResidualMm_) ? poseAlphaFast_ : poseAlphaSlow_;
+}
+
 PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float headingDeg) {
   const auto rays = fieldRays(points, headingDeg);
 
@@ -579,12 +591,70 @@ PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float
   estimate.ySampleCount = static_cast<uint16_t>(yEstimates.size());
 
   const auto pose = choosePoseFromCandidates(xCandidates, yCandidates, rays, prevX, prevY);
-  if (!pose) return estimate;
+  if (!pose) {
+    if (!xCandidates.empty()) estimate.rawXMm = clamp(xCandidates.front().median, 0.f, fieldW_);
+    if (!yCandidates.empty()) estimate.rawYMm = clamp(yCandidates.front().median, 0.f, fieldH_);
+    if (!prevPoseMm_) return estimate;
+
+    estimate.valid = true;
+    estimate.held = true;
+    estimate.xMm = prevPoseMm_->first;
+    estimate.yMm = prevPoseMm_->second;
+    return estimate;
+  }
+
+  const float rawX = clamp(pose->xMm, 0.f, fieldW_);
+  const float rawY = clamp(pose->yMm, 0.f, fieldH_);
+  estimate.rawXMm = rawX;
+  estimate.rawYMm = rawY;
+  estimate.inliers = pose->score.inliers;
+  estimate.xInliers = pose->score.xInliers;
+  estimate.yInliers = pose->score.yInliers;
+  estimate.medianResidualMm = pose->score.medianResidualMm;
+  estimate.meanResidualMm = pose->score.meanResidualMm;
+
+  if (!prevPoseMm_) {
+    estimate.valid = true;
+    estimate.shouldFuse = true;
+    estimate.poseAlpha = 1.f;
+    estimate.xMm = rawX;
+    estimate.yMm = rawY;
+    prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+    prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
+    return estimate;
+  }
+
+  const float innovationMm = std::hypot(rawX - prevPoseMm_->first, rawY - prevPoseMm_->second);
+  if (shouldHoldPose(innovationMm, pose->score)) {
+    estimate.valid = true;
+    estimate.held = true;
+    estimate.xMm = prevPoseMm_->first;
+    estimate.yMm = prevPoseMm_->second;
+    prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+    prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
+    return estimate;
+  }
+
+  const float alpha = poseAlpha(pose->score);
+  float nextX = prevPoseMm_->first + (rawX - prevPoseMm_->first) * alpha;
+  float nextY = prevPoseMm_->second + (rawY - prevPoseMm_->second) * alpha;
+
+  const float stepX = nextX - prevPoseMm_->first;
+  const float stepY = nextY - prevPoseMm_->second;
+  const float stepMag = std::hypot(stepX, stepY);
+  if (stepMag > maxPoseStepMm_) {
+    const float scale = maxPoseStepMm_ / stepMag;
+    nextX = prevPoseMm_->first + stepX * scale;
+    nextY = prevPoseMm_->second + stepY * scale;
+  }
 
   estimate.valid = true;
-  estimate.xMm = pose->xMm;
-  estimate.yMm = pose->yMm;
+  estimate.shouldFuse = true;
+  estimate.poseAlpha = alpha;
+  estimate.xMm = clamp(nextX, 0.f, fieldW_);
+  estimate.yMm = clamp(nextY, 0.f, fieldH_);
   prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+  prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
   return estimate;
 }
 

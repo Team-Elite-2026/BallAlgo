@@ -12,8 +12,18 @@ struct PoseEstimate {
   float xMm = 0;
   float yMm = 0;
   bool valid = false;
+  bool held = false;
+  bool shouldFuse = false;
+  float rawXMm = 0;
+  float rawYMm = 0;
   uint16_t xSampleCount = 0;
   uint16_t ySampleCount = 0;
+  int inliers = 0;
+  int xInliers = 0;
+  int yInliers = 0;
+  float medianResidualMm = 0;
+  float meanResidualMm = 0;
+  float poseAlpha = 0;
 };
 
 class LidarLocalizer {
@@ -52,6 +62,11 @@ class LidarLocalizer {
     int yInliers = 0;
     float medianResidualMm = 0;
     float meanResidualMm = 0;
+  };
+
+  struct PoseQuality {
+    int inliers = 0;
+    float medianResidualMm = 0;
   };
 
   struct PoseCandidate {
@@ -102,6 +117,8 @@ class LidarLocalizer {
   PoseScore scorePoseAgainstWalls(float robotXMm, float robotYMm,
                                   const std::vector<Ray>& rays) const;
   int candidateSourceBonus(CandidateSource source) const;
+  bool shouldHoldPose(float innovationMm, const PoseScore& score) const;
+  float poseAlpha(const PoseScore& score) const;
 
   float fieldW_;
   float fieldH_;
@@ -130,9 +147,15 @@ class LidarLocalizer {
   float wallAxisMarginMm_ = 180.f;
   int minPoseInliers_ = 28;
   int minPoseAxisInliers_ = 8;
+  float maxPoseStepMm_ = 70.f;
+  float poseJumpRejectMm_ = 240.f;
+  float goodResidualMm_ = 55.f;
+  float poseAlphaSlow_ = 0.10f;
+  float poseAlphaFast_ = 0.28f;
   std::vector<HoughAngle> houghAnglesX_;
   std::vector<HoughAngle> houghAnglesY_;
   std::optional<std::pair<float, float>> prevPoseMm_;
+  std::optional<PoseQuality> prevPoseQuality_;
 };
 
 }  // namespace ballalgo
