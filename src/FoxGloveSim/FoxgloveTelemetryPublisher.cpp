@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -254,29 +255,45 @@ void FoxgloveTelemetryPublisher::sendFrame(const std::string& payload) {
   if (socketFd_ < 0 && !connectSocket()) return;
 
   const std::string framed = payload + "\n";
-  const ssize_t sent = ::send(socketFd_, framed.data(), framed.size(), MSG_DONTWAIT | MSG_NOSIGNAL);
-  if (sent == static_cast<ssize_t>(framed.size())) {
-    ++framesSent_;
-    lastSocketError_.clear();
-    return;
-  }
-
-  if (sent < 0 &&
-      (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS || errno == ENOENT ||
-       errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
+  size_t written = 0;
+  int eagainRetries = 0;
+  constexpr int kMaxEagainRetries = 8;
+  while (written < framed.size()) {
+    const ssize_t sent =
+        ::send(socketFd_, framed.data() + written, framed.size() - written, MSG_DONTWAIT | MSG_NOSIGNAL);
+    if (sent > 0) {
+      written += static_cast<size_t>(sent);
+      eagainRetries = 0;
+      continue;
+    }
+    if (sent < 0 &&
+        (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOBUFS)) {
+      if (eagainRetries >= kMaxEagainRetries) {
+        noteSocketError("send() would block for too long");
+        closeSocket();
+        return;
+      }
+      ++eagainRetries;
+      std::this_thread::sleep_for(std::chrono::milliseconds(2));
+      continue;
+    }
+    if (sent < 0 &&
+        (errno == ENOENT || errno == ECONNREFUSED || errno == ENOTCONN || errno == EPIPE)) {
+      noteSocketError("send() failed: " + std::string(std::strerror(errno)));
+      closeSocket();
+      return;
+    }
+    if (sent == 0) {
+      noteSocketError("send() returned 0");
+      closeSocket();
+      return;
+    }
     noteSocketError("send() failed: " + std::string(std::strerror(errno)));
     closeSocket();
     return;
   }
-
-  if (sent >= 0 && sent < static_cast<ssize_t>(framed.size())) {
-    noteSocketError("send() partial write");
-    closeSocket();
-    return;
-  }
-
-  noteSocketError("send() failed: " + std::string(std::strerror(errno)));
-  closeSocket();
+  ++framesSent_;
+  lastSocketError_.clear();
 }
 
 void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {

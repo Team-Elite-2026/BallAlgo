@@ -24,6 +24,18 @@ target_include_directories(ballalgo_motion_core PUBLIC src)
 target_link_libraries(ballalgo_motion_core PUBLIC Eigen3::Eigen)
 target_compile_options(ballalgo_motion_core PRIVATE -O3 -Wall -Wextra)
 
+set(BALLALGO_PLANNER_CASE_SOURCES
+  src/FoxGloveSim/FoxgloveConfig.cpp
+  src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp
+  src/planner/PlannerCaseMain.cpp
+)
+
+add_executable(ballalgo_planner_case ${BALLALGO_PLANNER_CASE_SOURCES})
+target_include_directories(ballalgo_planner_case PRIVATE src)
+target_link_libraries(ballalgo_planner_case PRIVATE ballalgo_motion_core Eigen3::Eigen)
+target_compile_options(ballalgo_planner_case PRIVATE -O3 -Wall -Wextra)
+install(TARGETS ballalgo_planner_case RUNTIME DESTINATION bin)
+
 if(BALLALGO_BUILD_APP)
 find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
