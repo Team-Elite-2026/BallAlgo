@@ -8,6 +8,7 @@
 #include "lidar/Ld19Reader.hpp"
 #include "motion/ActionChunkPublisher.hpp"
 #include "motion/MotionPipeline.hpp"
+#include "motion/TrajectoryReplayRunner.hpp"
 #include "team/RoleArbiter.hpp"
 #include "team/TeamBallFilter.hpp"
 #include "team/TeamLink.hpp"
@@ -106,6 +107,8 @@ struct RuntimeOptions {
   bool commandGoalEnabled = false;
   CommandedPoseGoal commandGoal;
   bool commandGoalUsesCenteredCm = false;
+  bool trajectoryReplayEnabled = false;
+  std::string trajectoryReplayArtifactPath;
 };
 
 bool parseFloatArg(const char* text, float& value) {
@@ -144,6 +147,13 @@ bool parseArgs(int argc, char** argv, RuntimeOptions& options) {
       i += 3;
       continue;
     }
+    if (arg == "--trajectory-replay-artifact") {
+      if (i + 1 >= argc) return false;
+      options.trajectoryReplayArtifactPath = argv[i + 1];
+      options.trajectoryReplayEnabled = true;
+      ++i;
+      continue;
+    }
     return false;
   }
   return true;
@@ -152,7 +162,8 @@ bool parseArgs(int argc, char** argv, RuntimeOptions& options) {
 void printUsage(const char* argv0) {
   std::cerr << "Usage: " << argv0
             << " [--command-goal x_mm y_mm heading_deg]"
-            << " [--command-goal-centered-cm x_cm y_cm heading_deg]\n";
+            << " [--command-goal-centered-cm x_cm y_cm heading_deg]"
+            << " [--trajectory-replay-artifact path]\n";
 }
 
 }  // namespace
@@ -161,6 +172,10 @@ int main(int argc, char** argv) {
   RuntimeOptions options;
   if (!parseArgs(argc, argv, options)) {
     printUsage(argv[0]);
+    return 2;
+  }
+  if (options.commandGoalEnabled && options.trajectoryReplayEnabled) {
+    std::cerr << "cannot use --command-goal and --trajectory-replay-artifact together\n";
     return 2;
   }
   std::cout << "ballalgo C++ starting\n";
@@ -176,6 +191,9 @@ int main(int argc, char** argv) {
     if (!config::kEnableActionChunks) {
       std::cout << "warning: config::kEnableActionChunks is false, so no motion chunks will be sent\n";
     }
+  }
+  if (options.trajectoryReplayEnabled) {
+    std::cout << "trajectory replay artifact: " << options.trajectoryReplayArtifactPath << "\n";
   }
 
   ThresholdsData thr;
@@ -218,11 +236,19 @@ int main(int argc, char** argv) {
 
   MotionPipeline motion;
   ActionChunkPublisher actionChunkPublisher;
+  TrajectoryReplayRunner trajectoryReplayRunner;
   TeamLink teamLink(config::kRobotId, config::kPeerBtAddress,
                     static_cast<uint8_t>(config::kBtRfcommChannel));
   TeamBallFilter teamBallFilter;
   RoleArbiter roleArbiter(config::kRobotId);
   FoxgloveTelemetryPublisher foxglove(config::kFoxgloveConfigPath);
+  if (options.trajectoryReplayEnabled) {
+    std::string replayError;
+    if (!trajectoryReplayRunner.loadArtifact(options.trajectoryReplayArtifactPath, &replayError)) {
+      std::cerr << "failed to load trajectory replay artifact: " << replayError << "\n";
+      return 2;
+    }
+  }
   std::deque<LidarPoint> lidarWindow;
   float headingDeg = 0;
   uint32_t localBallAgeMs = config::kPeerStaleMs + 1;
@@ -420,8 +446,12 @@ int main(int argc, char** argv) {
                                     ball.ballVyPx);
       serial.writeAscii(ascii);
     }
-    actionChunkPublisher.publish(serial, pose, fusedBodyBall, goalDeg, headingDeg, offense,
-                                 offense ? nullptr : &defendedGoal, commandedGoal);
+    if (options.trajectoryReplayEnabled) {
+      trajectoryReplayRunner.updateAndPublish(serial, nowUs);
+    } else {
+      actionChunkPublisher.publish(serial, pose, fusedBodyBall, goalDeg, headingDeg, offense,
+                                   offense ? nullptr : &defendedGoal, commandedGoal);
+    }
 
     FoxgloveTelemetryFrame telemetry;
     telemetry.dtS = dt;
@@ -432,7 +462,14 @@ int main(int argc, char** argv) {
     telemetry.ball = fusedBodyBall;
     telemetry.visionBallAngleDeg = ball.angleDeg;
     telemetry.visionBallDistance = ball.distCal;
-    telemetry.planner = actionChunkPublisher.latestDebugSnapshot();
+    telemetry.planner = options.trajectoryReplayEnabled
+                            ? trajectoryReplayRunner.plannerSnapshot()
+                            : actionChunkPublisher.latestDebugSnapshot();
+    telemetry.teensyRaw = odo;
+    telemetry.trajectoryTarget =
+        options.trajectoryReplayEnabled
+            ? trajectoryReplayRunner.currentTarget(nowUs, headingDeg)
+            : actionChunkPublisher.currentTargetSample(nowUs, headingDeg);
 #ifdef BALLALGO_ENABLE_LIDAR
     if (foxglove.config().streamLidar) {
       telemetry.lidarScan = motion.lastDeskewedScan();

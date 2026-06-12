@@ -21,6 +21,7 @@ set(BALLALGO_MOTION_CORE_SOURCES
   src/motion/DefensePose.cpp
   src/motion/HermiteSpline.cpp
   src/motion/OffensePose.cpp
+  src/motion/TrajectoryReplay.cpp
   src/motion/VelocityProfile.cpp
   src/motion/StrikePose.cpp
   src/motion/MotionPlanner.cpp
@@ -35,6 +36,10 @@ target_compile_options(ballalgo_motion_core PRIVATE -O3 -Wall -Wextra)
 set(BALLALGO_PLANNER_CASE_SOURCES
   src/FoxGloveSim/FoxgloveConfig.cpp
   src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp
+  src/io/RobotSerial.cpp
+  src/motion/ClockSync.cpp
+  src/motion/Protocol.cpp
+  src/motion/TrajectoryReplayRunner.cpp
   src/planner/PlannerCaseMain.cpp
 )
 
@@ -67,6 +72,7 @@ set(BALLALGO_APP_SOURCES
   src/motion/Protocol.cpp
   src/motion/ClockSync.cpp
   src/motion/ActionChunkPublisher.cpp
+  src/motion/TrajectoryReplayRunner.cpp
   src/motion/MotionPipeline.cpp
   src/io/RobotSerial.cpp
   src/io/GpioLidar.cpp

@@ -12,6 +12,7 @@ struct FoxgloveConfig {
   bool streamPose = true;
   bool streamBall = true;
   bool streamVelocity = true;
+  bool streamTrajectory = true;
   bool streamLidar = false;
   bool streamCamera = false;
   bool streamLogs = true;
@@ -20,6 +21,7 @@ struct FoxgloveConfig {
   double poseHz = 30.0;
   double ballHz = 30.0;
   double velocityHz = 30.0;
+  double trajectoryHz = 30.0;
   double logsHz = 1.0;
   double cameraHz = 10.0;
 

@@ -238,6 +238,9 @@ Implemented now:
 - `/ball/twist`
 - `/ball/range`
 - `/planner/profile`
+- `/traj/target`
+- `/traj/teensy_raw`
+- `/traj/error`
 - `/camera/front/image`
 - `/camera/front/annotations`
 - `/debug/log`
@@ -252,6 +255,8 @@ There are now two generated layout formats:
 
 - [layouts/ballalgo_standard_layout.json](./layouts/ballalgo_standard_layout.json)
   - Foxglove SDK / notebook-style layout JSON
+- [layouts/trajectory_debug_layout.json](./layouts/trajectory_debug_layout.json)
+  - importable trajectory replay / executor-debug layout focused on target-vs-measured plots
 - [layouts/ballalgo_overview_app_layout.json](./layouts/ballalgo_overview_app_layout.json)
   - normal Foxglove app import/export format for the main live-debug view
 - [layouts/ballalgo_camera_app_layout.json](./layouts/ballalgo_camera_app_layout.json)
@@ -271,12 +276,14 @@ From the `BallAlgo` root:
 ```bash
 ./env/bin/python foxglove_sim/layouts/build_layout.py
 ./env/bin/python foxglove_sim/layouts/build_app_layouts.py
+python3 foxglove_sim/layouts/build_trajectory_debug_layout.py
 ```
 
 That rewrites:
 
 ```text
 foxglove_sim/layouts/ballalgo_standard_layout.json
+foxglove_sim/layouts/trajectory_debug_layout.json
 foxglove_sim/layouts/ballalgo_overview_app_layout.json
 foxglove_sim/layouts/ballalgo_camera_app_layout.json
 ```

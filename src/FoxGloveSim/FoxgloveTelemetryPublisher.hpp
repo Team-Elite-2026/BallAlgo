@@ -3,8 +3,10 @@
 #include "FoxGloveSim/FoxgloveConfig.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
+#include "io/RobotSerial.hpp"
 #include "lidar/Ld19Reader.hpp"
 #include "motion/ActionChunkPublisher.hpp"
+#include "motion/TrajectoryReplay.hpp"
 
 #include <cstdint>
 #include <string>
@@ -22,6 +24,8 @@ struct FoxgloveTelemetryFrame {
   double visionBallAngleDeg = -5.0;
   double visionBallDistance = -5.0;
   PlannerDebugSnapshot planner;
+  TeensyOdometry teensyRaw;
+  TrajectoryTargetSample trajectoryTarget;
 
   // Camera — populated in main.cpp only when streamCamera is enabled.
   std::vector<uint8_t> cameraJpegBytes;
@@ -62,6 +66,7 @@ class FoxgloveTelemetryPublisher {
   uint64_t lastPoseNs_ = 0;
   uint64_t lastBallNs_ = 0;
   uint64_t lastVelocityNs_ = 0;
+  uint64_t lastTrajectoryNs_ = 0;
   uint64_t lastPathNs_ = 0;
   uint64_t lastLogNs_ = 0;
   uint64_t lastCameraNs_ = 0;

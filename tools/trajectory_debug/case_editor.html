@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trajectory Case Editor</title>
+    <style>
+      :root {
+        --bg: #0f141a;
+        --panel: #182028;
+        --panel-strong: #202a34;
+        --stroke: #31404d;
+        --text: #d8e3ec;
+        --muted: #8fa2b1;
+        --accent: #5ce1b3;
+        --accent-2: #f6d365;
+        --accent-3: #5db1ff;
+        --danger: #ff8e73;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(93, 177, 255, 0.12), transparent 35%),
+          radial-gradient(circle at top right, rgba(92, 225, 179, 0.1), transparent 30%),
+          linear-gradient(180deg, #0e1318 0%, #131a22 100%);
+        color: var(--text);
+      }
+
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: minmax(340px, 420px) minmax(0, 1fr);
+      }
+
+      .sidebar {
+        padding: 24px;
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(18, 24, 31, 0.86);
+        backdrop-filter: blur(12px);
+      }
+
+      .content {
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        letter-spacing: 0.02em;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .panel {
+        margin-top: 18px;
+        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(32, 42, 52, 0.92), rgba(19, 25, 32, 0.92));
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      }
+
+      .panel h2 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--accent);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(10, 14, 18, 0.66);
+        color: var(--text);
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 11px 16px;
+        font-weight: 600;
+        cursor: pointer;
+        color: #0f151b;
+        background: var(--accent);
+        transition: transform 120ms ease, opacity 120ms ease;
+      }
+
+      button.secondary {
+        background: var(--panel-strong);
+        color: var(--text);
+      }
+
+      button.active {
+        background: var(--accent-2);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+        transform: none;
+      }
+
+      .stage {
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background:
+          linear-gradient(180deg, rgba(22, 30, 38, 0.96), rgba(15, 21, 27, 0.96)),
+          repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.03) 0,
+            rgba(255, 255, 255, 0.03) 1px,
+            transparent 1px,
+            transparent 80px
+          ),
+          repeating-linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.03) 0,
+            rgba(255, 255, 255, 0.03) 1px,
+            transparent 1px,
+            transparent 80px
+          );
+        padding: 20px;
+        min-height: 760px;
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .toolbar h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .status {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      svg {
+        width: 100%;
+        max-width: 1080px;
+        aspect-ratio: 1820 / 2430;
+        display: block;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+      }
+
+      pre {
+        margin: 0;
+        padding: 12px;
+        max-height: 280px;
+        overflow: auto;
+        border-radius: 16px;
+        background: rgba(10, 14, 18, 0.7);
+        color: #bdd2df;
+        font-size: 12px;
+      }
+
+      @media (max-width: 1100px) {
+        .shell {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          border-right: 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <h1>Trajectory Case Editor</h1>
+        <p>
+          Click the field to place a start pose and a commanded goal, then preview
+          the real C++ planner path before you generate or replay a case.
+        </p>
+
+        <section class="panel">
+          <h2>Placement Mode</h2>
+          <div class="button-row">
+            <button id="place-start" class="active" type="button">Place Start</button>
+            <button id="place-goal" class="secondary" type="button">Place Goal</button>
+            <button id="reset-points" class="secondary" type="button">Reset</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Case</h2>
+          <div class="grid">
+            <label>Case name
+              <input id="case-name" value="editor_preview" />
+            </label>
+            <label>Start heading (deg)
+              <input id="start-heading" type="number" value="0" step="1" />
+            </label>
+            <label>Goal heading (deg)
+              <input id="goal-heading" type="number" value="90" step="1" />
+            </label>
+            <label>Start vx field (mm/s)
+              <input id="start-vx" type="number" value="0" step="10" />
+            </label>
+            <label>Start vy field (mm/s)
+              <input id="start-vy" type="number" value="0" step="10" />
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Actions</h2>
+          <div class="button-row">
+            <button id="generate-path" type="button">Generate Path</button>
+            <button id="download-spec" class="secondary" type="button">Download Spec</button>
+          </div>
+          <p id="request-status" class="status">
+            Start by placing the robot start position.
+          </p>
+        </section>
+
+        <section class="panel">
+          <h2>Preview Data</h2>
+          <pre id="artifact-summary">No preview generated yet.</pre>
+        </section>
+      </aside>
+
+      <main class="content">
+        <div class="stage">
+          <div class="toolbar">
+            <h2>Field Preview</h2>
+            <div id="cursor-status" class="status">x=0 mm, y=0 mm</div>
+          </div>
+          <svg id="field-svg" viewBox="0 0 1820 2430" role="img" aria-label="Field editor">
+            <defs>
+              <pattern id="minor-grid" width="200" height="200" patternUnits="userSpaceOnUse">
+                <path d="M 200 0 L 0 0 0 200" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1" />
+              </pattern>
+            </defs>
+            <rect x="0" y="0" width="1820" height="2430" fill="url(#minor-grid)" stroke="#9bb4c5" stroke-width="10" rx="26" />
+            <g id="path-layer"></g>
+            <g id="marker-layer"></g>
+          </svg>
+          <div class="legend">
+            <span class="chip"><span class="dot" style="background:#5db1ff"></span>Start pose</span>
+            <span class="chip"><span class="dot" style="background:#f6d365"></span>Goal pose</span>
+            <span class="chip"><span class="dot" style="background:#5ce1b3"></span>Planner path</span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      const FIELD_W = 1820;
+      const FIELD_H = 2430;
+      const svg = document.getElementById("field-svg");
+      const markerLayer = document.getElementById("marker-layer");
+      const pathLayer = document.getElementById("path-layer");
+      const statusEl = document.getElementById("request-status");
+      const summaryEl = document.getElementById("artifact-summary");
+      const cursorStatusEl = document.getElementById("cursor-status");
+      const startButton = document.getElementById("place-start");
+      const goalButton = document.getElementById("place-goal");
+      const generateButton = document.getElementById("generate-path");
+      const downloadButton = document.getElementById("download-spec");
+      const resetButton = document.getElementById("reset-points");
+
+      const state = {
+        placementMode: "start",
+        start: { x_mm: 910, y_mm: 420 },
+        goal: { x_mm: 1320, y_mm: 1480 },
+        artifact: null,
+      };
+
+      function setPlacementMode(mode) {
+        state.placementMode = mode;
+        startButton.classList.toggle("active", mode === "start");
+        goalButton.classList.toggle("active", mode === "goal");
+        startButton.classList.toggle("secondary", mode !== "start");
+        goalButton.classList.toggle("secondary", mode !== "goal");
+      }
+
+      function displayYFromField(yFieldMm) {
+        return FIELD_H - yFieldMm;
+      }
+
+      function fieldYFromDisplay(yDisplayMm) {
+        return FIELD_H - yDisplayMm;
+      }
+
+      function fieldPointFromEvent(event) {
+        const rect = svg.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * FIELD_W;
+        const yDisplay = ((event.clientY - rect.top) / rect.height) * FIELD_H;
+        return {
+          x_mm: Math.max(0, Math.min(FIELD_W, x)),
+          y_mm: Math.max(0, Math.min(FIELD_H, fieldYFromDisplay(yDisplay))),
+        };
+      }
+
+      function createArrow(x, y, headingDeg, color, markerShape) {
+        const displayY = displayYFromField(y);
+        const headingRad = (headingDeg * Math.PI) / 180;
+        const tipX = x + Math.cos(headingRad) * 120;
+        const tipY = displayYFromField(y + Math.sin(headingRad) * 120);
+        let shape = "";
+        if (markerShape === "circle") {
+          shape = `<circle cx="${x.toFixed(1)}" cy="${displayY.toFixed(1)}" r="22" fill="${color}" />`;
+        } else {
+          shape = `<rect x="${(x - 22).toFixed(1)}" y="${(displayY - 22).toFixed(1)}" width="44" height="44" rx="8" fill="${color}" />`;
+        }
+        return `
+          ${shape}
+          <line x1="${x.toFixed(1)}" y1="${displayY.toFixed(1)}"
+                x2="${tipX.toFixed(1)}" y2="${tipY.toFixed(1)}"
+                stroke="${color}" stroke-width="18" stroke-linecap="round" />
+        `;
+      }
+
+      function renderMarkers() {
+        const startHeading = Number(document.getElementById("start-heading").value || 0);
+        const goalHeading = Number(document.getElementById("goal-heading").value || 0);
+        markerLayer.innerHTML = `
+          ${createArrow(state.start.x_mm, state.start.y_mm, startHeading, "#5db1ff", "circle")}
+          ${createArrow(state.goal.x_mm, state.goal.y_mm, goalHeading, "#f6d365", "rect")}
+        `;
+      }
+
+      function renderPath() {
+        const artifact = state.artifact;
+        if (!artifact || !artifact.path || artifact.path.length === 0) {
+          pathLayer.innerHTML = "";
+          return;
+        }
+        const commands = artifact.path
+          .map(
+            (point, index) =>
+              `${index === 0 ? "M" : "L"} ${point.x_mm.toFixed(1)} ${displayYFromField(point.y_mm).toFixed(1)}`
+          )
+          .join(" ");
+        pathLayer.innerHTML = `
+          <path d="${commands}" fill="none" stroke="#5ce1b3" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+        `;
+      }
+
+      function currentCasePayload() {
+        return {
+          case_name: document.getElementById("case-name").value.trim() || "editor_preview",
+          kind: "planner_goal",
+          start_pose: {
+            valid: true,
+            x_mm: Number(state.start.x_mm.toFixed(1)),
+            y_mm: Number(state.start.y_mm.toFixed(1)),
+            heading_deg: Number(document.getElementById("start-heading").value || 0),
+            vx_mm_s: Number(document.getElementById("start-vx").value || 0),
+            vy_mm_s: Number(document.getElementById("start-vy").value || 0),
+          },
+          goal_pose: {
+            x_mm: Number(state.goal.x_mm.toFixed(1)),
+            y_mm: Number(state.goal.y_mm.toFixed(1)),
+            heading_deg: Number(document.getElementById("goal-heading").value || 0),
+          },
+        };
+      }
+
+      async function generatePreview() {
+        generateButton.disabled = true;
+        statusEl.textContent = "Running the C++ planner for this case...";
+        try {
+          const response = await fetch("/api/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(currentCasePayload()),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "planner preview failed");
+          }
+          state.artifact = payload.artifact;
+          renderPath();
+          summaryEl.textContent = JSON.stringify(payload, null, 2);
+          statusEl.textContent = `Preview ready: ${payload.artifact.case_name} with ${payload.artifact.chunks.length} chunk(s).`;
+        } catch (error) {
+          statusEl.textContent = `Preview failed: ${error.message}`;
+        } finally {
+          generateButton.disabled = false;
+        }
+      }
+
+      function downloadSpec() {
+        const blob = new Blob([JSON.stringify(currentCasePayload(), null, 2)], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${currentCasePayload().case_name}.json`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }
+
+      svg.addEventListener("click", (event) => {
+        const point = fieldPointFromEvent(event);
+        if (state.placementMode === "start") {
+          state.start = point;
+          statusEl.textContent = `Start pose moved to (${point.x_mm.toFixed(0)}, ${point.y_mm.toFixed(0)}) mm.`;
+        } else {
+          state.goal = point;
+          statusEl.textContent = `Goal pose moved to (${point.x_mm.toFixed(0)}, ${point.y_mm.toFixed(0)}) mm.`;
+        }
+        renderMarkers();
+      });
+
+      svg.addEventListener("mousemove", (event) => {
+        const point = fieldPointFromEvent(event);
+        cursorStatusEl.textContent = `x=${point.x_mm.toFixed(0)} mm, y=${point.y_mm.toFixed(0)} mm`;
+      });
+
+      startButton.addEventListener("click", () => setPlacementMode("start"));
+      goalButton.addEventListener("click", () => setPlacementMode("goal"));
+      generateButton.addEventListener("click", generatePreview);
+      downloadButton.addEventListener("click", downloadSpec);
+      resetButton.addEventListener("click", () => {
+        state.start = { x_mm: 910, y_mm: 420 };
+        state.goal = { x_mm: 1320, y_mm: 1480 };
+        state.artifact = null;
+        renderMarkers();
+        renderPath();
+        summaryEl.textContent = "No preview generated yet.";
+        statusEl.textContent = "Points reset to the default planner demo.";
+      });
+
+      for (const inputId of ["start-heading", "goal-heading"]) {
+        document.getElementById(inputId).addEventListener("input", renderMarkers);
+      }
+
+      setPlacementMode("start");
+      renderMarkers();
+      renderPath();
+    </script>
+  </body>
+</html>

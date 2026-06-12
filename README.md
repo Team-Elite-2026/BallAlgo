@@ -94,9 +94,23 @@ On your laptop, open the Foxglove desktop app and connect to:
 ws://<pi-ip>:8765
 ```
 
-Import a layout from `foxglove_sim/layouts/ballalgo_overview_app_layout.json`.
+Import a layout from `foxglove_sim/layouts/trajectory_debug_layout.json` for
+trajectory replay/debug work, or use `foxglove_sim/layouts/ballalgo_overview_app_layout.json`
+for the broader runtime view.
 
 Config: `foxglove_sim/foxglove.conf` (port, stream toggles, MCAP path).
+
+Trajectory replay cases and generators live under `tests/trajectory_cases/`
+and `tools/trajectory_debug/`.
+
+For commanded-goal preview work, you can also launch the local editor:
+
+```bash
+python3 tools/trajectory_debug/case_editor_server.py --build-dir build
+```
+
+and open `http://127.0.0.1:8765` in a browser on the Pi or over SSH port
+forwarding.
 
 ---
 

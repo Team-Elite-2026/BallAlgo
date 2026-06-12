@@ -164,6 +164,17 @@ std::string formatPeriodicStatus(const FoxgloveTelemetryFrame& frame) {
   return out.str();
 }
 
+const char* modeOverrideString(ModeOverride mode) {
+  switch (mode) {
+    case ModeOverride::ManualOffense:
+      return "manual_offense";
+    case ModeOverride::ManualDefense:
+      return "manual_defense";
+    default:
+      return "auto";
+  }
+}
+
 }  // namespace
 
 FoxgloveTelemetryPublisher::FoxgloveTelemetryPublisher(const std::string& configPath)
@@ -290,6 +301,8 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   const bool sendBall = config_.streamBall && due(config_.ballHz, timestampNs, lastBallNs_);
   const bool sendVelocity =
       config_.streamVelocity && due(config_.velocityHz, timestampNs, lastVelocityNs_);
+  const bool sendTrajectory =
+      config_.streamTrajectory && due(config_.trajectoryHz, timestampNs, lastTrajectoryNs_);
   const bool sendPath = config_.streamPaths &&
                         frame.planner.valid &&
                         frame.planner.trajectoryId != lastPathTrajectoryId_ &&
@@ -334,7 +347,8 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   const bool sendEventLog = config_.streamLogs && !logEvents.empty();
   const bool sendPeriodicLog = config_.streamLogs && due(config_.logsHz, timestampNs, lastLogNs_);
 
-  if (!sendPose && !sendBall && !sendVelocity && !sendPath && !sendEventLog && !sendPeriodicLog &&
+  if (!sendPose && !sendBall && !sendVelocity && !sendTrajectory && !sendPath &&
+      !sendEventLog && !sendPeriodicLog &&
       !sendCamera && !sendLidar) {
     return;
   }
@@ -373,6 +387,9 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
   havePrevHeading_ = true;
   prevHeadingDeg_ = frame.headingDeg;
   prevOmegaDegS_ = omegaDegS;
+
+  const float poseVxFieldMps = frame.pose.vxMmS / 1000.0f;
+  const float poseVyFieldMps = frame.pose.vyMmS / 1000.0f;
 
   bool haveBallFieldPose = false;
   float ballXMm = 0.f;
@@ -481,6 +498,103 @@ void FoxgloveTelemetryPublisher::publish(const FoxgloveTelemetryFrame& frame) {
     addNumber(out, ballTwistState, "vy_field_m_s", ballVyFieldMps);
     addNumber(out, ballTwistState, "speed_field_m_s",
               std::hypot(ballVxFieldMps, ballVyFieldMps));
+    out << '}';
+  }
+
+  if (sendTrajectory) {
+    addFieldPrefix(out, root, "traj_target");
+    out << '{';
+    JsonObjectState state;
+    addBool(out, state, "valid", frame.trajectoryTarget.valid);
+    addBool(out, state, "active", frame.trajectoryTarget.active);
+    addBool(out, state, "grace_hold", frame.trajectoryTarget.graceHold);
+    addBool(out, state, "stop_chunk", frame.trajectoryTarget.stopChunk);
+    addBool(out, state, "scheduled", frame.trajectoryTarget.scheduled);
+    addUnsigned(out, state, "trajectory_id",
+                static_cast<unsigned long>(frame.trajectoryTarget.trajectoryId));
+    addUnsigned(out, state, "start_time_pi_us",
+                static_cast<unsigned long>(frame.trajectoryTarget.startTimePiUs));
+    addNumber(out, state, "dt_ms", frame.trajectoryTarget.dtMs);
+    addNumber(out, state, "num_actions", frame.trajectoryTarget.numActions);
+    addNumber(out, state, "action_index", frame.trajectoryTarget.actionIndex);
+    addNumber(out, state, "progress_01", frame.trajectoryTarget.progress01);
+    addNumber(out, state, "kick", frame.trajectoryTarget.kick);
+    addNumber(out, state, "dribbler_power", frame.trajectoryTarget.dribblerPower);
+    addNumber(out, state, "vx_global_m_s", frame.trajectoryTarget.globalAction.vx);
+    addNumber(out, state, "vy_global_m_s", frame.trajectoryTarget.globalAction.vy);
+    addNumber(out, state, "omega_rad_s", frame.trajectoryTarget.globalAction.omega);
+    addNumber(out, state, "ax_global_m_s2", frame.trajectoryTarget.globalAction.ax);
+    addNumber(out, state, "ay_global_m_s2", frame.trajectoryTarget.globalAction.ay);
+    addNumber(out, state, "alpha_rad_s2", frame.trajectoryTarget.globalAction.alpha);
+    addNumber(out, state, "vx_body_target_m_s", frame.trajectoryTarget.vxBodyTargetMps);
+    addNumber(out, state, "vy_body_target_m_s", frame.trajectoryTarget.vyBodyTargetMps);
+    addNumber(out, state, "ax_body_target_m_s2", frame.trajectoryTarget.axBodyTargetMps2);
+    addNumber(out, state, "ay_body_target_m_s2", frame.trajectoryTarget.ayBodyTargetMps2);
+    out << '}';
+
+    addFieldPrefix(out, root, "traj_teensy_raw");
+    out << '{';
+    JsonObjectState teensyState;
+    addNumber(out, teensyState, "heading_deg", frame.teensyRaw.headingDeg);
+    addNumber(out, teensyState, "mouse_vx_body_m_s", frame.teensyRaw.mouseVxBodyMmS / 1000.0f);
+    addNumber(out, teensyState, "mouse_vy_body_m_s", frame.teensyRaw.mouseVyBodyMmS / 1000.0f);
+    addNumber(out, teensyState, "omega_rad_s", frame.teensyRaw.omegaRadS);
+    addBool(out, teensyState, "has_ball", frame.teensyRaw.hasBall);
+    addBool(out, teensyState, "start_enabled", frame.teensyRaw.startEnabled);
+    addBool(out, teensyState, "goal_is_blue", frame.teensyRaw.goalIsBlue);
+    addString(out, teensyState, "mode_override", modeOverrideString(frame.teensyRaw.modeOverride));
+    addNumber(out, teensyState, "serial_latency_us", frame.teensyRaw.serialLatencyUs);
+    addBool(out, teensyState, "telemetry_fresh", frame.teensyRaw.telemetryFresh);
+    addBool(out, teensyState, "mouse_fresh", frame.teensyRaw.mouseFresh);
+    out << '}';
+
+    addFieldPrefix(out, root, "traj_error");
+    out << '{';
+    JsonObjectState errorState;
+    const bool haveTrajectoryError = frame.pose.valid && frame.trajectoryTarget.valid;
+    const float vxBodyErr =
+        frame.trajectoryTarget.vxBodyTargetMps - frame.pose.vxBody;
+    const float vyBodyErr =
+        frame.trajectoryTarget.vyBodyTargetMps - frame.pose.vyBody;
+    const float vxFieldErr =
+        frame.trajectoryTarget.globalAction.vx - poseVxFieldMps;
+    const float vyFieldErr =
+        frame.trajectoryTarget.globalAction.vy - poseVyFieldMps;
+    const float axBodyErr =
+        frame.trajectoryTarget.axBodyTargetMps2 - robotAxBody;
+    const float ayBodyErr =
+        frame.trajectoryTarget.ayBodyTargetMps2 - robotAyBody;
+    const float axFieldErr =
+        frame.trajectoryTarget.globalAction.ax - robotAxField;
+    const float ayFieldErr =
+        frame.trajectoryTarget.globalAction.ay - robotAyField;
+    const float omegaErr =
+        frame.trajectoryTarget.globalAction.omega - frame.teensyRaw.omegaRadS;
+    addBool(out, errorState, "valid", haveTrajectoryError);
+    addUnsigned(out, errorState, "trajectory_id",
+                static_cast<unsigned long>(frame.trajectoryTarget.trajectoryId));
+    addNumber(out, errorState, "action_index", frame.trajectoryTarget.actionIndex);
+    addNumber(out, errorState, "vx_body_error_m_s", haveTrajectoryError ? vxBodyErr : 0.0f);
+    addNumber(out, errorState, "vy_body_error_m_s", haveTrajectoryError ? vyBodyErr : 0.0f);
+    addNumber(out, errorState, "speed_body_error_m_s",
+              haveTrajectoryError
+                  ? (std::hypot(frame.trajectoryTarget.vxBodyTargetMps,
+                                frame.trajectoryTarget.vyBodyTargetMps) -
+                     std::hypot(frame.pose.vxBody, frame.pose.vyBody))
+                  : 0.0f);
+    addNumber(out, errorState, "vx_field_error_m_s", haveTrajectoryError ? vxFieldErr : 0.0f);
+    addNumber(out, errorState, "vy_field_error_m_s", haveTrajectoryError ? vyFieldErr : 0.0f);
+    addNumber(out, errorState, "speed_field_error_m_s",
+              haveTrajectoryError
+                  ? (std::hypot(frame.trajectoryTarget.globalAction.vx,
+                                frame.trajectoryTarget.globalAction.vy) -
+                     std::hypot(poseVxFieldMps, poseVyFieldMps))
+                  : 0.0f);
+    addNumber(out, errorState, "ax_body_error_m_s2", haveTrajectoryError ? axBodyErr : 0.0f);
+    addNumber(out, errorState, "ay_body_error_m_s2", haveTrajectoryError ? ayBodyErr : 0.0f);
+    addNumber(out, errorState, "ax_field_error_m_s2", haveTrajectoryError ? axFieldErr : 0.0f);
+    addNumber(out, errorState, "ay_field_error_m_s2", haveTrajectoryError ? ayFieldErr : 0.0f);
+    addNumber(out, errorState, "omega_error_rad_s", haveTrajectoryError ? omegaErr : 0.0f);
     out << '}';
   }
 

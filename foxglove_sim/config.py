@@ -13,6 +13,7 @@ class FoxgloveConfig:
     stream_pose: bool = True
     stream_ball: bool = True
     stream_velocity: bool = True
+    stream_trajectory: bool = True
     stream_lidar: bool = False
     stream_camera: bool = False
     stream_logs: bool = True
@@ -21,6 +22,7 @@ class FoxgloveConfig:
     pose_hz: float = 30.0
     ball_hz: float = 30.0
     velocity_hz: float = 30.0
+    trajectory_hz: float = 30.0
     logs_hz: float = 1.0
     camera_hz: float = 10.0
 
@@ -53,6 +55,7 @@ def load_config(path: str | Path) -> FoxgloveConfig:
         "stream_pose": _parse_bool,
         "stream_ball": _parse_bool,
         "stream_velocity": _parse_bool,
+        "stream_trajectory": _parse_bool,
         "stream_lidar": _parse_bool,
         "stream_camera": _parse_bool,
         "stream_logs": _parse_bool,
@@ -60,6 +63,7 @@ def load_config(path: str | Path) -> FoxgloveConfig:
         "pose_hz": float,
         "ball_hz": float,
         "velocity_hz": float,
+        "trajectory_hz": float,
         "logs_hz": float,
         "camera_hz": float,
         "socket_path": str,

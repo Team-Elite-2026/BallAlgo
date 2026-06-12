@@ -153,6 +153,13 @@ void ActionChunkPublisher::recordChunk(const PlannedChunk& chunk, const PoseStat
   lastChunk_.startHeadingDeg = headingDeg;
 }
 
+TrajectoryTargetSample ActionChunkPublisher::currentTargetSample(uint64_t queryPiUs,
+                                                                 float headingDeg) const {
+  if (!lastChunk_.valid) return {};
+  return sampleTrajectoryTarget(lastChunk_.actions, latestDebug_.trajectoryId,
+                                lastChunk_.startTimePi, lastChunk_.dtMs, headingDeg, queryPiUs);
+}
+
 bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, const BallState& ball,
                                    float goalDeg, float headingDeg, bool offenseActive,
                                    const DefenseFieldTarget* defendedGoal,

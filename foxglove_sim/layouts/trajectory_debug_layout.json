@@ -1,0 +1,479 @@
+{
+  "version": 1,
+  "content": {
+    "type": "tabs",
+    "selectedTabIndex": 0,
+    "tabs": [
+      {
+        "title": "Trajectory Overview",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 1.8,
+              "content": {
+                "type": "panel",
+                "panelType": "ThreeDee",
+                "title": "Trajectory Field",
+                "version": 1,
+                "config": {
+                  "scene": {
+                    "backgroundColor": "#101215",
+                    "transforms": {
+                      "visible": false,
+                      "showLabel": false,
+                      "axisSize": 0.2,
+                      "lineWidth": 1.0
+                    },
+                    "syncCamera": false
+                  },
+                  "topics": {
+                    "/field/scene/static": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    },
+                    "/field/scene/live": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "selectedIdVariable": "selected_id",
+                      "computeVertexNormals": false
+                    },
+                    "/planner/scene/path": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    }
+                  },
+                  "syncedTopics": {
+                    "/field/scene/static": false,
+                    "/field/scene/live": true,
+                    "/planner/scene/path": true
+                  },
+                  "cameraState": {
+                    "distance": 2.6,
+                    "perspective": false,
+                    "phi": 0.0,
+                    "target": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    "thetaOffset": 0.0,
+                    "near": 0.05,
+                    "far": 50.0,
+                    "logDepth": false
+                  },
+                  "followTf": "field",
+                  "fixedFrame": "field",
+                  "followMode": "follow-none"
+                }
+              }
+            },
+            {
+              "proportion": 1.4,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1.3,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "title": "Target vs Measured Velocity",
+                            "version": 1,
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/traj/target.vx_body_target_m_s",
+                                  "color": "#4e98e2",
+                                  "label": "target vx body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/target.vy_body_target_m_s",
+                                  "color": "#f5774d",
+                                  "label": "target vy body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/twist.vx_body_m_s",
+                                  "color": "#9ed3ff",
+                                  "label": "measured vx body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/twist.vy_body_m_s",
+                                  "color": "#ffb68c",
+                                  "label": "measured vy body",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "followingViewWidth": 10.0,
+                              "yAxisLabel": "m/s"
+                            }
+                          }
+                        },
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "title": "Target vs Measured Omega",
+                            "version": 1,
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/traj/target.omega_rad_s",
+                                  "color": "#4cf5ae",
+                                  "label": "target omega",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/teensy_raw.omega_rad_s",
+                                  "color": "#f7df71",
+                                  "label": "measured omega",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "followingViewWidth": 10.0,
+                              "yAxisLabel": "rad/s"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "proportion": 1.3,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "title": "Target vs Measured Accel",
+                            "version": 1,
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/traj/target.ax_body_target_m_s2",
+                                  "color": "#4e98e2",
+                                  "label": "target ax",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/target.ay_body_target_m_s2",
+                                  "color": "#f5774d",
+                                  "label": "target ay",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/accel.ax_body_m_s2",
+                                  "color": "#9ed3ff",
+                                  "label": "measured ax",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/robot/accel.ay_body_m_s2",
+                                  "color": "#ffb68c",
+                                  "label": "measured ay",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "followingViewWidth": 10.0,
+                              "yAxisLabel": "m/s^2"
+                            }
+                          }
+                        },
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "title": "Velocity Tracking Error",
+                            "version": 1,
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/traj/error.vx_body_error_m_s",
+                                  "color": "#4e98e2",
+                                  "label": "vx body err",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/error.vy_body_error_m_s",
+                                  "color": "#f5774d",
+                                  "label": "vy body err",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/error.speed_body_error_m_s",
+                                  "color": "#f7df71",
+                                  "label": "speed err",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                },
+                                {
+                                  "value": "/traj/error.omega_error_rad_s",
+                                  "color": "#c84fe3",
+                                  "label": "omega err",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": true
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "isSynced": true,
+                              "xAxisVal": "timestamp",
+                              "xAxisLabel": "Time (s)",
+                              "timeWindowMode": "sliding",
+                              "followingViewWidth": 10.0,
+                              "yAxisLabel": "m/s",
+                              "rightYAxis": {
+                                "label": "rad/s",
+                                "showTickLabels": true,
+                                "showGridLines": false
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "split",
+                      "direction": "row",
+                      "items": [
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Plot",
+                            "title": "Trajectory Speed Profile",
+                            "version": 1,
+                            "config": {
+                              "paths": [
+                                {
+                                  "value": "/planner/profile.samples[:].speed_m_s",
+                                  "color": "#4cf5ae",
+                                  "label": "path speed",
+                                  "timestampMethod": "receiveTime",
+                                  "showLine": true,
+                                  "lineSize": 2.0,
+                                  "useRightYAxis": false
+                                }
+                              ],
+                              "showLegend": true,
+                              "legendDisplay": "floating",
+                              "showPlotValuesInLegend": true,
+                              "showXAxisLabels": true,
+                              "showYAxisLabels": true,
+                              "xAxisVal": "custom",
+                              "xAxisPath": {
+                                "value": "/planner/profile.samples[:].progress_01"
+                              },
+                              "timeRange": "latest",
+                              "xAxisLabel": "Trajectory Progress (0-1)",
+                              "yAxisLabel": "m/s"
+                            }
+                          }
+                        },
+                        {
+                          "proportion": 1.0,
+                          "content": {
+                            "type": "panel",
+                            "panelType": "Log",
+                            "title": "Debug Log",
+                            "version": 1,
+                            "config": {
+                              "minLogLevel": 1,
+                              "topicToRender": "/debug/log",
+                              "fontSize": 12,
+                              "showLevel": true,
+                              "showDate": false,
+                              "showTime": true,
+                              "showTimezone": false,
+                              "showName": false,
+                              "showSourceLocation": false
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "title": "Trajectory Raw",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 1.0,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "RawMessages",
+                      "title": "Target Topic",
+                      "version": 1,
+                      "config": {
+                        "topicPath": "/traj/target",
+                        "expansion": "all",
+                        "fontSize": 12
+                      }
+                    }
+                  },
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "RawMessages",
+                      "title": "Tracking Error Topic",
+                      "version": 1,
+                      "config": {
+                        "topicPath": "/traj/error",
+                        "expansion": "all",
+                        "fontSize": 12
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "proportion": 1.0,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "RawMessages",
+                      "title": "Teensy Raw Topic",
+                      "version": 1,
+                      "config": {
+                        "topicPath": "/traj/teensy_raw",
+                        "expansion": "all",
+                        "fontSize": 12
+                      }
+                    }
+                  },
+                  {
+                    "proportion": 1.0,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "RawMessages",
+                      "title": "Session Info",
+                      "version": 1,
+                      "config": {
+                        "topicPath": "/session/info",
+                        "expansion": "all",
+                        "fontSize": 12
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

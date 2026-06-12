@@ -5,6 +5,7 @@
 #include "io/RobotSerial.hpp"
 #include "motion/ClockSync.hpp"
 #include "motion/MotionPlanner.hpp"
+#include "motion/TrajectoryReplay.hpp"
 
 #include <vector>
 
@@ -35,6 +36,7 @@ class ActionChunkPublisher {
                const DefenseFieldTarget* defendedGoal = nullptr,
                const CommandedPoseGoal* commandedGoal = nullptr);
   const PlannerDebugSnapshot& latestDebugSnapshot() const { return latestDebug_; }
+  TrajectoryTargetSample currentTargetSample(uint64_t queryPiUs, float headingDeg) const;
 
  private:
   // Step 2: snapshot of the last chunk we sent, used to roll the executing

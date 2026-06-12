@@ -84,6 +84,8 @@ FoxgloveConfig FoxgloveConfig::loadFromFile(const std::string& path) {
       parseBool(value, cfg.streamBall);
     } else if (key == "stream_velocity") {
       parseBool(value, cfg.streamVelocity);
+    } else if (key == "stream_trajectory") {
+      parseBool(value, cfg.streamTrajectory);
     } else if (key == "stream_lidar") {
       parseBool(value, cfg.streamLidar);
     } else if (key == "stream_camera") {
@@ -98,6 +100,8 @@ FoxgloveConfig FoxgloveConfig::loadFromFile(const std::string& path) {
       parseDouble(value, cfg.ballHz);
     } else if (key == "velocity_hz") {
       parseDouble(value, cfg.velocityHz);
+    } else if (key == "trajectory_hz") {
+      parseDouble(value, cfg.trajectoryHz);
     } else if (key == "logs_hz") {
       parseDouble(value, cfg.logsHz);
     } else if (key == "socket_path") {

@@ -1,0 +1,15 @@
+{
+  "case_name": "planner_to_pose_demo",
+  "kind": "planner_goal",
+  "start_pose": {
+    "valid": true,
+    "x_mm": 910.0,
+    "y_mm": 420.0,
+    "heading_deg": 0.0
+  },
+  "goal_pose": {
+    "x_mm": 1320.0,
+    "y_mm": 1480.0,
+    "heading_deg": 90.0
+  }
+}

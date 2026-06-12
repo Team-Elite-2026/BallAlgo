@@ -1,0 +1,28 @@
+{
+  "case_name": "diagonal",
+  "kind": "manual_sequence",
+  "start_pose": {
+    "valid": true,
+    "x_mm": 910.0,
+    "y_mm": 500.0,
+    "heading_deg": 0.0
+  },
+  "chunks": [
+    {
+      "trajectory_id": 4,
+      "start_delay_ms": 0,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vx": 0.25,
+          "vy": 0.25,
+          "omega": 0.0,
+          "ax": 0.0,
+          "ay": 0.0,
+          "alpha": 0.0
+        }
+      ]
+    }
+  ]
+}

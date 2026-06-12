@@ -138,6 +138,9 @@ DIRECT_CHANNELS: tuple[DirectChannel, ...] = (
     DirectChannel("/ball/twist",    "ball_twist",    "stream_velocity", "ballalgo.BallVelocity"),
     DirectChannel("/ball/range",    "ball_range",    "stream_ball",     "ballalgo.BallRange"),
     DirectChannel("/planner/profile", "planner_profile", "stream_paths", "ballalgo.TrajectorySpeedProfile"),
+    DirectChannel("/traj/target", "traj_target", "stream_trajectory", "ballalgo.TrajectoryTarget"),
+    DirectChannel("/traj/teensy_raw", "traj_teensy_raw", "stream_trajectory", "ballalgo.TeensyRawTelemetry"),
+    DirectChannel("/traj/error", "traj_error", "stream_trajectory", "ballalgo.TrajectoryTrackingError"),
 )
 
 

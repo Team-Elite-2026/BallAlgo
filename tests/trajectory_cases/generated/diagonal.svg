@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000.0" height="1300.0" viewBox="0 0 1000.0 1300.0">
+<rect width="100%" height="100%" fill="#0f1216"/>
+<line x1="40.0" y1="1260.0" x2="40.0" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="141.1" y1="1260.0" x2="141.1" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="242.2" y1="1260.0" x2="242.2" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="343.3" y1="1260.0" x2="343.3" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="444.4" y1="1260.0" x2="444.4" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="545.5" y1="1260.0" x2="545.5" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="646.6" y1="1260.0" x2="646.6" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="747.7" y1="1260.0" x2="747.7" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="848.8" y1="1260.0" x2="848.8" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="949.9" y1="1260.0" x2="949.9" y2="40.0" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="1260.0" x2="960.0" y2="1260.0" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="1159.6" x2="960.0" y2="1159.6" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="1059.2" x2="960.0" y2="1059.2" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="958.8" x2="960.0" y2="958.8" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="858.4" x2="960.0" y2="858.4" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="757.9" x2="960.0" y2="757.9" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="657.5" x2="960.0" y2="657.5" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="557.1" x2="960.0" y2="557.1" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="456.7" x2="960.0" y2="456.7" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="356.3" x2="960.0" y2="356.3" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="255.9" x2="960.0" y2="255.9" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="155.5" x2="960.0" y2="155.5" stroke="#232b33" stroke-width="1"/>
+<line x1="40.0" y1="55.1" x2="960.0" y2="55.1" stroke="#232b33" stroke-width="1"/>
+<rect x="40.0" y="40.0" width="920.0" height="1220.0" fill="none" stroke="#9eb6c8" stroke-width="2"/>
+<path d="M500.0,1009.0 L500.5,1008.5 L501.0,1008.0 L501.5,1007.5 L502.0,1007.0 L502.5,1006.5 L503.0,1006.0 L503.5,1005.5 L504.0,1005.0 L504.5,1004.5 L505.1,1004.0 L505.6,1003.4 L506.1,1002.9 L506.6,1002.4 L507.1,1001.9 L507.6,1001.4 L508.1,1000.9 L508.6,1000.4 L509.1,999.9 L509.6,999.4 L510.1,998.9 L510.6,998.4 L511.1,997.9 L511.6,997.4 L512.1,996.9 L512.6,996.4 L513.1,995.9 L513.6,995.4 L514.2,994.9 L514.7,994.4 L515.2,993.9 L515.7,993.4 L516.2,992.9 L516.7,992.4 L517.2,991.9 L517.7,991.4 L518.2,990.9 L518.7,990.4 L519.2,989.9 L519.7,989.4 L520.2,988.9 L520.7,988.4 L521.2,987.9 L521.7,987.4 L522.2,986.9 L522.7,986.4 L523.3,985.9 L523.8,985.4 L524.3,984.9 L524.8,984.4 L525.3,983.9" fill="none" stroke="#4cf5ae" stroke-width="3"/>
+<circle cx="500.0" cy="1009.0" r="7" fill="#4e98e2"/>
+<line x1="500.0" y1="1009.0" x2="570.8" y2="1009.0" stroke="#4e98e2" stroke-width="3"/>
+<rect x="518.3" y="976.9" width="14" height="14" fill="#f7df71"/>
+<line x1="525.3" y1="983.9" x2="596.0" y2="983.9" stroke="#f7df71" stroke-width="3"/>
+<text x="40.0" y="24.0" fill="#d9e3ea" font-family="Menlo, Monaco, monospace" font-size="15">Case: diagonal</text>
+<text x="40.0" y="46.0" fill="#d9e3ea" font-family="Menlo, Monaco, monospace" font-size="15">Kind: manual_sequence</text>
+<text x="40.0" y="68.0" fill="#d9e3ea" font-family="Menlo, Monaco, monospace" font-size="15">Chunks: 1</text>
+<text x="40.0" y="90.0" fill="#d9e3ea" font-family="Menlo, Monaco, monospace" font-size="15">Path samples: 51</text>
+<text x="40.0" y="112.0" fill="#d9e3ea" font-family="Menlo, Monaco, monospace" font-size="15">Chunk0: traj=4 dt=4ms actions=50</text>
+</svg>
