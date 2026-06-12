@@ -22,6 +22,7 @@ PlannerDebugSnapshot makeSnapshot(const CommandedPosePlanDebug& debug) {
   PlannerDebugSnapshot snapshot;
   snapshot.valid = true;
   snapshot.commandedGoalMode = true;
+  snapshot.defenseMode = false;
   snapshot.withinTolerance = debug.withinTolerance;
   snapshot.trajectoryId = debug.chunk.trajectoryId;
   snapshot.startTimePi = debug.chunk.startTimePi;
@@ -38,6 +39,7 @@ PlannerDebugSnapshot makeSnapshot(const BallPlanDebug& debug) {
   PlannerDebugSnapshot snapshot;
   snapshot.valid = true;
   snapshot.commandedGoalMode = false;
+  snapshot.defenseMode = false;
   snapshot.withinTolerance = debug.withinTargetTolerance;
   snapshot.usedCenterFallback = debug.usedCenterFallback;
   snapshot.usedBodyChaseFallback = debug.usedBodyChaseFallback;
@@ -48,6 +50,23 @@ PlannerDebugSnapshot makeSnapshot(const BallPlanDebug& debug) {
   snapshot.targetXMm = debug.targetXMm;
   snapshot.targetYMm = debug.targetYMm;
   snapshot.targetHeadingDeg = debug.targetHeadingDeg;
+  snapshot.path = debug.path;
+  snapshot.trajectorySpeedProfile = debug.trajectorySpeedProfile;
+  return snapshot;
+}
+
+PlannerDebugSnapshot makeSnapshot(const DefensePlanDebug& debug) {
+  PlannerDebugSnapshot snapshot;
+  snapshot.valid = true;
+  snapshot.commandedGoalMode = false;
+  snapshot.defenseMode = true;
+  snapshot.withinTolerance = debug.withinTargetTolerance;
+  snapshot.trajectoryId = debug.chunk.trajectoryId;
+  snapshot.startTimePi = debug.chunk.startTimePi;
+  snapshot.dtMs = debug.chunk.dtMs;
+  snapshot.targetXMm = debug.defensePose.targetXMm;
+  snapshot.targetYMm = debug.defensePose.targetYMm;
+  snapshot.targetHeadingDeg = debug.defensePose.targetHeadingDeg;
   snapshot.path = debug.path;
   snapshot.trajectorySpeedProfile = debug.trajectorySpeedProfile;
   return snapshot;
@@ -134,17 +153,19 @@ void ActionChunkPublisher::recordChunk(const PlannedChunk& chunk, const PoseStat
   lastChunk_.startHeadingDeg = headingDeg;
 }
 
-bool ActionChunkPublisher::publish(RobotSerial& serial, std::vector<uint8_t>& rx,
-                                   const PoseState& pose, const BallState& ball, float goalDeg,
-                                   float headingDeg, bool offenseActive,
+bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, const BallState& ball,
+                                   float goalDeg, float headingDeg, bool offenseActive,
+                                   const DefenseFieldTarget* defendedGoal,
                                    const CommandedPoseGoal* commandedGoal) {
-  if (!config::kEnableActionChunks || (!offenseActive && commandedGoal == nullptr)) {
+  if (!config::kEnableActionChunks ||
+      (!offenseActive && defendedGoal == nullptr && commandedGoal == nullptr)) {
     latestDebug_ = {};
     lastChunk_.valid = false;
     return true;
   }
-  serial.readSome(rx);
-  clock_.processBuffer(serial, rx);
+  std::vector<ProtocolFrame> frames;
+  serial.takePendingFrames(frames);
+  clock_.processFrames(serial, frames);
   auto now = std::chrono::steady_clock::now();
   double t = std::chrono::duration<double>(now.time_since_epoch()).count();
   if (t - lastPublish_ < 1.0 / config::kChunkPublishHz) return true;
@@ -158,6 +179,10 @@ bool ActionChunkPublisher::publish(RobotSerial& serial, std::vector<uint8_t>& rx
   PlannedChunk chunk;
   if (commandedGoal != nullptr) {
     auto debug = planner_.debugPlanToPose(startPose, *commandedGoal, headingDeg);
+    latestDebug_ = makeSnapshot(debug);
+    chunk = std::move(debug.chunk);
+  } else if (!offenseActive && defendedGoal != nullptr) {
+    auto debug = planner_.debugPlanDefense(startPose, ball, headingDeg, *defendedGoal);
     latestDebug_ = makeSnapshot(debug);
     chunk = std::move(debug.chunk);
   } else {

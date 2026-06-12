@@ -1,5 +1,7 @@
 #pragma once
 
+#include "motion/Protocol.hpp"
+
 #include <cstdint>
 #include <sys/types.h>
 #include <string>
@@ -15,7 +17,13 @@ struct TeensyOdometry {
   float mouseVxBodyMmS = 0;  // lateral (+right)
   float mouseVyBodyMmS = 0;  // forward (+forward)
   float omegaRadS = 0;
-  bool mouseFresh = false;  // set when a fresh vx or vy token arrived this poll
+  bool mouseFresh = false;
+  bool telemetryFresh = false;
+  bool hasBall = false;
+  bool startEnabled = false;
+  bool goalIsBlue = true;
+  ModeOverride modeOverride = ModeOverride::Auto;
+  uint16_t serialLatencyUs = 0;
 };
 
 class RobotSerial {
@@ -26,21 +34,19 @@ class RobotSerial {
   ssize_t readSome(std::vector<uint8_t>& out);
   bool write(const std::vector<uint8_t>& data);
   bool writeAscii(const std::string& s);
+  bool poll();
+  void takePendingFrames(std::vector<ProtocolFrame>& out);
 
-  // Backward-compatible heading-only poll.
   void pollHeading(float& headingDeg);
-
-  // Full ASCII telemetry poll. Tokens are numeric strings terminated by a tag
-  // letter: 'h' heading(deg), 'x' mouse vx body(mm/s), 'y' mouse vy body(mm/s),
-  // 'w' yaw rate(rad/s). odo.mouseFresh is true when new mouse data arrived.
   void pollOdometry(TeensyOdometry& odo);
 
  private:
   bool writeAll(const uint8_t* data, size_t len);
-  void consumeAscii(TeensyOdometry& odo);
+  void handleFrame(const ProtocolFrame& frame);
 
   int fd_ = -1;
-  std::string headingBuf_;
+  std::vector<uint8_t> rxBuffer_;
+  std::vector<ProtocolFrame> pendingFrames_;
   TeensyOdometry odoCache_;
 };
 

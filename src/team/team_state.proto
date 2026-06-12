@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package ballalgo.team;
+
+enum RoleClaim {
+  OFFENSE = 0;
+  DEFENSE = 1;
+}
+
+enum ModeOverride {
+  AUTO = 0;
+  MANUAL_OFFENSE = 1;
+  MANUAL_DEFENSE = 2;
+}
+
+message TeamState {
+  uint32 schema_version = 1;
+  uint32 robot_id = 2;
+  uint64 seq = 3;
+  uint64 monotonic_time_us = 4;
+  RoleClaim role_claim = 5;
+  bool pose_valid = 6;
+  float pose_x_mm = 7;
+  float pose_y_mm = 8;
+  float heading_deg = 9;
+  bool ball_visible = 10;
+  float ball_distance_cm = 11;
+  float ball_abs_x_mm = 12;
+  float ball_abs_y_mm = 13;
+  float ball_sigma_x_mm = 14;
+  float ball_sigma_y_mm = 15;
+  uint32 ball_age_ms = 16;
+  bool has_ball = 17;
+  bool start_enabled = 18;
+  bool goal_is_blue = 19;
+  ModeOverride mode_override = 20;
+}

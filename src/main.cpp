@@ -8,6 +8,9 @@
 #include "lidar/Ld19Reader.hpp"
 #include "motion/ActionChunkPublisher.hpp"
 #include "motion/MotionPipeline.hpp"
+#include "team/RoleArbiter.hpp"
+#include "team/TeamBallFilter.hpp"
+#include "team/TeamLink.hpp"
 #include "vision/SectorTracker.hpp"
 #include "vision/Thresholds.hpp"
 #include "vision/VisionMath.hpp"
@@ -15,6 +18,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <cstdio>
 #include <chrono>
 #include <cmath>
@@ -45,6 +49,57 @@ static int fieldMmToCenteredCm(float positionMm, float axisLimitMm) {
 
 static float centeredCmToFieldMm(float centeredCm, float axisLimitMm) {
   return centeredCm * 10.f + 0.5f * axisLimitMm;
+}
+
+static float estimateBallSigmaMm(float ballDistanceCm) {
+  return std::clamp(45.0f + 1.5f * ballDistanceCm, 60.0f, 260.0f);
+}
+
+static TeamBallObservation makeLocalBallObservation(const PoseState& pose, const BallState& ball,
+                                                    float headingDeg, uint32_t ballAgeMs) {
+  TeamBallObservation observation;
+  if (!pose.valid || !ball.visible || ballAgeMs > config::kPeerStaleMs) return observation;
+
+  float fieldDXMm = 0;
+  float fieldDYMm = 0;
+  bodyToFieldOffsetMm(ball.xM * 1000.f, ball.yM * 1000.f, headingDeg, fieldDXMm, fieldDYMm);
+
+  observation.valid = true;
+  observation.xMm = pose.xMm + fieldDXMm;
+  observation.yMm = pose.yMm + fieldDYMm;
+  const float sigma = estimateBallSigmaMm(std::hypot(ball.xM, ball.yM) * 100.f);
+  observation.sigmaXMm = sigma;
+  observation.sigmaYMm = sigma;
+  return observation;
+}
+
+static BallState makeFusedBodyBall(const FusedBallFieldState& fusedField, const PoseState& pose,
+                                   float headingDeg, const BallState& fallback) {
+  if (!fusedField.valid || !pose.valid) return fallback;
+
+  BallState fused = fallback;
+  float bodyXMm = 0;
+  float bodyYMm = 0;
+  fieldToBodyOffsetMm(fusedField.xMm - pose.xMm, fusedField.yMm - pose.yMm, headingDeg, bodyXMm,
+                      bodyYMm);
+
+  float vxBody = 0;
+  float vyBody = 0;
+  fieldVelToBody(fusedField.vxMmS, fusedField.vyMmS, headingDeg, vxBody, vyBody);
+
+  fused.visible = true;
+  fused.xM = bodyXMm / 1000.f;
+  fused.yM = bodyYMm / 1000.f;
+  fused.vx = vxBody;
+  fused.vy = vyBody;
+  return fused;
+}
+
+static DefenseFieldTarget defendedGoalFromSelection(bool goalIsBlue) {
+  if (goalIsBlue) {
+    return DefenseFieldTarget{config::kYellowGoalXMm, config::kYellowGoalYMm};
+  }
+  return DefenseFieldTarget{config::kBlueGoalXMm, config::kBlueGoalYMm};
 }
 
 struct RuntimeOptions {
@@ -163,10 +218,14 @@ int main(int argc, char** argv) {
 
   MotionPipeline motion;
   ActionChunkPublisher actionChunkPublisher;
+  TeamLink teamLink(config::kRobotId, config::kPeerBtAddress,
+                    static_cast<uint8_t>(config::kBtRfcommChannel));
+  TeamBallFilter teamBallFilter;
+  RoleArbiter roleArbiter(config::kRobotId);
   FoxgloveTelemetryPublisher foxglove(config::kFoxgloveConfigPath);
   std::deque<LidarPoint> lidarWindow;
-  std::vector<uint8_t> rxBuf;
   float headingDeg = 0;
+  uint32_t localBallAgeMs = config::kPeerStaleMs + 1;
   double debugAccumS = 0.0;
   unsigned long loopCount = 0;
   unsigned long frameGrabFailures = 0;
@@ -284,6 +343,64 @@ int main(int argc, char** argv) {
     }
 
     auto ballState = motion.updateBall(ball.angleDeg, ball.distCal, ball.found, dt);
+    if (ball.found && ball.distCal >= 0) {
+      localBallAgeMs = 0;
+    } else {
+      const uint32_t dtMs = static_cast<uint32_t>(std::clamp(dt * 1000.0, 0.0, 1000.0));
+      localBallAgeMs = std::min<uint32_t>(localBallAgeMs + dtMs, 10000u);
+    }
+
+    const bool localBallFresh = ballState.visible && localBallAgeMs <= config::kPeerStaleMs;
+    const float localBallDistanceCm = std::hypot(ballState.xM, ballState.yM) * 100.f;
+    const TeamBallObservation localBallObservation =
+        makeLocalBallObservation(pose, ballState, headingDeg, localBallAgeMs);
+
+    teamLink.poll(nowUs);
+
+    teamBallFilter.predict(dt);
+    if (localBallObservation.valid) teamBallFilter.update(localBallObservation);
+
+    const PeerTeamState& peerState = teamLink.peerState();
+    if (isPeerStateFresh(peerState, nowUs) && peerState.state.poseValid &&
+        isBallMeasurementFresh(peerState.state)) {
+      TeamBallObservation peerObservation;
+      peerObservation.valid = true;
+      peerObservation.xMm = peerState.state.ballAbsXMm;
+      peerObservation.yMm = peerState.state.ballAbsYMm;
+      peerObservation.sigmaXMm = std::max(1.0f, peerState.state.ballSigmaXMm);
+      peerObservation.sigmaYMm = std::max(1.0f, peerState.state.ballSigmaYMm);
+      teamBallFilter.update(peerObservation);
+    }
+
+    const FusedBallFieldState fusedFieldBall = teamBallFilter.state();
+    const BallState fusedBodyBall = makeFusedBodyBall(fusedFieldBall, pose, headingDeg, ballState);
+    const TeamRole activeRole = roleArbiter.update(nowUs, odo.modeOverride, localBallFresh,
+                                                   localBallDistanceCm, peerState);
+    const bool offense = activeRole == TeamRole::Offense;
+    const DefenseFieldTarget defendedGoal = defendedGoalFromSelection(odo.goalIsBlue);
+
+    TeamState localTeamState;
+    localTeamState.schemaVersion = 1;
+    localTeamState.robotId = config::kRobotId;
+    localTeamState.roleClaim = activeRole;
+    localTeamState.poseValid = pose.valid;
+    localTeamState.poseXMm = pose.xMm;
+    localTeamState.poseYMm = pose.yMm;
+    localTeamState.headingDeg = headingDeg;
+    localTeamState.ballVisible = localBallFresh;
+    localTeamState.ballDistanceCm = localBallFresh ? localBallDistanceCm : 0.0f;
+    localTeamState.ballAgeMs = localBallAgeMs;
+    localTeamState.hasBall = odo.hasBall;
+    localTeamState.startEnabled = odo.startEnabled;
+    localTeamState.goalIsBlue = odo.goalIsBlue;
+    localTeamState.modeOverride = odo.modeOverride;
+    if (localBallObservation.valid) {
+      localTeamState.ballAbsXMm = localBallObservation.xMm;
+      localTeamState.ballAbsYMm = localBallObservation.yMm;
+      localTeamState.ballSigmaXMm = localBallObservation.sigmaXMm;
+      localTeamState.ballSigmaYMm = localBallObservation.sigmaYMm;
+    }
+    teamLink.publish(localTeamState, nowUs);
 
     int lx = pose.valid ? fieldMmToCenteredCm(pose.xMm, config::kFieldWidthMm)
                         : config::kLostSentinel;
@@ -292,11 +409,10 @@ int main(int argc, char** argv) {
     float goalDeg = goals.yellowAngle;
     if (goalDeg < 0) goalDeg = goals.blueAngle;
 
-    bool offense = ball.found || ballState.visible;
     const CommandedPoseGoal* commandedGoal =
         options.commandGoalEnabled ? &options.commandGoal : nullptr;
 
-    if (serial.isOpen()) {
+    if (serial.isOpen() && config::kEnableLegacyAsciiPerception) {
       auto ascii = formatPerception(static_cast<int>(ball.angleDeg),
                                     static_cast<int>(ball.distCal),
                                     static_cast<int>(goals.blueAngle),
@@ -304,8 +420,8 @@ int main(int argc, char** argv) {
                                     ball.ballVyPx);
       serial.writeAscii(ascii);
     }
-    actionChunkPublisher.publish(serial, rxBuf, pose, ballState, goalDeg, headingDeg, offense,
-                                 commandedGoal);
+    actionChunkPublisher.publish(serial, pose, fusedBodyBall, goalDeg, headingDeg, offense,
+                                 offense ? nullptr : &defendedGoal, commandedGoal);
 
     FoxgloveTelemetryFrame telemetry;
     telemetry.dtS = dt;
@@ -313,7 +429,7 @@ int main(int argc, char** argv) {
     telemetry.frameGrabFailures = frameGrabFailures;
     telemetry.headingDeg = headingDeg;
     telemetry.pose = pose;
-    telemetry.ball = ballState;
+    telemetry.ball = fusedBodyBall;
     telemetry.visionBallAngleDeg = ball.angleDeg;
     telemetry.visionBallDistance = ball.distCal;
     telemetry.planner = actionChunkPublisher.latestDebugSnapshot();

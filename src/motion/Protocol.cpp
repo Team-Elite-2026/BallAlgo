@@ -3,6 +3,23 @@
 #include <cstring>
 
 namespace ballalgo {
+namespace {
+
+#pragma pack(push, 1)
+struct LegacyTeensyTelemetryPayload {
+  float headingDeg;
+  float mouseVxBodyMmS;
+  float mouseVyBodyMmS;
+  float omegaRadS;
+  uint8_t hasBall;
+  uint16_t serialLatencyUs;
+  uint8_t pad1;
+};
+#pragma pack(pop)
+static_assert(sizeof(LegacyTeensyTelemetryPayload) == 20,
+              "LegacyTeensyTelemetryPayload must match the prior Teensy telemetry wire format");
+
+}  // namespace
 
 static uint32_t crc32Update(uint32_t crc, uint8_t b) {
   crc ^= b;
@@ -79,8 +96,33 @@ std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t
   return packFrame(kMsgActionChunk, pl);
 }
 
-bool unpackFrames(std::vector<uint8_t>& buffer,
-                  std::vector<std::pair<uint8_t, std::vector<uint8_t>>>& out) {
+bool parseTeensyTelemetry(const uint8_t* data, size_t len, TeensyTelemetryPayload& out) {
+  if (data == nullptr) return false;
+  if (len == sizeof(TeensyTelemetryPayload)) {
+    std::memcpy(&out, data, sizeof(out));
+    return true;
+  }
+  if (len == sizeof(LegacyTeensyTelemetryPayload)) {
+    LegacyTeensyTelemetryPayload legacy{};
+    std::memcpy(&legacy, data, sizeof(legacy));
+    out = {};
+    out.headingDeg = legacy.headingDeg;
+    out.mouseVxBodyMmS = legacy.mouseVxBodyMmS;
+    out.mouseVyBodyMmS = legacy.mouseVyBodyMmS;
+    out.omegaRadS = legacy.omegaRadS;
+    out.hasBall = legacy.hasBall;
+    out.serialLatencyUs = legacy.serialLatencyUs;
+    out.goalIsBlue = 1;
+    return true;
+  }
+  return false;
+}
+
+bool parseTeensyTelemetry(const std::vector<uint8_t>& payload, TeensyTelemetryPayload& out) {
+  return parseTeensyTelemetry(payload.data(), payload.size(), out);
+}
+
+bool unpackFrames(std::vector<uint8_t>& buffer, std::vector<ProtocolFrame>& out) {
   out.clear();
   size_t i = 0;
   while (i + 11 <= buffer.size()) {
@@ -101,8 +143,10 @@ bool unpackFrames(std::vector<uint8_t>& buffer,
       ++i;
       continue;
     }
-    std::vector<uint8_t> payload(buffer.begin() + i + 7, buffer.begin() + i + 7 + plen);
-    out.emplace_back(type, payload);
+    ProtocolFrame frame;
+    frame.type = type;
+    frame.payload.assign(buffer.begin() + i + 7, buffer.begin() + i + 7 + plen);
+    out.push_back(std::move(frame));
     buffer.erase(buffer.begin(), buffer.begin() + i + frameLen);
     i = 0;
   }

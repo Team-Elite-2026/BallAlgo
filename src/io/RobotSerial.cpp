@@ -1,6 +1,7 @@
 #include "io/RobotSerial.hpp"
 #include "io/SerialBaud.hpp"
 
+#include <algorithm>
 #include <fcntl.h>
 #include <errno.h>
 #include <termios.h>
@@ -8,6 +9,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <utility>
 
 namespace ballalgo {
 
@@ -78,60 +80,66 @@ bool RobotSerial::writeAscii(const std::string& s) {
   return writeAll(reinterpret_cast<const uint8_t*>(s.data()), s.size());
 }
 
-void RobotSerial::consumeAscii(TeensyOdometry& odo) {
+bool RobotSerial::poll() {
+  odoCache_.mouseFresh = false;
+  odoCache_.telemetryFresh = false;
+
   std::vector<uint8_t> chunk;
   readSome(chunk);
-  auto flush = [&](char tag) {
-    if (headingBuf_.empty()) return;
-    float value = 0;
-    try {
-      value = std::stof(headingBuf_);
-    } catch (...) {
-      headingBuf_.clear();
-      return;
-    }
-    switch (tag) {
-      case 'h':
-        odo.headingDeg = value;
+  if (!chunk.empty()) rxBuffer_.insert(rxBuffer_.end(), chunk.begin(), chunk.end());
+
+  std::vector<ProtocolFrame> frames;
+  unpackFrames(rxBuffer_, frames);
+  for (const auto& frame : frames) {
+    handleFrame(frame);
+  }
+  return !frames.empty();
+}
+
+void RobotSerial::takePendingFrames(std::vector<ProtocolFrame>& out) {
+  out = std::move(pendingFrames_);
+  pendingFrames_.clear();
+}
+
+void RobotSerial::handleFrame(const ProtocolFrame& frame) {
+  if (frame.type == kMsgTelemetry) {
+    TeensyTelemetryPayload telemetry;
+    if (!parseTeensyTelemetry(frame.payload, telemetry)) return;
+    odoCache_.headingDeg = telemetry.headingDeg;
+    odoCache_.mouseVxBodyMmS = telemetry.mouseVxBodyMmS;
+    odoCache_.mouseVyBodyMmS = telemetry.mouseVyBodyMmS;
+    odoCache_.omegaRadS = telemetry.omegaRadS;
+    odoCache_.mouseFresh = true;
+    odoCache_.telemetryFresh = true;
+    odoCache_.hasBall = telemetry.hasBall != 0;
+    odoCache_.startEnabled = telemetry.startEnabled != 0;
+    odoCache_.goalIsBlue = telemetry.goalIsBlue != 0;
+    switch (telemetry.modeOverride) {
+      case 1:
+        odoCache_.modeOverride = ModeOverride::ManualOffense;
         break;
-      case 'x':
-        odo.mouseVxBodyMmS = value;
-        odo.mouseFresh = true;
-        break;
-      case 'y':
-        odo.mouseVyBodyMmS = value;
-        odo.mouseFresh = true;
-        break;
-      case 'w':
-        odo.omegaRadS = value;
+      case 2:
+        odoCache_.modeOverride = ModeOverride::ManualDefense;
         break;
       default:
+        odoCache_.modeOverride = ModeOverride::Auto;
         break;
     }
-    headingBuf_.clear();
-  };
-  for (uint8_t b : chunk) {
-    char ch = static_cast<char>(b);
-    if (ch == 'h' || ch == 'x' || ch == 'y' || ch == 'w') {
-      flush(ch);
-    } else if ((ch >= '0' && ch <= '9') || ch == '-' || ch == '.') {
-      headingBuf_ += ch;
-    } else if (ch != '\xFE') {
-      headingBuf_.clear();
-    }
+    odoCache_.serialLatencyUs = telemetry.serialLatencyUs;
+    return;
   }
+
+  pendingFrames_.push_back(frame);
 }
 
 void RobotSerial::pollHeading(float& headingDeg) {
-  odoCache_.mouseFresh = false;
   odoCache_.headingDeg = headingDeg;
-  consumeAscii(odoCache_);
+  poll();
   headingDeg = odoCache_.headingDeg;
 }
 
 void RobotSerial::pollOdometry(TeensyOdometry& odo) {
-  odoCache_.mouseFresh = false;
-  consumeAscii(odoCache_);
+  poll();
   odo = odoCache_;
 }
 
