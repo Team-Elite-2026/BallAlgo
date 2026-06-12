@@ -41,6 +41,9 @@ class TrajectoryReplayRunner {
   bool armed_ = false;
   uint64_t replayEpochPiUs_ = 0;
   size_t nextChunkToSend_ = 0;
+  uint64_t lastDebugReportPiUs_ = 0;
+  bool lastSerialOpen_ = false;
+  bool lastHaveClockSyncPing_ = false;
 };
 
 }  // namespace ballalgo
