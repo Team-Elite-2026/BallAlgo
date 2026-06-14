@@ -432,8 +432,7 @@ int main(int argc, char** argv) {
                         : config::kLostSentinel;
     int ly = pose.valid ? fieldMmToCenteredCm(pose.yMm, config::kFieldHeightMm)
                         : config::kLostSentinel;
-    float goalDeg = goals.yellowAngle;
-    if (goalDeg < 0) goalDeg = goals.blueAngle;
+    float goalDeg = odo.goalIsBlue ? goals.blueAngle : goals.yellowAngle;
 
     const CommandedPoseGoal* commandedGoal =
         options.commandGoalEnabled ? &options.commandGoal : nullptr;
