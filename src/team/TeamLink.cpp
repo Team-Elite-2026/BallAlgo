@@ -288,12 +288,13 @@ void TeamLink::readPeer(uint64_t nowUs) {
     return;
   }
 
+  // Decode any complete frames currently buffered. A poll loop running faster
+  // than the peer's send rate will frequently find no complete frame and an
+  // empty buffer — that is the NORMAL idle state, not a desync. Real teardowns
+  // are handled above: read()==0 (peer closed) and read() error. Do NOT tear
+  // down here just because no frame was decoded this tick.
   std::vector<TeamState> states;
-  if (!unpackTeamStateFrames(rxBuffer_, states) && rxBuffer_.empty()) {
-    closeConnection();
-    scheduleReconnect(nowUs);
-    return;
-  }
+  unpackTeamStateFrames(rxBuffer_, states);
 
   for (const TeamState& state : states) {
     if (state.robotId == robotId_) continue;

@@ -138,7 +138,6 @@ inline constexpr int kChunkDtMs = 4;
 inline constexpr int kChunkMaxActions = 50;
 inline constexpr float kChunkPublishHz = 60.f;
 inline constexpr int kSerialLatencyMarginUs = 2000;
-inline constexpr bool kEnableLegacyAsciiPerception = false;
 inline constexpr uint32_t kRobotId = 0;
 inline constexpr const char* kPeerBtAddress = "";
 inline constexpr int kBtRfcommChannel = 1;

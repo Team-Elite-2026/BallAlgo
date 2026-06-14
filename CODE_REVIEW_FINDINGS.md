@@ -38,90 +38,35 @@
 
 ## CRITICAL
 
-### C1. BallAlgo does not build: CMake references a deleted file
-- **Subsystem:** build
-- **Files:** [BallAlgo/CMakeLists.txt:35-45](BallAlgo/CMakeLists.txt#L35-L45)
-- **Problem:** `ballalgo_planner_case` lists `src/planner/PlannerCaseMain.cpp`; the `src/planner/` directory does not exist. CMake configure aborts before generating *any* target — including `ballalgo` and the tests.
-- **Robot behavior:** nobody can build the Pi binary from a clean clone; the README's documented build commands fail.
-- **Evidence:** ran `cmake -S . -B /tmp/...` → `Cannot find source file: src/planner/PlannerCaseMain.cpp … CMake Generate step failed.` The stale committed `CMakeFiles/` at repo root (which contains a `ballalgo_planner_bench.dir` for yet another vanished target) shows this has drifted at least twice.
-- **Repro/verify:** `cmake -S . -B build` from BallAlgo root.
+> **Canonical branch update (2026-06-14):** Offense2026 now lives on the merged
+> **`FinalDraft1`** branch (the [LC] `MotionExecutor`/`MotionProtocol`/`DriveArbiter`
+> stack no longer exists; the [NPA] `TrajectoryExecutor` stack is the one true
+> motion path). All findings below were re-verified against `FinalDraft1`. Resolved
+> findings **C1, C2, C5, C6, C9, C10** were removed.
 
-### C2. [NPA] Camera data arrives on a port nobody reads; Cam fights LinePCBComm for the LinePCB port
-- **Subsystem:** Teensy serial / perception
-- **Files:** [Offense2026/src/Cam.cpp:18-23](Offense2026/src/Cam.cpp#L18-L23) (reads `Serial2`), [Offense2026/src/main.cpp:39](Offense2026/src/main.cpp#L39) (`Serial2` = LinePCB link @1 Mbaud), [Offense2026/src/main.cpp:88](Offense2026/src/main.cpp#L88) (`Serial3` = Pi link, comment "was Serial2")
-- **Problem:** when the Pi link moved to `Serial3`, `Cam` was not updated. It still drains `Serial2` — which now carries LinePCB binary packets.
-- **Robot behavior:** (a) ball/goal angles from the Pi can **never** reach this firmware → orbit fallback and the whole defense mode see `ballAngle = -5` forever; (b) `Cam::CamCalc()` and `LinePCBComm::update()` both consume `Serial2` bytes, so line-angle/mouse packets are randomly eaten depending on loop order → line-detection dropouts and stale mouse velocity injected into `TrajectoryExecutor`.
-- **Evidence:** code paths above; `runOffense()` calls `camera.CamCalc()` every iteration ([main.cpp:106](Offense2026/src/main.cpp#L106)) after `linePCBComm.update()`.
-- **Verify:** log `camera.ballAngle` with the Pi streaming — it will stay -5; watch LinePCB packet checksum failures rise when `CamCalc` runs.
-
-### C3. [NPA] Cam ASCII parser is incompatible with the current Pi perception schema (and the Pi has it disabled anyway)
+### C3. Cam ASCII perception parser — RESOLVED (perception path removed; Pi plans both roles)
 - **Subsystem:** Pi→Teensy perception protocol
-- **Files:** [Offense2026/src/Cam.cpp:25-63](Offense2026/src/Cam.cpp#L25-L63), [BallAlgo/src/main.cpp:38-44](BallAlgo/src/main.cpp#L38-L44) (`formatPerception`), [BallAlgo/src/config.hpp:141](BallAlgo/src/config.hpp#L141)
-- **Problem (three stacked):**
-  1. The Pi's ASCII format is `<ang>b<dist>a<blue>c<yellow>d<lx>e<ly>f<bvx>g<bvy>i`. This Cam only handles `b/a/c/d` and appends *everything else* — including the `e`/`f`/`g`/`i` delimiter letters and following digits — into the strtod buffer. A buffer like `"-3e12f8g3i145"` parses as **-3×10¹²** because `e` is consumed as scientific notation. Ball angle/dist become garbage whenever the extended fields are streamed.
-  2. There is no `0xFE` guard (unlike the [LC] Cam), so binary action-chunk frames on the same port would also be eaten byte-by-byte.
-  3. The Pi ships with `kEnableLegacyAsciiPerception = false`, so by default no ASCII is emitted at all.
-  - Also: no freshness timeout (stale ball values persist forever after the stream stops; [LC] added 120/200 ms timeouts) and `CamCalc()` falls off the end without a `return` on the no-data path (UB).
-- **Robot behavior:** ball chase locks onto a phantom ball or a -5 sentinel; behavior depends on which robot got which stale value.
-- **Verify:** unit-feed the literal Pi string from `formatPerception` into this parser.
+- **Status:** **RESOLVED on FinalDraft1 via architecture change.** The team chose "Pi plans everything": the Pi runs the camera/vision and plans **both** offense and defense, streaming ready-to-execute binary action chunks; the Teensy is role-agnostic and only executes chunks. Consequences applied:
+  - Teensy-side `Cam.cpp`/`Cam.h` (the ASCII serial *parser* — not the camera or any vision math, which live on the Pi) **deleted**. `Orbit`/dampen **deleted**. `runOffense`/`runDefense` collapsed into one `runRobot()` that executes chunks + line safety.
+  - Only `TrajectoryExecutor::processSerial()` reads `Serial3` now — single owner, so the former two-reader bus race is gone by construction.
+  - Pi ASCII path removed: `formatPerception`, the send block, and `kEnableLegacyAsciiPerception` deleted. The Pi→Teensy link is now purely the binary framed protocol (chunk `0x03`, telemetry `0x04`, ping/pong).
+- **Net:** former C2 (bus contention) and C3 (ASCII parser bugs) no longer exist — the offending code is gone. Role switching is now a pure Pi-side decision (LCD selection → telemetry `modeOverride` → `RoleArbiter` → offense/defense chunks).
+- **Follow-up (minor):** the now-dead Teensy `Defense` class is still constructed in `main.cpp` but never used — safe to delete in a later cleanup.
 
-### C4. Teensy→Pi telemetry contract broken on both branches (heading/switches/mouse never fully reach the Pi EKF)
+### C4. Teensy→Pi telemetry contract — RESOLVED
 - **Subsystem:** Pi↔Teensy telemetry
-- **Files:** [LC] [Offense2026/src/main.cpp:76-90](Offense2026/src/main.cpp#L76-L90) (sends ASCII `"<deg>h"`), [Offense2026/src/MotionProtocol.cpp](Offense2026/src/MotionProtocol.cpp) (sends only Ping, never `kMsgTelemetry 0x04`); [NPA] [Offense2026/src/TrajectoryExecutor.cpp:183-203](Offense2026/src/TrajectoryExecutor.cpp#L183-L203) (sends 20-byte **legacy** payload); Pi: [BallAlgo/src/motion/Protocol.cpp:99-119](BallAlgo/src/motion/Protocol.cpp#L99-L119), [BallAlgo/src/io/RobotSerial.cpp:104-133](BallAlgo/src/io/RobotSerial.cpp#L104-L133)
-- **Problem:**
-  - **[LC]:** the Pi consumes **only** binary `kMsgTelemetry` frames for heading, mouse velocity, omega, hasBall, startEnabled, goalIsBlue, modeOverride. This firmware never sends that frame. It sends an ASCII `"123.45h"` heading that **no Pi code parses**. Net effect on the Pi: `headingDeg` stays 0 forever, mouse fusion never runs (`mouseFresh` never true), the deskewer gets zero-velocity samples, and the goal-side / start / mode-override flags never arrive.
-  - **[NPA]:** telemetry exists but uses the 20-byte legacy layout. The Pi's legacy fallback hardcodes `goalIsBlue = 1`, leaves `startEnabled = 0` and `modeOverride = Auto`. So the Pi *always* believes the team attacks blue / defends yellow regardless of the LCD/switch, never sees the start switch, and manual role override is unreachable.
-- **Robot behavior:** with heading ≡ 0 [LC], every body↔field rotation in the EKF, offense/defense pose generation, and chunk planning silently degrades to "robot always faces +y". With forced `goalIsBlue` [NPA], the defense target and role logic can be aimed at the wrong end for half the matches.
-- **Verify:** instrument `RobotSerial::handleFrame` for frame type 0x04 with each firmware; check `odoCache_.goalIsBlue` against the physical switch.
+- **Status:** **RESOLVED on FinalDraft1.** `TrajectoryExecutor::sendTelemetry()` now sends the full 24-byte `TeensyTelemetryPayload` (heading, mouse vx/vy, omega, hasBall, startEnabled, goalIsBlue, modeOverride, serialLatencyUs) as a framed `0x04` packet on the Pi link (`Serial3`). The Pi's `TeensyTelemetryPayload` ([Protocol.hpp:24-38](BallAlgo/src/motion/Protocol.hpp#L24-L38)) is byte-identical (`static_assert(sizeof == 24)`), `parseTeensyTelemetry` takes the full-parse branch, and `RobotSerial::handleFrame` ([RobotSerial.cpp:104-129](BallAlgo/src/io/RobotSerial.cpp#L104-L129)) populates `goalIsBlue`/`startEnabled`/`modeOverride` from it. `setMatchState()` is fed the live LCD switch state each loop. The 20-byte legacy path still exists only as a backward-compat fallback in `parseTeensyTelemetry`. The [LC] half of this finding is moot (that firmware no longer exists).
 
-### C5. Pi attack-goal selection ignores the goal-side switch entirely
-- **Subsystem:** BallAlgo strategy
-- **Files:** [BallAlgo/src/main.cpp:409-410](BallAlgo/src/main.cpp#L409-L410)
-- **Problem:** `goalDeg = goals.yellowAngle; if (goalDeg < 0) goalDeg = goals.blueAngle;` — the offense aim angle prefers **whichever goal is yellow**, falling back to blue if yellow is occluded. `odo.goalIsBlue` is used only for the *defended* goal. There is no condition on which goal the team is attacking.
-- **Robot behavior:** when assigned to attack the blue goal, the striker lines up its strike heading on the yellow goal (its own); when yellow is briefly occluded it flips aim mid-play.
-- **Evidence:** code path; compare with `defendedGoalFromSelection()` four lines above, which *does* consult the switch.
-- **Verify:** set `goalIsBlue` and watch `BallPlanDebug.goalDeg`/`targetHeadingDeg`.
-
-### C6. Robot-to-robot Bluetooth link tears itself down on every idle poll
-- **Subsystem:** team comms
-- **Files:** [BallAlgo/src/team/TeamLink.cpp:291-296](BallAlgo/src/team/TeamLink.cpp#L291-L296), [BallAlgo/src/team/TeamProto.cpp:254-276](BallAlgo/src/team/TeamProto.cpp#L254-L276)
-- **Problem:** `unpackTeamStateFrames()` returns `!out.empty()` — i.e. **false** when no complete frame is buffered, which is the *normal* case for a 100+ Hz poll loop reading a 30 Hz stream. `readPeer()` treats `(!unpack && rxBuffer_.empty())` as a fatal desync and calls `closeConnection() + scheduleReconnect()`. An idle, healthy connection with an empty buffer satisfies that condition on the very next loop after connecting.
-- **Robot behavior:** the RFCOMM link connects, then drops within one loop iteration, forever. Team state, fused team ball, and role arbitration never function on real robots (the unit tests bypass `TeamLink`).
-- **Additional deployment trap:** `kRobotId = 0` and `kPeerBtAddress = ""` are `constexpr` in [config.hpp:142-143](BallAlgo/src/config.hpp#L142-L143) — both robots compile as server (id 0), neither dials out, and `readPeer` drops same-id packets, so even the framing fix requires a per-robot rebuild discipline that nothing enforces or checks.
-- **Verify:** loopback two processes on one Pi with distinct ids; watch `[TEAM] peer connected` spam.
-
-### C7. [LC] Motion executor ISR: no global→body rotation, races the main loop, ignores the start switch
+### C7. [LC] Motion executor ISR races/no rotation/no start gate — MOOT
 - **Subsystem:** Teensy motion execution
-- **Files:** [Offense2026/src/MotionExecutor.cpp:45-103](Offense2026/src/MotionExecutor.cpp#L45-L103), [Offense2026/src/main.cpp:65-74,201-230](Offense2026/src/main.cpp#L65-L74)
-- **Problem (stacked):**
-  1. Chunks carry **global-frame** velocities (the Pi's comments and the docs both say the Teensy rotates them by IMU heading — see `applyTerminalVelocity` in [MotionPlanner.cpp:77-95](BallAlgo/src/motion/MotionPlanner.cpp#L77-L95)). `MotionExecutor::tick()` feeds `current.vx/vy` straight into the body-frame wheel projection. No rotation, no Coriolis terms. Correct only at heading 0.
-  2. The velocity P-loop compares global-frame targets against `vx_meas` (body-frame EKF velocity echoed by the Pi) — mixed frames in the same subtraction.
-  3. `motionTimer` fires `tick()` every 500 µs unconditionally. The gating flag `usingActionChunkDrive` only controls whether the **main loop** also writes motors. With `enableActionChunks=false`, `RobotMode::Defense`, or the start switch **off**, the ISR still drives motors from any chunk the Pi sends while `movement.apply()`/`movement.stop()` writes different duty cycles a few hundred µs later — two command sources fighting at kHz rate, and **no `startEnabled` check anywhere in the ISR path** (`DriveArbiter` gates only the legacy path).
-  4. On `actionIndex >= num_actions` it hard-brakes immediately — the documented 20 ms grace hold (which [NPA] implements) is missing, so any publish jitter > chunk horizon causes stutter-braking.
-- **Robot behavior:** robot moves with the start switch off whenever the Pi streams chunks; motors chatter from dueling writers; trajectories execute in the wrong direction except when facing heading 0.
-- **Verify:** bench: start switch off, stream chunks, watch wheels.
+- **Status:** **MOOT on FinalDraft1.** The entire [LC] motion stack (`MotionExecutor.cpp`, `MotionProtocol.cpp`, `DriveArbiter.cpp`, `MotionConfig.h`) does not exist on this branch. The canonical executor is `TrajectoryExecutor`, which rotates global→body in `execute()` (now with the correct transpose — see former C10), applies a 20 ms grace hold, and is gated behind `lcdController.isStartEnabled()` in `runOffense()` before `execute()` runs. No ISR/main-loop dual-writer exists. Keep this entry only as a reminder not to resurrect the [LC] stack.
 
-### C8. Pi and Teensy disagree on the motor model by ~4–100×; planned trajectories are unexecutable as timed
+### C8. Pi and Teensy disagree on the motor model — OPEN (needs bench characterization)
 - **Subsystem:** motion planning ↔ execution
-- **Files:** Pi: [BallAlgo/src/config.hpp:83-96](BallAlgo/src/config.hpp#L83-L96) (12 V bus, kS 0.5, kV 0.08, kA 0.02, no-load 1620 rpm); [LC]: [Offense2026/src/MotionConfig.h:20-26](Offense2026/src/MotionConfig.h#L20-L26) + [Movement.cpp:69-95](Offense2026/src/Movement.cpp#L69-L95) (7.4 V hardcoded, kS 0.05, kV 0.12, kA 0.002, per-wheel duty clamp, **no proportional scaling**); [NPA]: [TrajectoryExecutor.cpp:22-26,363-366](Offense2026/src/TrajectoryExecutor.cpp#L22-L26) (kS 0.119, **kV 5.35 V·s/rad**, kA 0.17 — marked `TODO: replace with bench-characterised values` — and `readBatteryVoltage()` hardcoded `return 12.0f`).
-- **Problem:** probe run on the actual Pi sources: `wheelProjVMax(0)=3.65 m/s, wheelProjVMax(90°)=5.21 m/s` while `kVMaxX/kVMaxY = 0.8/0.6 m/s` coexist in the same config and are used by *different* code paths (A*/profiler use the 5.2 m/s motor model; defense intercept clamps and the body-chase fallback use 0.8). The [NPA] kV=5.35 implies a max wheel speed of ~2.2 rad/s ≈ 0.06 m/s — every realistic command rails into the proportional-scaling clamp.
-- **Robot behavior:** A* travel-time costs and strike intercept times are ~5–7× optimistic → intercept poses aim where the ball *was*; the Teensy saturates voltage on essentially every action; [LC]'s independent per-wheel clamping additionally distorts the direction of travel under saturation (the docs' "Proportional Voltage Safeguard" is implemented only on [NPA]).
-- **Evidence:** probe output above; four distinct wheel-angle/motor-constant sets across docs/Pi/[LC]/[NPA] (the wheel *angles* do reconcile as a 90° re-parameterization; the electrical constants do not).
-- **Verify:** bench-characterize kS/kV/kA once; assert the same numbers in both repos (ideally a shared generated header).
-
-### C9. A* assigns heading bins with the wrong angle convention and forces heading = travel direction (verified)
-- **Subsystem:** BallAlgo motion planning
-- **Files:** [BallAlgo/src/motion/AStar3D.cpp:145-160](BallAlgo/src/motion/AStar3D.cpp#L145-L160)
-- **Problem:** the travel-direction velocity ceiling uses `phiTravelSpec = atan2(dx, dy)` (0°=+y convention, consistent with the rest of the system), but the **neighbor's heading bin** is computed two lines later from `headingBinFromRadians(std::atan2(dyw, dxw))` — the math convention (0°=+x). The two disagree by 90° + mirror. Additionally, translation moves *force* the neighbor heading to the travel direction (a holonomic robot should be able to translate while holding heading; only the explicit turn-in-place moves change heading in a controlled way).
-- **Robot behavior / evidence (probe):** a straight +x request, start and goal heading both 90°, produces: `(900,1200,θ90) → θ45 → θ0 → …14 cells at θ0… → θ45 → θ90`. The robot is commanded to rotate from 90°→0°, hold the *wrong* heading the whole way (the theta spline then generates real ω commands to do this), and rotate back at the end. Path cost = 0.366 s for 0.6 m (also reflecting C8's inflated speeds). Every planned path pays two parasitic rotation sequences, the asymmetric speed ceiling is evaluated at headings 90° off, and the goal heading the strike pose carefully computed is violated until the final cells.
-- **Verify:** the probe (`plan(910,1215,bin2 → 1510,1215,bin2)`) reproduces it in isolation.
-
-### C10. Pi body→field and Teensy field→body rotations are not inverses of each other
-- **Subsystem:** cross-repo frame conventions
-- **Files:** Pi body→field: [BallAlgo/src/vision/VisionMath.cpp:35-42](BallAlgo/src/vision/VisionMath.cpp#L35-L42), [BallAlgo/src/motion/StrikePose.cpp:19-24](BallAlgo/src/motion/StrikePose.cpp#L19-L24) (both `[c −s; s c]`); Teensy field→local: [Offense2026/src/TrajectoryExecutor.cpp:291-299](Offense2026/src/TrajectoryExecutor.cpp#L291-L299) (also `[c −s; s c]`, [LC] has no rotation at all — see C7).
-- **Problem:** if `field = R·body` on the Pi, the Teensy must apply `Rᵀ` to go back. Both sides apply the *same* matrix. The Pi is internally self-consistent (its `updateGoalBearing`/`fieldToBodyOffsetMm` correctly use the transpose), so this is specifically a **Pi-plans-vs-Teensy-executes** mismatch: for heading θ, the executed velocity direction is mirrored ~2θ away from the planned one. At θ≈0 (likely most bench tests) the error vanishes, which would mask it.
-  - Related unresolved sign question: the BNO055 heading is clockwise-positive (compass), `getOmegaRadS()` is explicitly negated to CW-positive [NPA], the docs' Step-1 matrix is `[c s; −s c]` ("non-standard convention"), and `PoseKalman::bodyVelToWorld`'s comment ("heading 0=+y, 90=+x, clockwise") does not match its own CCW matrix. Since ball/goal angles and LiDAR pose are hardware-validated, the residual risk concentrates here: mouse-velocity fusion, goal-bearing innovation sign, and chunk execution direction.
-- **Verify (one decisive test):** command a pure +x field velocity chunk while the robot is physically rotated to +90°, observe actual travel direction; and feed a synthetic 1 kHz mouse velocity into `predictMouse` at heading 90° and check the EKF velocity sign.
+- **Status:** **STILL OPEN — cannot be fixed in code without hardware measurement.** Updated facts on FinalDraft1:
+  - Pi: 12 V bus, kS 0.5, kV 0.08, kA 0.02 ([config.hpp:87-89](BallAlgo/src/config.hpp#L87-L89)); `kVMaxX/kVMaxY = 0.8/0.6 m/s` ([config.hpp:151-152](BallAlgo/src/config.hpp#L151-L152)) coexist with a `wheelProjVMax` motor model that implies ~3.6–5.2 m/s — these two speed ceilings are used by different code paths and disagree by ~6×.
+  - Teensy: kS 0.119, **kV 5.35 V·s/rad**, kA 0.17 ([TrajectoryExecutor.cpp:24-26](Offense2026/src/TrajectoryExecutor.cpp#L24-L26)). `kV 5.35` is ~67× the Pi's `kV 0.08`. (Note: `readBatteryVoltage()` now reads the real ADC — the hardcoded-12V sub-issue is fixed.)
+- **Why not auto-fixed:** the correct constants are physical properties of the drivetrain (kS/kV/kA, true vMax). Picking numbers without a bench characterization would just replace one wrong set with another. **Action required:** bench-characterize kS/kV/kA and vMax once, then assert the *same* values on both sides (ideally a single shared generated header), and make the Pi's planner ceiling (`wheelProjVMax`) and `kVMaxX/Y` consistent with each other.
 
 ---
 

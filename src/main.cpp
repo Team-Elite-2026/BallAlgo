@@ -36,14 +36,6 @@ namespace {
 
 constexpr double kDebugReportPeriodS = 1.0;
 
-static std::string formatPerception(int ballAng, int ballDist, int blue, int yellow, int lx,
-                                    int ly, int bvx, int bvy) {
-  std::ostringstream ss;
-  ss << ballAng << 'b' << ballDist << 'a' << blue << 'c' << yellow << 'd' << lx << 'e' << ly
-     << 'f' << bvx << 'g' << bvy << 'i';
-  return ss.str();
-}
-
 static int fieldMmToCenteredCm(float positionMm, float axisLimitMm) {
   return static_cast<int>(std::lround((positionMm - 0.5f * axisLimitMm) * 0.1f));
 }
@@ -437,14 +429,6 @@ int main(int argc, char** argv) {
     const CommandedPoseGoal* commandedGoal =
         options.commandGoalEnabled ? &options.commandGoal : nullptr;
 
-    if (serial.isOpen() && config::kEnableLegacyAsciiPerception) {
-      auto ascii = formatPerception(static_cast<int>(ball.angleDeg),
-                                    static_cast<int>(ball.distCal),
-                                    static_cast<int>(goals.blueAngle),
-                                    static_cast<int>(goals.yellowAngle), lx, ly, ball.ballVxPx,
-                                    ball.ballVyPx);
-      serial.writeAscii(ascii);
-    }
     if (options.trajectoryReplayEnabled) {
       trajectoryReplayRunner.updateAndPublish(serial, nowUs);
     } else {
