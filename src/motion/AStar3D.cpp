@@ -147,7 +147,7 @@ bool AStar3D::plan(float sx, float sy, int stheta, float gx, float gy, int gthet
                                                      static_cast<float>(hBins_));
       const float vlim = motion::wheelProjVMax(phiTravelSpec + thetaA);
 
-      int nit = headingBinFromRadians(std::atan2(dyw, dxw), hBins_);
+      int nit = it;  // holonomic: heading is independent of travel direction
 
       // Curve penalty: change in travel direction from the incoming move.
       float curveCost = 0.f;
