@@ -106,3 +106,349 @@ FoxgloveTelemetryPublisher → foxglove_sim/sidecar.py (optional live debug)
 python3 foxglove_sim/sidecar.py          # on Pi
 python3 foxglove_sim/fake/run_demo.py    # local demo without hardware
 ```
+
+---
+---
+
+# DEEP REFERENCE — Architecture, Math, Communication, Sensors
+
+> Audience: AI agents and humans who need to modify this system safely. This
+> section is written to be self-contained. Read the relevant subsection before
+> touching code. For the running list of *known bugs*, see
+> [`BallAlgo/CODE_REVIEW_FINDINGS.md`](../../CODE_REVIEW_FINDINGS.md) — do not
+> duplicate that content here; this file documents how the system is *meant* to
+> work.
+
+## 0. What this robot is and the one-paragraph mental model
+
+This is a **RoboCup Junior Soccer (Open League)** robot. Two robots per team play
+autonomous soccer with an orange ball on a ~182 cm × 243 cm field with a blue
+goal on one short wall and a yellow goal on the other. Each robot is a **two-brain
+system**: a **Raspberry Pi CM5 (BallAlgo)** is the "cortex" — it does all vision,
+LiDAR localization, state estimation, strategy, and motion *planning* — and a
+**Teensy 4.1 (Offense2026)** is the "cerebellum/spinal cord" — it owns the motors
+and real-time sensors and *executes* the plans. The Pi computes **where to be and
+how to get there** and streams time-stamped velocity/acceleration "action chunks"
+over UART; the Teensy rotates them into the body frame and drives the wheels.
+
+**Canonical branches (June 2026):** Pi = whatever is checked out in `BallAlgo/`;
+Teensy = **`FinalDraft1`** in `Offense2026/`. The older `lineControl` /
+`NewPathAlgoTest` branches the code review referenced are obsolete.
+
+**Recent architecture decisions (this is the current intent — honor it):**
+- **The Pi plans BOTH offense and defense.** It arbitrates role and emits the
+  appropriate action chunks. The Teensy is **role-agnostic**: it executes whatever
+  chunks arrive. Switching a robot's role mid-match is a pure Pi-side decision.
+- The legacy Teensy-side **orbit/dampen ball-chase and the `Cam` ASCII parser were
+  removed.** The camera and all vision math live **only on the Pi**.
+- The Pi→Teensy link is a **single binary framed protocol**; the legacy ASCII
+  perception path was removed. Exactly one object drains the Pi UART on the Teensy
+  (`TrajectoryExecutor::processSerial`).
+
+---
+
+## 1. Coordinate frames & conventions (READ FIRST — most bugs live here)
+
+Every motion/vision bug in this codebase traces back to a frame or sign mistake.
+Internalize these before editing anything spatial.
+
+- **Heading/angle convention is NON-STANDARD:** `0° = +y = robot forward`,
+  `90° = +x = robot right`, increasing **clockwise**. This is *not* the math
+  `atan2(y,x)` convention. Almost everywhere the code uses `atan2(x, y)` (note the
+  argument order) to honor this.
+- **Body frame:** origin at the robot, `+y` forward (out the intake), `+x` right.
+  Vision angles/distances and mouse velocity are produced here.
+- **Field frame:** origin at field center, axes fixed to the field. LiDAR pose,
+  goal constants, and A*/spline planning live here.
+- **Body→Field rotation** (used by `ballFieldMm`, `bodyVelToWorld`,
+  `bodyToFieldOffsetMm`):
+  `[fx;fy] = [c −s; s c]·[bx;by]`, `c=cos(h), s=sin(h)`.
+- **Field→Body rotation** (the transpose, used by `fieldToBodyOffsetMm`,
+  `fieldVelToBody`, and the Teensy chunk executor):
+  `[bx;by] = [c s; −s c]·[fx;fy]`.
+  **Invariant:** the Teensy MUST apply the transpose of what the Pi applied. (This
+  was a real bug — see C10 in the findings file — now fixed in
+  `TrajectoryExecutor::execute`.)
+- **Units:** Pi planning/pose is in **mm** and **mm/s**; ball KF internal state is
+  **m / m/s**; chunk action velocities on the wire are **m/s**; the Teensy motor
+  model works in **rad/s** (wheel) and **volts**. Conversions happen at the
+  boundaries — `config::kBallDistToM`, `×1000` in the chunk publisher, `/r_wheel`
+  in the executor. Mismatching these is a recurring class of bug (see M1).
+- **IMU heading is the absolute authority.** The EKF never estimates θ; it takes
+  the Teensy's BNO055 heading as ground truth and only fuses x/y.
+
+---
+
+## 2. Hardware & sensors — what each one is and how it is used
+
+| Sensor / actuator | Board | Driver file | How it is used |
+|---|---|---|---|
+| **Camera** (CSI) | Pi | `camera/CameraCapture.cpp` | libcamera capture → HSV threshold → blob/sector tracking → ball & goal **angles** (and ball distance via pixel calibration). |
+| **LD19 LiDAR** | Pi | `lidar/Ld19Reader.cpp`, `LidarDeskewer.cpp`, `LidarLocalizer.cpp` | 230400-baud scan → motion-deskew → wall/line fit → absolute field **(x,y)** pose. Read `docs/LD19.md` before touching. |
+| **BNO055 IMU** | Teensy | `CompassSensor.cpp` (on `Wire2`, addr 0x28) | Absolute heading (`getOrientation`, **int degrees**) + yaw rate (`getOmegaRadS`, rad/s, **negated to CW-positive**). Heading is sent to the Pi as the authoritative θ. |
+| **Optical-flow "mouse"** | LinePCB → Teensy | `LinePCBComm.cpp` | Body-frame velocity `vx,vy` (m/s). Forwarded to the Pi as telemetry for the EKF dead-reckoning predict step. |
+| **Line sensors** | LinePCB → Teensy | `LinePCBComm.cpp`, `LineDetection.cpp` | Field boundary detection → line angle + avoidance angle + chord length + cross-line flag. **Top-priority safety override** in the Teensy loop. |
+| **Light gate** | Teensy | `Switches.cpp` | Beam-break ball-in-intake detection → `hasBall` flag in telemetry. |
+| **Mode switches + LCD** | Teensy | `Switches.cpp`, `LcdController.cpp` (Serial8) | Start/stop, goal-color selection, role override, calibration triggers. Relayed to the Pi via telemetry (`startEnabled`, `goalIsBlue`, `modeOverride`). |
+| **4 drive motors** | Teensy | `Motor.cpp`, `Movement.cpp`, `TrajectoryExecutor.cpp` | Holonomic layout, wheel axes at ≈ ±35° / ±145° from forward (`kWheelAngle*` / `ALPHA_WHEEL`). |
+| **Kicker solenoid + dribbler** | Teensy | `Movement.cpp` | `kick()`/`kickBackground()`, `setDribbler()`. (Pi-driven kick/dribble fields are currently padding — see H6.) |
+
+**Inter-board buses (Teensy `main.cpp`):**
+- `Serial3` @ 2 Mbaud — **Pi ↔ Teensy** (binary framed protocol; the ONE link that matters for planning).
+- `Serial2` @ 1 Mbaud — **LinePCB ↔ Teensy** (line sensors + mouse odometry, `0xA5`-framed binary).
+- `Serial8` — **LCD** controller.
+- `Wire2` — BNO055 IMU.
+
+---
+
+## 3. The Pi control loop (`BallAlgo/src/main.cpp`)
+
+Single-threaded, camera-frame-paced (target ~120 fps). One iteration:
+
+```
+1.  grab() camera frame                       (on failure: continue — skips everything, see M8)
+2.  BGR→HSV, inRange(ball/yellow/blue), ROI mask, morphology
+3.  SectorTracker.trackBall / trackGoals      → ball.angleDeg/distCal, goals.{blue,yellow}Angle+certainty
+4.  serial.pollOdometry(odo)                  → heading, mouse v, omega, hasBall, switches, modeOverride
+5.  motion.predictStep(odo, dt)               → EKF predict (mouse+IMU dead-reckon) + deskewer motion sample
+6.  motion.updateLidar(window, heading)       → LiDAR map-snap of (x,y)         [#ifdef BALLALGO_ENABLE_LIDAR]
+7.  motion.updateGoalBearings(obs, heading)   → bearing-only EKF correction of lateral drift
+8.  motion.updateBall(angle, dist, found, dt) → ball KF (body frame)
+9.  teamLink.poll / teamBallFilter            → fuse own + teammate ball; RoleArbiter picks offense/defense
+10. actionChunkPublisher.publish(...)         → plan + send action chunk (or trajectoryReplayRunner)
+11. foxglove.publish(telemetry)               → live debug snapshot (optional)
+12. rate-limited [DBG] stderr line            (every kDebugReportPeriodS = 1 s)
+```
+
+The orchestration object is `MotionPipeline motion` (`motion/MotionPipeline.cpp`),
+which owns the two Kalman filters, the deskewer, and the LiDAR localizer and
+exposes `predictStep / updateLidar / updateGoalBearings / updateBall / poseState`.
+
+---
+
+## 4. State estimation math
+
+### 4a. Robot pose EKF — `estimation/PoseKalman.cpp`
+- State `x = [x, y, vx, vy]` in **field mm / mm·s⁻¹**. θ is **not** estimated (IMU is authority).
+- **Predict (`predict`)**: constant-velocity F, additive process noise `kPoseKfProcessPosVar/VelVar`.
+- **Mouse predict-update (`predictMouse`)**: DWNA constant-velocity propagation, then a measurement update where the body-frame mouse velocity is rotated to world (`bodyVelToWorld`) and observed as `[vx,vy]`. The time-varying IMU rotation is what makes the filter an **EKF** rather than linear.
+- **LiDAR update (`update`)**: direct `[x,y]` measurement snap with `kPoseKfMeasPosVar`. **Only this call sets `init_` and resets the staleness clock** — important consequence in H8 (no LiDAR ⇒ pose never validates).
+- **Goal-bearing update (`updateGoalBearing`)**: bearing-only EKF update. Predicted bearing `h = atan2(bx,by)` with the field displacement rotated into body frame; innovation wrapped to (−π,π]; analytic Jacobian `H = [−dy/r², dx/r², 0, 0]`; occlusion-scaled variance `R = base + penalty·(1−certainty)²`.
+- Validity gated by `kPoseMaxStaleS`.
+
+### 4b. Ball KF — `estimation/BallKalman.cpp`
+- State `x = [x, y, vx, vy]` in **body-frame m / m·s⁻¹** (note: spec wanted field frame — see H3).
+- CV model with **viscous friction**: velocity decays `γ^(dt/dt_cam)` per step (`kBallKfFrictionGamma`, dt-normalized so it's frame-rate independent).
+- Camera supplies only `[x,y]` (from `polarToBodyXY(angle, dist)`); high velocity-init variance because velocity is unobserved.
+- Validity gated by `kBallMaxStaleS`.
+
+### 4c. Team ball filter / role — `team/`
+- `TeamBallFilter` fuses this robot's ball observation with the teammate's (received over Bluetooth) into a single field-frame ball estimate.
+- `RoleArbiter` chooses Offense/Defense from `modeOverride` (LCD), ball freshness, and relative ball distance vs the peer; emits the role the chunk publisher plans for.
+
+---
+
+## 5. Vision pipeline (`vision/`, `camera/`)
+
+- `CameraCapture` opens libcamera, negotiates a viewfinder mode, and returns BGR frames. (FPS is *not* pinned — see M15.)
+- Per frame: `BGR→HSV`, three `inRange` masks (ball / yellow goal / blue goal) from `thresholds.json`, optional elliptical ROI mask, optional morphology (close+dilate ball, open+close goals).
+- `SectorTracker` (`vision/SectorTracker.cpp`) finds the ball/goal blobs and converts to **angle** (`atan2(midx, midy)` honoring the 0°=+y convention) and a pixel-calibrated **distance** (`VisionMath::calibrateBallDist`, a power-law). Goal "certainty" ≈ visible blob-area ratio, feeding the bearing-EKF variance.
+- **Calibration coupling caution:** channel swaps in `CameraCapture` and the hue
+  bands in `thresholds.json` are internally self-consistent but *look* swapped
+  (ball hue sits in a blue-ish band). Do not "fix" one without the other (M21).
+
+---
+
+## 6. LiDAR localization (`lidar/`) — see `docs/LD19.md`
+
+- `Ld19Reader` parses LD19 frames (CRC-checked, hardware-timestamped) into points.
+- `LidarDeskewer` un-smears a scan using the robot's motion during the sweep
+  (mouse velocity + yaw rate buffered via `addMotionSample`).
+- `LidarLocalizer` fits the field walls/lines to recover absolute `(x,y)` (then
+  EMA/step-clamp smoothing). The result is fed to `PoseKalman::update`.
+- Built behind `BALLALGO_ENABLE_LIDAR`. **If disabled, pose never validates** and
+  the planner degrades to body-chase (H8) — this is a deliberate flag, not a bug,
+  but know the consequence.
+
+---
+
+## 7. Motion planning (`motion/`) — the heart of the Pi
+
+Pipeline (spec: `docs/pipeline_context.md`, which has the full LaTeX derivations):
+
+```
+ActionChunkPublisher.publish
+  └─ computeStartState   (Step 2: look-ahead — roll executing chunk to now+latency, blend with EKF)
+  └─ MotionPlanner.debugPlan / debugPlanDefense / debugPlanToPose
+        ├─ Strike/Defense pose      (OffensePose.cpp / DefensePose.cpp / StrikePose.cpp)
+        ├─ AStar3D                  (Step 3: 3D kinematic A* over (x, y, θ-bin))
+        ├─ HermiteSpline.buildData  (Step 4a: smooth the discrete waypoints)
+        └─ VelocityProfile          (Step 4b: asymmetric S-curve, motor+traction limited)
+  └─ packActionChunk → RobotSerial.write
+```
+
+Key ideas and the math:
+- **Look-ahead (Step 2, `computeStartState`):** plan from where the robot *will be*
+  after plan+serialize latency `kPipelineLatencyUs`, not where it is now. Blend the
+  chunk's predicted future state with the live EKF using
+  `α = exp(−(e/σ_track)²)` where `e` is the tracking error. (Acceleration blend is
+  not yet implemented — M3; `kPipelineLatencyUs` is a guess that should be measured.)
+- **Strike pose (offense):** iterate ball-intercept time, place the target a
+  `kOffenseIntakeOffsetMm` behind the predicted ball along the ball→goal line, heading toward the goal.
+- **Defense pose:** solve the keeper's blocking point on the goal-line/arc geometry
+  and a pacing velocity along the goal line (full derivation in the spec).
+- **A\* (`AStar3D`):** nodes are `(x, y, θ-bin)` on a `kAstarCellMm` grid with
+  `kAstarHeadingBins` heading slices. Cost = time, using a **direction-dependent
+  speed ceiling** `wheelProjVMax(φ_local)` (the most-loaded wheel limits chassis
+  speed). Heading is **independent of travel direction** (holonomic) — translation
+  steps keep the heading bin; only explicit turn moves change it. (This was a real
+  bug — C9 — now fixed.)
+- **Velocity ceiling model (`motion/MotionLimits.hpp`):** `wheelProjVMax(φ)`
+  projects chassis velocity onto each wheel axis and returns
+  `min_i(maxWheelVel / |cos(α_i − φ)|)`; `vMaxDir`/`aMaxDir` give the elliptical
+  `kVMaxX/Y`, `kAMaxX/Y` ceilings. ⚠️ These two ceilings **disagree by ~6×** and
+  are used by different code paths — see C8; this needs a bench characterization.
+- **S-curve profile (`VelocityProfile`):** forward/backward integration over the
+  spline giving jerk-limited `ṡ(s)`, then sliced into `GlobalAction`s at
+  `kChunkDtMs` spacing.
+
+---
+
+## 8. Communication protocols
+
+### 8a. Pi ↔ Teensy binary framing (the critical link)
+Frame: `magic(4) | type(1) | len(2, LE) | payload(len) | CRC32(4)`.
+Magic = `0xCEFAEDFE` (Pi `kProtocolMagic`) = bytes `FE ED FA CE` (Teensy
+`PKT_MAGIC_BYTES`). Message types:
+
+| Type | Name | Dir | Payload |
+|---|---|---|---|
+| `0x01` | Ping | Teensy→Pi | `t0` (clock sync) |
+| `0x02` | Pong | Pi→Teensy | `t0_echo, t1_pi` |
+| `0x03` | ActionChunk | Pi→Teensy | trajectory_id, start_time_pi, dt_ms, num_actions, GlobalAction[] |
+| `0x04` | Telemetry | Teensy→Pi | `TeensyTelemetryPayload` (**24 B, `static_assert`'d byte-identical both sides**) |
+
+- **Telemetry** (`TrajectoryExecutor::sendTelemetry` ↔ `Protocol::parseTeensyTelemetry` ↔ `RobotSerial::handleFrame`): heading, mouse vx/vy, omega, hasBall, startEnabled, goalIsBlue, modeOverride, serialLatencyUs. This is how the LCD/switch state reaches the Pi's planner and role arbiter.
+- **Clock sync (`ClockSync` / `handleClockPong`):** NTP-style. `latency=(t1−t0)/2`, `clock_offset = t1_pi − t0 − latency`. Chunks are stamped in **Pi time**; the Teensy maps `t_start_teensy = start_time_pi − clock_offset` to schedule execution.
+- **Freshness/safety:** chunks are time-indexed; if the index runs past the chunk a **20 ms grace hold** applies, then `emergencyBrake()`. Stale `trajectory_id`s are dropped (note the restart-lockout caveat H4).
+
+### 8b. LinePCB ↔ Teensy (`LinePCBComm`)
+`0xA5 | type | len(2) | payload | xor-checksum`. Carries line angle, avoidance
+angle, mouse vx/vy, chord length, cross-line flag (`LinePCBDataPkt`, 24 B).
+
+### 8c. Robot ↔ Robot Bluetooth (`team/TeamLink`, `TeamProto`)
+RFCOMM link sharing `TeamState` (pose, ball, role claim) at ~30 Hz for team
+coordination. Per-robot `kRobotId` / `kPeerBtAddress` must differ (see C6 caveats).
+
+### 8d. Foxglove (debug only — see §11).
+
+---
+
+## 9. Teensy execution (`Offense2026/src/TrajectoryExecutor.cpp`)
+
+`execute()` per loop:
+1. Hot-swap the queued chunk when its scheduled start time arrives.
+2. Time-index into the active chunk (`elapsed/dt_ms`); grace-hold / brake at the end.
+3. Read IMU heading, mouse vx/vy, yaw rate.
+4. **Global→body rotation** of the chunk's `vx/vy/ax/ay` using the transpose matrix (§1).
+5. **Coriolis feedforward** (`a − ω×v` terms).
+6. **Velocity P-loop** (`Kp_x/y/omega`) on the rotation-corrected targets.
+7. `executeAsymmetricDrive`: project chassis `(v, a)` onto each wheel, apply the
+   motor feedforward `V = kS·soft_sign(ω) + kV·ω + kA·α`, then a **proportional
+   voltage safeguard** (scale all four wheels if any exceeds `v_bus`) to preserve
+   direction under battery sag. `readBatteryVoltage()` reads the real ADC.
+
+The Teensy `loop()` (`main.cpp`) is now role-agnostic: update sensors → relay LCD
+match state → `runRobot()` (drain Pi link, line-avoidance override, execute chunks,
+LCD telemetry).
+
+---
+
+## 10. Important globals, objects & functions (where to look)
+
+**Pi (`BallAlgo/src/`):**
+- `main.cpp` — the loop and all wiring; `MotionPipeline motion`, `ActionChunkPublisher`, `TeamLink`, `RoleArbiter`, `CameraCapture`, `Ld19Reader`, `RobotSerial`, `FoxgloveTelemetryPublisher`.
+- `config.hpp` — **all tunables** (field dims, motor model, vmax/amax, KF variances, chunk timing, team config, feature flags `kEnable*`). Change constants here, not inline.
+- `vision/VisionMath.cpp` — `polarToBodyXY`, `ballFieldMm`, `bodyToFieldOffsetMm`/`fieldToBodyOffsetMm`, `fieldVelToBody` (the frame primitives — used everywhere).
+- `motion/Protocol.cpp` — wire format (`packActionChunk`, `parseTeensyTelemetry`, `unpackFrames`).
+
+**Teensy (`Offense2026/src/`):**
+- `main.cpp` — `runRobot()` + `loop()`; the global objects (`movement`, `trajectoryExecutor`, `linePCBComm`, `lcdController`, `compassSensor`).
+- `TrajectoryExecutor.*` — chunk parsing/execution, telemetry, clock sync, asymmetric drive.
+- `Movement.cpp` — line-avoidance drive, heading PID (`findCorrectionRelZero/Offset`), `kick`/`dribbler`. `Motor.cpp` — PWM driver.
+- `CompassSensor.cpp`, `Switches.cpp`, `LcdController.cpp`, `LinePCBComm.cpp` — sensor/IO drivers.
+
+---
+
+## 11. What is debugging vs production
+
+**Debugging / non-competition (safe to disable, do not depend on in matches):**
+- **Foxglove** (`foxglove_sim/`, `FoxgloveTelemetryPublisher`, `streamCamera/streamLidar`) — live visualization; JPEG-encodes frames (cost!).
+- **`[DBG]` stderr lines** in `main.cpp` (rate-limited to 1 s).
+- **`Serial.println` in the Teensy** — diagnostic only; heavy use throttles the loop (M18). Trim in hot paths.
+- **`tools/`** Python — `hsv_picker.py`, `lidar_visual.py`, bench scripts.
+- **Trajectory replay** (`TrajectoryReplayRunner`, `--trajectory-replay-artifact`) and **`--command-goal`** — test harnesses that bypass live strategy.
+- **Feature flags** `kEnableMouseFusion`, `kEnableGoalBearingFusion`, `kEnableActionChunks`, `kEnableSerial`, `BALLALGO_ENABLE_LIDAR`, `BALLALGO_ENABLE_BLUETOOTH`.
+
+**Production (match-critical):** the camera/LiDAR/EKF/planner/chunk path on the Pi;
+the chunk-execute + line-avoidance + telemetry path on the Teensy; the binary
+serial protocol and clock sync.
+
+---
+
+## 12. Invariants a future editor MUST preserve
+
+1. **Frames must round-trip.** If you change a rotation on one side, change the
+   transpose on the other (`bodyToField` ↔ Teensy `field→body`).
+2. **Wire structs are contracts.** Any change to `ActionChunk` /
+   `TeensyTelemetryPayload` must be mirrored byte-for-byte on both repos and keep
+   the `static_assert`. Telemetry has one; the chunk format does **not** yet (see §13).
+3. **One reader per UART.** Never add a second consumer of `Serial3` on the Teensy.
+4. **The IMU is the only source of θ.** Don't add a competing heading estimate.
+5. **The Pi plans; the Teensy executes.** Don't add strategy/planning to the Teensy.
+6. **Tunables live in `config.hpp`** (Pi) and the `TrajectoryExecutor`/`Movement`
+   constants (Teensy) — keep the motor model numbers in sync (C8).
+
+---
+
+## 13. Issues found during this documentation pass (NOT already in CODE_REVIEW_FINDINGS.md)
+
+These were noticed while writing this doc; verify and, if confirmed, add to the
+findings file. Confidence noted per item.
+
+- **N1 — Redundant BNO055 I²C polling per loop (latency + intra-loop heading skew). [High confidence]**
+  `CompassSensor::getOrientation()` and `getOmegaRadS()` each issue a fresh
+  `bno.getEvent(...)` I²C transaction, and they are called multiple times per
+  control loop from different places (`loop()` → `setRobotHeadingDegrees`;
+  `processSerial → sendTelemetry`; `execute()`; etc.). That's ~3–5 I²C reads per
+  iteration. Two harms: (a) several ms of I²C latency added to every loop —
+  directly relevant to trajectory timing/quantization; (b) the heading used for
+  chunk rotation, telemetry, and line-PID are sampled at *different instants*, so
+  they disagree slightly within one iteration. **Fix:** read heading + omega once
+  at the top of `loop()`, cache, and have everyone use the cached values.
+
+- **N2 — LiDAR deskewer is fed mouse velocity even when it is stale. [Medium confidence]**
+  `MotionPipeline::predictStep` always calls `deskewer_.addMotionSample(..., odo.mouseVxBodyMmS, odo.mouseVyBodyMmS, odo.omegaRadS)` regardless of `odo.mouseFresh`. When the mouse telemetry is stale, the EKF correctly falls back to a plain `predict()`, but the **deskewer still ingests the stale/zero velocity**, so scans get de-smeared with the wrong motion during telemetry dropouts. **Fix:** gate the motion sample on `odo.mouseFresh`, or pass the EKF's own velocity estimate.
+
+- **N3 — ActionChunk wire format has no layout/version guard (unlike telemetry). [Medium confidence]**
+  Telemetry is protected by a byte-identical `static_assert` on both sides. The
+  **highest-rate, most safety-critical** message — the action chunk — is hand-packed
+  on the Pi (`packActionChunk`) and `memcpy`'d into the Teensy `ActionChunk` struct
+  with only a `pkt_len >= 32` sanity check. Any field-order/padding/size drift between
+  the repos silently corrupts motion commands. (H6 found one concrete instance — the
+  kick/dribbler bytes — but the underlying *absence of a structural guard* is the
+  broader risk.) **Fix:** define a shared packed `GlobalAction`/chunk-header layout
+  with a `static_assert` and a `schemaVersion`/expected-size byte checked on receipt.
+
+- **N4 — Look-ahead blend can self-defeat because the chunk start is stamped in the future. [Low–medium confidence; refines M3]**
+  `recordChunk` stores the chunk's start pose as the *look-ahead* pose and stamps
+  `startTimePi = now + latency`. On the next iteration `predictChunkState(nowPi)`
+  sees `nowPi < startTimePi`, returns `tElapsed = 0`, and yields the future start
+  pose; the tracking error `e = |EKF_now − future_start|` is then systematically
+  inflated, pushing `α→0` so the planner largely ignores the chunk prediction it
+  was supposed to blend with. Worth instrumenting `α` to confirm. **Fix:** compare
+  the EKF against the chunk state evaluated at a matching timestamp.
+
+- **N5 — `runRobot()` line-avoidance still commands a heading hold. [Low confidence / behavioral]**
+  During a line event the Teensy calls `movement.movement(avoidanceAngle, lineAvoidanceSpeed, 0, false)`, which (via `findCorrectionRelZero(0)`) simultaneously tries to rotate the robot back to the *zeroed* heading while escaping the line. That heading correction can fight the escape translation. Confirm this is intended; if not, pass the current heading as the target so it translates straight off the line.
+
