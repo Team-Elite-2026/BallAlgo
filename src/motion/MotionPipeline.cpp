@@ -14,10 +14,15 @@ void MotionPipeline::predictStep(const TeensyOdometry& odo, double dtS, uint64_t
   } else {
     poseKf_.predict(dtS);
   }
-  deskewer_.addMotionSample(timestampUs,
-                            odo.mouseVxBodyMmS,
-                            odo.mouseVyBodyMmS,
-                            odo.omegaRadS);
+  // Only ingest motion samples when telemetry is fresh. Stale odometry
+  // carries the wrong timestamp attribution; the deskewer's own extrapolation
+  // and kMaxMotionDataAgeS guard handle brief dropouts correctly.
+  if (odo.mouseFresh) {
+    deskewer_.addMotionSample(timestampUs,
+                              odo.mouseVxBodyMmS,
+                              odo.mouseVyBodyMmS,
+                              odo.omegaRadS);
+  }
 }
 
 PoseState MotionPipeline::updateLidar(const std::vector<LidarPoint>& pts, float headingDeg) {
