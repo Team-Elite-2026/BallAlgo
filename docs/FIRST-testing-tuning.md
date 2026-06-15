@@ -295,3 +295,154 @@ If Pi says sent, but Teensy never says queued, that is still a UART/wiring/port 
 7. `chunk_boundary_handoff`
 8. `num_actions_0_stop_chunk`
 
+## Feedforward Tuning
+
+The Pi profiler and Teensy executor now share the same baseline feedforward
+constants:
+
+- `kS = 0.119`
+- `kV = 0.139`
+- `kA = 0.00074`
+
+Current code locations:
+
+- Pi planner model: `src/config.hpp`
+- Teensy executor model: `../Offense2026/src/TrajectoryExecutor.cpp`
+
+These do not need to be mathematically perfect to get useful trajectory
+behavior. What matters most is that:
+
+- `kS` is in the right ballpark so the robot starts moving cleanly
+- `kV` is close enough that steady-state speed is not badly biased
+- `kA` is not wildly wrong during ramps, starts, and stops
+
+If these values are off by a little, the robot can still work. If they are off
+by a lot, the planner timing and executor tracking will disagree and you will
+see bigger velocity error in Foxglove.
+
+### How exact do these need to be?
+
+- `kS`: moderately important
+- `kV`: very important
+- `kA`: least important at first
+
+Practical priority:
+
+1. Get `kV` approximately right
+2. Get `kS` approximately right
+3. Fine-tune `kA` only after the first two are reasonable
+
+You do not need lab-grade identification before testing trajectories. For this
+robot, a good practical target is:
+
+- steady-state commanded vs measured velocity should be close and repeatable
+- the robot should not hesitate badly at low speed
+- starts and stops should not lag dramatically or snap violently
+
+### What to look at in Foxglove
+
+For tuning, focus on:
+
+- `/traj/target`
+- `/traj/error`
+- `/robot/twist`
+- `/robot/angular`
+
+Most useful comparisons:
+
+- target `vx/vy/omega` vs measured `vx/vy/omega`
+- body-frame velocity error over time
+- whether the sign and scale of the error stay consistent
+
+### Tune `kS`
+
+Best cases:
+
+- `forward_only`
+- `strafe_only`
+- `rotate_only`
+
+What `kS` affects:
+
+- breakaway from rest
+- very low-speed motion
+- initial hesitation or twitching
+
+Signs `kS` is too low:
+
+- robot hesitates before starting
+- very small commands do almost nothing
+- motion begins only after error builds up
+
+Signs `kS` is too high:
+
+- robot jumps or twitches when motion begins
+- low-speed motion feels too abrupt
+
+### Tune `kV`
+
+Best cases:
+
+- `forward_only`
+- `strafe_only`
+- `rotate_only`
+- `diagonal`
+
+What `kV` affects:
+
+- steady-state tracking
+- how much voltage is predicted for a given wheel speed
+- whether planned cruise speed matches actual cruise speed
+
+Signs `kV` is too low:
+
+- robot consistently runs slower than target at steady speed
+- `/traj/error` stays biased in the same direction during cruise
+
+Signs `kV` is too high:
+
+- robot consistently overspeeds at steady velocity
+- velocity error flips sign the other way during cruise
+
+### Tune `kA`
+
+Best cases:
+
+- `accelerate_then_stop`
+- `translate_while_rotating`
+- `chunk_boundary_handoff`
+
+What `kA` affects:
+
+- ramp-up and braking behavior
+- lag during acceleration changes
+- chunk transition smoothness
+
+Signs `kA` is too low:
+
+- robot feels sluggish on ramps
+- start and stop transitions lag noticeably
+- chunk transitions sag before recovering
+
+Signs `kA` is too high:
+
+- robot snaps too hard into motion
+- braking is too abrupt
+- overshoot grows during ramps or transitions
+
+### Suggested tuning order
+
+1. Start with `forward_only`
+2. Adjust `kV` until cruise speed looks reasonable
+3. Adjust `kS` until low-speed breakaway looks clean
+4. Repeat with `strafe_only` and `rotate_only`
+5. Validate with `diagonal`
+6. Adjust `kA` using `accelerate_then_stop`
+7. Validate transitions with `translate_while_rotating` and `chunk_boundary_handoff`
+
+### Important note about `kA`
+
+The current `kA = 0.00074` is a motor/gearbox-based starting point, not a final
+robot-level identified value. It is okay if this changes after replay testing.
+
+If you only have time to get one thing right first, make it `kV`.
