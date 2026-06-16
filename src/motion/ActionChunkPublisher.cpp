@@ -72,6 +72,42 @@ PlannerDebugSnapshot makeSnapshot(const DefensePlanDebug& debug) {
   return snapshot;
 }
 
+struct ActuatorCommand {
+  uint8_t kick = 0;
+  uint8_t dribblerPower = 0;
+};
+
+ActuatorCommand chooseActuatorCommand(const PoseState& pose, const BallState& ball,
+                                      float headingDeg, bool offenseActive, bool hasBall,
+                                      const FieldTarget* offenseGoalFieldTarget,
+                                      uint64_t nowPiUs, uint64_t& lastKickPiUs) {
+  ActuatorCommand command;
+  if (!offenseActive) return command;
+
+  const float ballDistanceMm = std::hypot(ball.xM, ball.yM) * 1000.f;
+  if (hasBall || (ball.visible && ballDistanceMm <= config::kDribblerCaptureDistMm)) {
+    command.dribblerPower = config::kDribblerActivePower;
+  }
+
+  if (!hasBall || !pose.valid || offenseGoalFieldTarget == nullptr) return command;
+  if (lastKickPiUs != 0 && nowPiUs - lastKickPiUs < config::kKickCooldownUs) return command;
+
+  float goalBodyXMm = 0.f;
+  float goalBodyYMm = 0.f;
+  fieldToBodyOffsetMm(offenseGoalFieldTarget->xMm - pose.xMm,
+                      offenseGoalFieldTarget->yMm - pose.yMm, headingDeg, goalBodyXMm,
+                      goalBodyYMm);
+  if (goalBodyYMm < config::kKickMinGoalForwardMm) return command;
+
+  const float goalAngleDeg =
+      std::atan2(goalBodyXMm, goalBodyYMm) * 180.f / static_cast<float>(M_PI);
+  if (std::fabs(goalAngleDeg) > config::kKickAimToleranceDeg) return command;
+
+  command.kick = 1u;
+  lastKickPiUs = nowPiUs;
+  return command;
+}
+
 }  // namespace
 
 ActionChunkPublisher::PredictedState ActionChunkPublisher::predictChunkState(
@@ -151,17 +187,21 @@ void ActionChunkPublisher::recordChunk(const PlannedChunk& chunk, const PoseStat
   lastChunk_.startXMm = startPose.xMm;
   lastChunk_.startYMm = startPose.yMm;
   lastChunk_.startHeadingDeg = headingDeg;
+  lastChunk_.kick = chunk.kick;
+  lastChunk_.dribblerPower = chunk.dribblerPower;
 }
 
 TrajectoryTargetSample ActionChunkPublisher::currentTargetSample(uint64_t queryPiUs,
                                                                  float headingDeg) const {
   if (!lastChunk_.valid) return {};
   return sampleTrajectoryTarget(lastChunk_.actions, latestDebug_.trajectoryId,
-                                lastChunk_.startTimePi, lastChunk_.dtMs, headingDeg, queryPiUs);
+                                lastChunk_.startTimePi, lastChunk_.dtMs, headingDeg, queryPiUs,
+                                lastChunk_.kick, lastChunk_.dribblerPower);
 }
 
 bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, const BallState& ball,
                                    float goalDeg, float headingDeg, bool offenseActive,
+                                   bool hasBall, const FieldTarget* offenseGoalFieldTarget,
                                    const DefenseFieldTarget* defendedGoal,
                                    const CommandedPoseGoal* commandedGoal) {
   if (!config::kEnableActionChunks ||
@@ -180,8 +220,9 @@ bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, c
 
   // Step 2: roll the executing trajectory forward to the look-ahead horizon and
   // blend with the live EKF state to obtain the planner start node.
+  const uint64_t nowPi = nowPiUs();
   uint64_t startTimePi = 0;
-  const PoseState startPose = computeStartState(pose, headingDeg, nowPiUs(), startTimePi);
+  const PoseState startPose = computeStartState(pose, headingDeg, nowPi, startTimePi);
 
   PlannedChunk chunk;
   if (commandedGoal != nullptr) {
@@ -193,7 +234,9 @@ bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, c
     latestDebug_ = makeSnapshot(debug);
     chunk = std::move(debug.chunk);
   } else {
-    auto debug = planner_.debugPlan(startPose, ball, goalDeg, headingDeg, startPose.valid);
+    auto debug =
+        planner_.debugPlan(startPose, ball, goalDeg, headingDeg, startPose.valid,
+                           offenseGoalFieldTarget);
     latestDebug_ = makeSnapshot(debug);
     chunk = std::move(debug.chunk);
   }
@@ -201,12 +244,17 @@ bool ActionChunkPublisher::publish(RobotSerial& serial, const PoseState& pose, c
   // predicted future state, not "now").
   chunk.startTimePi = startTimePi;
   latestDebug_.startTimePi = startTimePi;
+  const ActuatorCommand actuatorCommand =
+      chooseActuatorCommand(startPose, ball, headingDeg, offenseActive, hasBall,
+                            offenseGoalFieldTarget, nowPi, lastKickPiUs_);
+  chunk.kick = actuatorCommand.kick;
+  chunk.dribblerPower = actuatorCommand.dribblerPower;
 
   recordChunk(chunk, startPose, headingDeg);
 
   auto pkt = packActionChunk(chunk.trajectoryId, chunk.startTimePi, chunk.dtMs, chunk.actions,
                              static_cast<int>(chunk.actions.size()), pose.vxBody, pose.vyBody,
-                             pose.valid);
+                             pose.valid, chunk.kick, chunk.dribblerPower);
   return serial.write(pkt);
 }
 

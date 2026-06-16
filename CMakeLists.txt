@@ -118,4 +118,21 @@ target_include_directories(ballalgo_team_tests PRIVATE src)
 target_link_libraries(ballalgo_team_tests PRIVATE Eigen3::Eigen)
 target_compile_options(ballalgo_team_tests PRIVATE -O2 -Wall -Wextra)
 add_test(NAME ballalgo_team_tests COMMAND ballalgo_team_tests)
+
+add_executable(ballalgo_motion_tests
+  tests/MotionPoseTests.cpp
+)
+target_include_directories(ballalgo_motion_tests PRIVATE src)
+target_link_libraries(ballalgo_motion_tests PRIVATE ballalgo_motion_core Eigen3::Eigen)
+target_compile_options(ballalgo_motion_tests PRIVATE -O2 -Wall -Wextra)
+add_test(NAME ballalgo_motion_tests COMMAND ballalgo_motion_tests)
+
+add_executable(ballalgo_protocol_tests
+  tests/ProtocolTests.cpp
+  src/motion/Protocol.cpp
+)
+target_include_directories(ballalgo_protocol_tests PRIVATE src)
+target_link_libraries(ballalgo_protocol_tests PRIVATE Eigen3::Eigen)
+target_compile_options(ballalgo_protocol_tests PRIVATE -O2 -Wall -Wextra)
+add_test(NAME ballalgo_protocol_tests COMMAND ballalgo_protocol_tests)
 endif()

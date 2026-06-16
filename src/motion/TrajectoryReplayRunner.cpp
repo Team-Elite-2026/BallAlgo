@@ -158,7 +158,8 @@ bool TrajectoryReplayRunner::updateAndPublish(RobotSerial& serial, uint64_t nowP
                                nextChunk.chunk.dtMs, nextChunk.chunk.actions,
                                static_cast<int>(nextChunk.chunk.actions.size()),
                                artifact_.startPose.vxBody, artifact_.startPose.vyBody,
-                               artifact_.startPose.valid);
+                               artifact_.startPose.valid, nextChunk.chunk.kick,
+                               nextChunk.chunk.dribblerPower);
   if (!serial.write(frame)) {
     std::fprintf(stderr, "[REPLAY] serial write failed traj=%llu chunk_index=%zu\n",
                  static_cast<unsigned long long>(nextChunk.chunk.trajectoryId), nextChunkToSend_);

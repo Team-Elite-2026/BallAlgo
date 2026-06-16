@@ -32,7 +32,8 @@ struct PlannerDebugSnapshot {
 class ActionChunkPublisher {
  public:
   bool publish(RobotSerial& serial, const PoseState& pose, const BallState& ball, float goalDeg,
-               float headingDeg, bool offenseActive,
+               float headingDeg, bool offenseActive, bool hasBall,
+               const FieldTarget* offenseGoalFieldTarget = nullptr,
                const DefenseFieldTarget* defendedGoal = nullptr,
                const CommandedPoseGoal* commandedGoal = nullptr);
   const PlannerDebugSnapshot& latestDebugSnapshot() const { return latestDebug_; }
@@ -49,6 +50,8 @@ class ActionChunkPublisher {
     float startXMm = 0;
     float startYMm = 0;
     float startHeadingDeg = 0;
+    uint8_t kick = 0;
+    uint8_t dribblerPower = 0;
   };
 
   // Integrated global state predicted from the executing chunk at a query time.
@@ -71,6 +74,7 @@ class ActionChunkPublisher {
   ClockSync clock_;
   MotionPlanner planner_;
   double lastPublish_ = 0;
+  uint64_t lastKickPiUs_ = 0;
   PlannerDebugSnapshot latestDebug_;
   LastChunk lastChunk_;
 };

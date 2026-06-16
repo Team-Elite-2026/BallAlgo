@@ -95,6 +95,13 @@ static DefenseFieldTarget defendedGoalFromSelection(bool goalIsBlue) {
   return DefenseFieldTarget{config::kBlueGoalXMm, config::kBlueGoalYMm};
 }
 
+static FieldTarget attackGoalFromSelection(bool goalIsBlue) {
+  if (goalIsBlue) {
+    return FieldTarget{config::kBlueGoalXMm, config::kBlueGoalYMm};
+  }
+  return FieldTarget{config::kYellowGoalXMm, config::kYellowGoalYMm};
+}
+
 struct RuntimeOptions {
   bool commandGoalEnabled = false;
   CommandedPoseGoal commandGoal;
@@ -396,6 +403,7 @@ int main(int argc, char** argv) {
                                                    localBallDistanceCm, peerState);
     const bool offense = activeRole == TeamRole::Offense;
     const DefenseFieldTarget defendedGoal = defendedGoalFromSelection(odo.goalIsBlue);
+    const FieldTarget attackGoal = attackGoalFromSelection(odo.goalIsBlue);
 
     TeamState localTeamState;
     localTeamState.schemaVersion = 1;
@@ -433,6 +441,7 @@ int main(int argc, char** argv) {
       trajectoryReplayRunner.updateAndPublish(serial, nowUs);
     } else {
       actionChunkPublisher.publish(serial, pose, fusedBodyBall, goalDeg, headingDeg, offense,
+                                   odo.hasBall, offense ? &attackGoal : nullptr,
                                    offense ? nullptr : &defendedGoal, commandedGoal);
     }
 

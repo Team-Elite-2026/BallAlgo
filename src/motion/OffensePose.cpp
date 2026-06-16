@@ -55,7 +55,7 @@ bool poseOutsideSafeBox(float xMm, float yMm) {
 }
 
 float headingBetweenPointsDeg(float fromX, float fromY, float toX, float toY) {
-  return std::atan2(toY - fromY, toX - fromX) * 180.f / static_cast<float>(M_PI);
+  return std::atan2(toX - fromX, toY - fromY) * 180.f / static_cast<float>(M_PI);
 }
 
 float wrapAngleDeg(float angleDeg) {
@@ -88,18 +88,35 @@ bool ballInCornerBand(float ballXMm, float ballYMm) {
   return (nearLeft || nearRight) && (nearBottom || nearTop);
 }
 
-OffensePoseState classifyOffensePoseState(float ballFieldXMm, float ballFieldYMm) {
+bool attackRunsPositiveY(float goalFieldYMm) {
+  return goalFieldYMm >= config::kFieldHeightMm * 0.5f;
+}
+
+float enemyGoalLineYMm(bool attackPositiveY) {
+  return attackPositiveY ? config::kOffenseHighGoalLineYMm
+                         : config::kOffenseLowGoalLineYMm;
+}
+
+float ourGoalLineYMm(bool attackPositiveY) {
+  return attackPositiveY ? config::kOffenseLowGoalLineYMm
+                         : config::kOffenseHighGoalLineYMm;
+}
+
+OffensePoseState classifyOffensePoseState(float ballFieldXMm, float ballFieldYMm,
+                                          bool attackPositiveY) {
   if (ballInCornerBand(ballFieldXMm, ballFieldYMm)) {
     return OffensePoseState::CollectBallInCorner;
   }
-  if (ballAtOrBeyondBoundary(ballFieldXMm, ballFieldYMm)) {
-    return OffensePoseState::CollectBallAtBoundary;
-  }
-  if (ballFieldXMm >= config::kOffenseEnemyGoalLineXMm) {
+  if ((attackPositiveY && ballFieldYMm >= enemyGoalLineYMm(true)) ||
+      (!attackPositiveY && ballFieldYMm <= enemyGoalLineYMm(false))) {
     return OffensePoseState::CollectBallNearEnemyGoalLine;
   }
-  if (ballFieldXMm <= config::kOffenseOurGoalLineXMm) {
+  if ((attackPositiveY && ballFieldYMm <= ourGoalLineYMm(true)) ||
+      (!attackPositiveY && ballFieldYMm >= ourGoalLineYMm(false))) {
     return OffensePoseState::CollectBallBehindRobotNearOurGoalLine;
+  }
+  if (ballAtOrBeyondBoundary(ballFieldXMm, ballFieldYMm)) {
+    return OffensePoseState::CollectBallAtBoundary;
   }
   return OffensePoseState::NormalStrike;
 }
@@ -124,20 +141,23 @@ void setTerminalVelocityHold(OffensePoseResult& result) {
 }
 
 void setForwardSafeStrikeTarget(OffensePoseResult& result, const PoseState& pose,
-                                float headingDeg) {
-  float targetXMm =
-      result.predictedBallFieldXMm - config::kOffenseIntakeOffsetMm;
-  float targetYMm = result.predictedBallFieldYMm;
+                                float headingDeg, bool attackPositiveY) {
+  const float attackSignY = attackPositiveY ? 1.f : -1.f;
+  float targetXMm = result.predictedBallFieldXMm;
+  float targetYMm =
+      result.predictedBallFieldYMm - attackSignY * config::kOffenseIntakeOffsetMm;
   clampPoseToSafeBox(targetXMm, targetYMm);
   result.targetXMm = targetXMm;
   result.targetYMm = targetYMm;
-  result.targetHeadingDeg = 0.f;
+  result.targetHeadingDeg = attackPositiveY ? 0.f : 180.f;
   fieldPointToBodyMeters(result.targetXMm, result.targetYMm, pose, headingDeg,
                          result.strikeTargetBodyXM, result.strikeTargetBodyYM);
 }
 
-void fillDirectBallTarget(OffensePoseResult& result, const PoseState& pose, float headingDeg) {
+void fillDirectBallTarget(OffensePoseResult& result, const PoseState& pose, float headingDeg,
+                          bool attackPositiveY) {
   const float strikeOffsetMm = config::kOffenseIntakeOffsetMm;
+  const float attackSignY = attackPositiveY ? 1.f : -1.f;
   result.usesDirectBallPose = true;
 
   if (result.state == OffensePoseState::CollectBallInCorner) {
@@ -180,16 +200,14 @@ void fillDirectBallTarget(OffensePoseResult& result, const PoseState& pose, floa
   }
 
   if (result.state == OffensePoseState::CollectBallNearEnemyGoalLine) {
-    setTargetFacingBall(result, pose, headingDeg,
-                        result.predictedBallFieldXMm - strikeOffsetMm,
-                        result.predictedBallFieldYMm);
+    setTargetFacingBall(result, pose, headingDeg, result.predictedBallFieldXMm,
+                        result.predictedBallFieldYMm - attackSignY * strikeOffsetMm);
     return;
   }
 
   if (result.state == OffensePoseState::CollectBallBehindRobotNearOurGoalLine) {
-    setTargetFacingBall(result, pose, headingDeg,
-                        result.predictedBallFieldXMm + strikeOffsetMm,
-                        result.predictedBallFieldYMm);
+    setTargetFacingBall(result, pose, headingDeg, result.predictedBallFieldXMm,
+                        result.predictedBallFieldYMm + attackSignY * strikeOffsetMm);
     return;
   }
 }
@@ -233,17 +251,22 @@ OffensePoseResult computeOffensePose(const PoseState& pose, const BallState& bal
   result.predictedBallBodyVYMps = predicted.vy;
   ballFieldMm(pose.xMm, pose.yMm, predicted.xM, predicted.yM, headingDeg,
               result.predictedBallFieldXMm, result.predictedBallFieldYMm);
+  const bool attackPositiveY = !hasGoalFieldTarget || attackRunsPositiveY(goalFieldYMm);
   setTerminalVelocityHold(result);
   result.ballInFrontOfRobot = result.predictedBallBodyXM >= 0.f;
-  result.ballPastEnemyGoalLine = result.predictedBallFieldXMm >= config::kOffenseEnemyGoalLineXMm;
-  result.ballPastOurGoalLine = result.predictedBallFieldXMm <= config::kOffenseOurGoalLineXMm;
+  result.ballPastEnemyGoalLine =
+      attackPositiveY ? (result.predictedBallFieldYMm >= enemyGoalLineYMm(true))
+                      : (result.predictedBallFieldYMm <= enemyGoalLineYMm(false));
+  result.ballPastOurGoalLine =
+      attackPositiveY ? (result.predictedBallFieldYMm <= ourGoalLineYMm(true))
+                      : (result.predictedBallFieldYMm >= ourGoalLineYMm(false));
   result.ballAtOrBeyondBoundary =
       ballAtOrBeyondBoundary(result.predictedBallFieldXMm, result.predictedBallFieldYMm);
   result.state = classifyOffensePoseState(result.predictedBallFieldXMm,
-                                          result.predictedBallFieldYMm);
+                                          result.predictedBallFieldYMm, attackPositiveY);
 
   if (result.state != OffensePoseState::NormalStrike) {
-    fillDirectBallTarget(result, pose, headingDeg);
+    fillDirectBallTarget(result, pose, headingDeg, attackPositiveY);
     return result;
   }
 
@@ -257,7 +280,7 @@ OffensePoseResult computeOffensePose(const PoseState& pose, const BallState& bal
       const float targetYMm =
           result.predictedBallFieldYMm - config::kOffenseIntakeOffsetMm * (goalDyMm / goalDistMm);
       if (poseOutsideSafeBox(targetXMm, targetYMm)) {
-        setForwardSafeStrikeTarget(result, pose, headingDeg);
+        setForwardSafeStrikeTarget(result, pose, headingDeg, attackPositiveY);
         return result;
       }
       result.targetXMm = targetXMm;
@@ -278,7 +301,7 @@ OffensePoseResult computeOffensePose(const PoseState& pose, const BallState& bal
   ballFieldMm(pose.xMm, pose.yMm, fallbackTargetBodyXM, fallbackTargetBodyYM, headingDeg,
               result.targetXMm, result.targetYMm);
   if (poseOutsideSafeBox(result.targetXMm, result.targetYMm)) {
-    setForwardSafeStrikeTarget(result, pose, headingDeg);
+    setForwardSafeStrikeTarget(result, pose, headingDeg, attackPositiveY);
     return result;
   }
   result.strikeTargetBodyXM = fallbackTargetBodyXM;

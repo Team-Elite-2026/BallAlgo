@@ -57,7 +57,8 @@ std::vector<uint8_t> packPong(uint64_t t0, uint64_t tPi) {
 
 std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t dtMs,
                                      const std::vector<MotionAction>& actions, int n,
-                                     float vxMeas, float vyMeas, bool poseValid) {
+                                     float vxMeas, float vyMeas, bool poseValid, uint8_t kick,
+                                     uint8_t dribblerPower) {
   std::vector<uint8_t> pl;
   pl.resize(20 + 12 + n * 24);
   size_t off = 0;
@@ -74,9 +75,10 @@ std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t
   off += 4;
   std::memcpy(pl.data() + off, &vyMeas, 4);
   off += 4;
-  uint8_t pv = poseValid ? 1 : 0;
-  pl[off++] = pv;
-  off += 3;
+  pl[off++] = poseValid ? 1u : 0u;
+  pl[off++] = kick;
+  pl[off++] = dribblerPower;
+  pl[off++] = 0u;
   for (int i = 0; i < n; ++i) {
     const auto& a = actions[i];
     std::memcpy(pl.data() + off, &a.vx, 4);

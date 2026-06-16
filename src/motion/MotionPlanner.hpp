@@ -14,9 +14,11 @@
 namespace ballalgo {
 
 struct PlannedChunk {
-  uint64_t trajectoryId;
-  uint64_t startTimePi;
-  uint16_t dtMs;
+  uint64_t trajectoryId = 0;
+  uint64_t startTimePi = 0;
+  uint16_t dtMs = 0;
+  uint8_t kick = 0;
+  uint8_t dribblerPower = 0;
   std::vector<MotionAction> actions;
 };
 

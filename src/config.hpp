@@ -119,13 +119,18 @@ inline constexpr float kOffenseRobotRadiusMm = 0.5f * kOffenseRobotDiameterMm;
 inline constexpr float kOffenseBallDiameterMm = 42.67f;
 inline constexpr float kOffenseBallRadiusMm = 0.5f * kOffenseBallDiameterMm;
 inline constexpr float kOffenseIntakeOffsetMm = 90.f;
-// Assumes yellow-goal attack runs in the +X field direction.
-// Move this inset to push both offense full-field goal-line guards forward/back together.
-inline constexpr float kOffenseGoalLineInsetXMm = 140.f;
-inline constexpr float kOffenseOurGoalLineXMm = kOffenseGoalLineInsetXMm;
-inline constexpr float kOffenseEnemyGoalLineXMm = kFieldWidthMm - kOffenseGoalLineInsetXMm;
+// Goal-line handling is along the field Y axis because the goals sit on the
+// short walls at y = 0 and y = fieldHeight.
+inline constexpr float kOffenseGoalLineInsetYMm = 140.f;
+inline constexpr float kOffenseLowGoalLineYMm = kOffenseGoalLineInsetYMm;
+inline constexpr float kOffenseHighGoalLineYMm = kFieldHeightMm - kOffenseGoalLineInsetYMm;
 inline constexpr float kOffenseBoundaryInsetXMm = 100.f;
 inline constexpr float kOffenseBoundaryInsetYMm = 100.f;
+inline constexpr uint8_t kDribblerActivePower = 255u;
+inline constexpr float kDribblerCaptureDistMm = 220.f;
+inline constexpr float kKickAimToleranceDeg = 12.f;
+inline constexpr float kKickMinGoalForwardMm = 120.f;
+inline constexpr uint64_t kKickCooldownUs = 750000;
 inline constexpr float kDefenseGoalLineYMinCm = 40.f;
 inline constexpr float kDefenseGoalLineXMaxCm = 55.f;
 inline constexpr float kDefenseGoalLineQuadraticC = 2000.f;

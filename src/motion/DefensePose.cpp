@@ -28,7 +28,7 @@ float clampMagnitude(float value, float limit) {
 }
 
 float targetHeadingFromBallGoal(float ballRelXCm, float ballRelYCm) {
-  return std::atan2(ballRelYCm, ballRelXCm) * 180.f / static_cast<float>(M_PI);
+  return std::atan2(ballRelXCm, ballRelYCm) * 180.f / static_cast<float>(M_PI);
 }
 
 void fieldBallFromBody(const PoseState& pose, const BallState& ball, float headingDeg,
@@ -50,7 +50,7 @@ void goalLinePointFromBall(float ballRelXCm, float ballRelYCm, float& targetRelX
     segment = DefenseGoalLineSegment::TopLine;
     targetRelXCm = config::kDefenseGoalLineYMinCm / m;
     targetRelYCm = config::kDefenseGoalLineYMinCm;
-  } else if (m <= -5.f / 11.f) {
+  } else if (m <= 5.f / 11.f) {
     segment = DefenseGoalLineSegment::SideLine;
     targetRelXCm = config::kDefenseGoalLineXMaxCm;
     targetRelYCm = config::kDefenseGoalLineXMaxCm * m;

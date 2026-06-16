@@ -47,7 +47,8 @@ std::vector<uint8_t> packFrame(uint8_t type, const std::vector<uint8_t>& payload
 std::vector<uint8_t> packPong(uint64_t t0, uint64_t tPi);
 std::vector<uint8_t> packActionChunk(uint64_t trajId, uint64_t startPi, uint16_t dtMs,
                                      const std::vector<MotionAction>& actions, int n,
-                                     float vxMeas, float vyMeas, bool poseValid);
+                                     float vxMeas, float vyMeas, bool poseValid, uint8_t kick,
+                                     uint8_t dribblerPower);
 bool parseTeensyTelemetry(const uint8_t* data, size_t len, TeensyTelemetryPayload& out);
 bool parseTeensyTelemetry(const std::vector<uint8_t>& payload, TeensyTelemetryPayload& out);
 bool unpackFrames(std::vector<uint8_t>& buffer, std::vector<ProtocolFrame>& out);
