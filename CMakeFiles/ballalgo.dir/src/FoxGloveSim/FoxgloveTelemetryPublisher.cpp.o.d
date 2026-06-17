@@ -424,13 +424,17 @@ CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o: \
  /home/aniket/BallAlgo/src/lidar/Ld19Reader.hpp \
  /usr/include/c++/14/optional /usr/include/c++/14/utility \
  /usr/include/c++/14/bits/stl_relops.h \
- /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.hpp \
  /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
+ /home/aniket/BallAlgo/src/motion/Protocol.hpp \
+ /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
+ /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
+ /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.hpp \
  /home/aniket/BallAlgo/src/motion/ClockSync.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPlanner.hpp \
- /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
- /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
- /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/DefensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/OffensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/TrajectoryReplay.hpp \
  /home/aniket/BallAlgo/src/config.hpp \
  /home/aniket/BallAlgo/src/motion/StrikePose.hpp \
  /usr/include/c++/14/chrono /usr/include/c++/14/bits/chrono.h \
@@ -441,6 +445,14 @@ CMakeFiles/ballalgo.dir/src/FoxGloveSim/FoxgloveTelemetryPublisher.cpp.o: \
  /usr/include/aarch64-linux-gnu/bits/types/struct_iovec.h \
  /usr/include/linux/falloc.h /usr/include/aarch64-linux-gnu/bits/stat.h \
  /usr/include/aarch64-linux-gnu/bits/struct_stat.h \
+ /usr/include/c++/14/iomanip /usr/include/c++/14/locale \
+ /usr/include/c++/14/bits/locale_facets_nonio.h \
+ /usr/include/aarch64-linux-gnu/c++/14/bits/time_members.h \
+ /usr/include/aarch64-linux-gnu/c++/14/bits/messages_members.h \
+ /usr/include/libintl.h /usr/include/c++/14/bits/codecvt.h \
+ /usr/include/c++/14/bits/locale_facets_nonio.tcc \
+ /usr/include/c++/14/bits/locale_conv.h \
+ /usr/include/c++/14/bits/quoted_string.h \
  /usr/include/aarch64-linux-gnu/sys/socket.h \
  /usr/include/aarch64-linux-gnu/bits/socket.h \
  /usr/include/aarch64-linux-gnu/bits/socket_type.h \

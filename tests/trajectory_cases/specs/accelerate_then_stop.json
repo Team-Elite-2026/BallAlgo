@@ -14,20 +14,11 @@
       "dt_ms": 4,
       "segments": [
         {
-          "duration_ms": 80,
-          "vx_start": 0.0,
-          "vx_end": 0.0,
+          "duration_ms": 200,
           "vy_start": 0.0,
-          "vy_end": 0.70,
-          "omega_start": 0.0,
-          "omega_end": 0.0
-        },
-        {
-          "duration_ms": 80,
+          "vy_end": 0.50,
           "vx_start": 0.0,
           "vx_end": 0.0,
-          "vy_start": 0.70,
-          "vy_end": 0.0,
           "omega_start": 0.0,
           "omega_end": 0.0
         }
@@ -35,7 +26,23 @@
     },
     {
       "trajectory_id": 7,
-      "start_delay_ms": 180,
+      "start_delay_ms": 200,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vy_start": 0.50,
+          "vy_end": 0.0,
+          "vx_start": 0.0,
+          "vx_end": 0.0,
+          "omega_start": 0.0,
+          "omega_end": 0.0
+        }
+      ]
+    },
+    {
+      "trajectory_id": 53,
+      "start_delay_ms": 400,
       "dt_ms": 4,
       "stop_chunk": true
     }

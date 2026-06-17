@@ -12,27 +12,19 @@
       "trajectory_id": 8,
       "start_delay_ms": 0,
       "dt_ms": 4,
-      "segments": [
-        {
-          "duration_ms": 100,
-          "vx": 0.0,
-          "vy": 0.45,
-          "omega": 0.0
-        }
-      ]
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.45, "omega": 0.0}]
     },
     {
       "trajectory_id": 9,
-      "start_delay_ms": 100,
+      "start_delay_ms": 200,
       "dt_ms": 4,
-      "segments": [
-        {
-          "duration_ms": 100,
-          "vx": 0.40,
-          "vy": 0.0,
-          "omega": 0.0
-        }
-      ]
+      "segments": [{"duration_ms": 200, "vx": 0.40, "vy": 0.0, "omega": 0.0}]
+    },
+    {
+      "trajectory_id": 52,
+      "start_delay_ms": 400,
+      "dt_ms": 4,
+      "stop_chunk": true
     }
   ]
 }

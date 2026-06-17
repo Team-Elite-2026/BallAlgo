@@ -421,12 +421,17 @@ CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o: \
  /usr/include/c++/14/optional /usr/include/c++/14/utility \
  /usr/include/c++/14/bits/stl_relops.h \
  /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
+ /home/aniket/BallAlgo/src/motion/Protocol.hpp \
+ /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
+ /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
  /home/aniket/BallAlgo/src/motion/ClockSync.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPlanner.hpp \
- /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
- /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
- /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/DefensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/OffensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/TrajectoryReplay.hpp \
  /home/aniket/BallAlgo/src/config.hpp \
- /home/aniket/BallAlgo/src/motion/Protocol.hpp /usr/include/c++/14/chrono \
- /usr/include/c++/14/bits/chrono.h /usr/include/c++/14/ratio \
- /usr/include/c++/14/ctime /usr/include/c++/14/bits/parse_numbers.h
+ /home/aniket/BallAlgo/src/vision/VisionMath.hpp \
+ /usr/include/c++/14/chrono /usr/include/c++/14/bits/chrono.h \
+ /usr/include/c++/14/ratio /usr/include/c++/14/ctime \
+ /usr/include/c++/14/bits/parse_numbers.h

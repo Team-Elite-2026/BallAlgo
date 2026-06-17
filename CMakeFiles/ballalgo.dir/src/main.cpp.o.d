@@ -465,21 +465,31 @@ CMakeFiles/ballalgo.dir/src/main.cpp.o: \
  /home/aniket/BallAlgo/src/lidar/LidarLocalizer.hpp \
  /home/aniket/BallAlgo/src/lidar/Ld19Reader.hpp \
  /usr/include/c++/14/optional \
- /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.hpp \
  /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
+ /home/aniket/BallAlgo/src/motion/Protocol.hpp \
+ /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
+ /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
+ /home/aniket/BallAlgo/src/motion/ActionChunkPublisher.hpp \
  /home/aniket/BallAlgo/src/motion/ClockSync.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPlanner.hpp \
- /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
- /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
- /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/DefensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/OffensePose.hpp \
+ /home/aniket/BallAlgo/src/motion/TrajectoryReplay.hpp \
  /home/aniket/BallAlgo/src/io/GpioLidar.hpp \
  /home/aniket/BallAlgo/src/motion/MotionPipeline.hpp \
+ /home/aniket/BallAlgo/src/lidar/LidarDeskewer.hpp \
+ /usr/include/c++/14/deque /usr/include/c++/14/bits/stl_deque.h \
+ /usr/include/c++/14/bits/deque.tcc \
+ /home/aniket/BallAlgo/src/motion/TrajectoryReplayRunner.hpp \
+ /home/aniket/BallAlgo/src/team/RoleArbiter.hpp \
+ /home/aniket/BallAlgo/src/team/TeamTypes.hpp \
+ /home/aniket/BallAlgo/src/team/TeamBallFilter.hpp \
+ /home/aniket/BallAlgo/src/team/TeamLink.hpp \
  /home/aniket/BallAlgo/src/vision/SectorTracker.hpp \
  /home/aniket/BallAlgo/src/vision/Thresholds.hpp \
  /home/aniket/BallAlgo/src/vision/VisionMath.hpp \
  /usr/include/opencv4/opencv2/imgcodecs.hpp \
  /usr/include/opencv4/opencv2/imgproc.hpp \
  /usr/include/opencv4/opencv2/imgproc/segmentation.hpp \
- /usr/include/c++/14/chrono /usr/include/c++/14/deque \
- /usr/include/c++/14/bits/stl_deque.h /usr/include/c++/14/bits/deque.tcc \
- /usr/include/c++/14/iostream
+ /usr/include/c++/14/chrono /usr/include/c++/14/iostream

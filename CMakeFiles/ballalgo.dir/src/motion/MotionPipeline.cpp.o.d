@@ -420,5 +420,12 @@ CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o: \
  /home/aniket/BallAlgo/src/lidar/Ld19Reader.hpp \
  /usr/include/c++/14/optional /usr/include/c++/14/utility \
  /usr/include/c++/14/bits/stl_relops.h \
- /home/aniket/BallAlgo/src/config.hpp \
+ /home/aniket/BallAlgo/src/io/RobotSerial.hpp \
+ /home/aniket/BallAlgo/src/motion/Protocol.hpp \
+ /home/aniket/BallAlgo/src/motion/VelocityProfile.hpp \
+ /home/aniket/BallAlgo/src/motion/HermiteSpline.hpp \
+ /home/aniket/BallAlgo/src/motion/AStar3D.hpp \
+ /home/aniket/BallAlgo/src/lidar/LidarDeskewer.hpp \
+ /usr/include/c++/14/deque /usr/include/c++/14/bits/stl_deque.h \
+ /usr/include/c++/14/bits/deque.tcc /home/aniket/BallAlgo/src/config.hpp \
  /home/aniket/BallAlgo/src/vision/VisionMath.hpp

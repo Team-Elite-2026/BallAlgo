@@ -1,0 +1,106 @@
+{
+  "case_name": "trapezoid_velocity",
+  "kind": "manual_sequence",
+  "start_pose": {
+    "valid": true,
+    "x_mm": 910.0,
+    "y_mm": 500.0,
+    "heading_deg": 0.0
+  },
+  "chunks": [
+    {
+      "trajectory_id": 54,
+      "start_delay_ms": 0,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vy_start": 0.0,
+          "vy_end": 0.225,
+          "vx_start": 0.0,
+          "vx_end": 0.0,
+          "omega_start": 0.0,
+          "omega_end": 0.0
+        }
+      ]
+    },
+    {
+      "trajectory_id": 55,
+      "start_delay_ms": 200,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vy_start": 0.225,
+          "vy_end": 0.45,
+          "vx_start": 0.0,
+          "vx_end": 0.0,
+          "omega_start": 0.0,
+          "omega_end": 0.0
+        }
+      ]
+    },
+    {
+      "trajectory_id": 56,
+      "start_delay_ms": 400,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.45, "omega": 0.0}]
+    },
+    {
+      "trajectory_id": 57,
+      "start_delay_ms": 600,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.45, "omega": 0.0}]
+    },
+    {
+      "trajectory_id": 58,
+      "start_delay_ms": 800,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.45, "omega": 0.0}]
+    },
+    {
+      "trajectory_id": 59,
+      "start_delay_ms": 1000,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.45, "omega": 0.0}]
+    },
+    {
+      "trajectory_id": 60,
+      "start_delay_ms": 1200,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vy_start": 0.45,
+          "vy_end": 0.225,
+          "vx_start": 0.0,
+          "vx_end": 0.0,
+          "omega_start": 0.0,
+          "omega_end": 0.0
+        }
+      ]
+    },
+    {
+      "trajectory_id": 61,
+      "start_delay_ms": 1400,
+      "dt_ms": 4,
+      "segments": [
+        {
+          "duration_ms": 200,
+          "vy_start": 0.225,
+          "vy_end": 0.0,
+          "vx_start": 0.0,
+          "vx_end": 0.0,
+          "omega_start": 0.0,
+          "omega_end": 0.0
+        }
+      ]
+    },
+    {
+      "trajectory_id": 62,
+      "start_delay_ms": 1600,
+      "dt_ms": 4,
+      "stop_chunk": true
+    }
+  ]
+}

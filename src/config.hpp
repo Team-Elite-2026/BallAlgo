@@ -5,7 +5,7 @@
 
 namespace ballalgo::config {
 
-inline constexpr const char* kSerialPort = "/dev/serial0";
+inline constexpr const char* kSerialPort = "/dev/ttyAMA2";
 inline constexpr int kSerialBaud = 2000000;
 inline constexpr bool kEnableSerial = true;
 

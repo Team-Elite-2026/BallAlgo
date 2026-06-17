@@ -10,15 +10,21 @@ ballalgo: \
   CMakeFiles/ballalgo.dir/src/vision/VisionMath.cpp.o \
   CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o \
   CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o \
+  CMakeFiles/ballalgo.dir/src/lidar/LidarDeskewer.cpp.o \
   CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o \
   CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o \
   CMakeFiles/ballalgo.dir/src/estimation/BallKalman.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o \
+  CMakeFiles/ballalgo.dir/src/motion/TrajectoryReplayRunner.cpp.o \
   CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o \
   CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o \
   CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o \
+  CMakeFiles/ballalgo.dir/src/team/RoleArbiter.cpp.o \
+  CMakeFiles/ballalgo.dir/src/team/TeamBallFilter.cpp.o \
+  CMakeFiles/ballalgo.dir/src/team/TeamProto.cpp.o \
+  CMakeFiles/ballalgo.dir/src/team/TeamLink.cpp.o \
   libballalgo_motion_core.a \
   /usr/lib/aarch64-linux-gnu/libopencv_stitching.so.4.10.0 \
   /usr/lib/aarch64-linux-gnu/libopencv_alphamat.so.4.10.0 \
@@ -304,6 +310,8 @@ CMakeFiles/ballalgo.dir/src/camera/CameraCapture.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/lidar/Ld19Reader.cpp.o:
 
+CMakeFiles/ballalgo.dir/src/lidar/LidarDeskewer.cpp.o:
+
 CMakeFiles/ballalgo.dir/src/lidar/LidarLocalizer.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/estimation/PoseKalman.cpp.o:
@@ -316,11 +324,21 @@ CMakeFiles/ballalgo.dir/src/motion/ClockSync.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/motion/ActionChunkPublisher.cpp.o:
 
+CMakeFiles/ballalgo.dir/src/motion/TrajectoryReplayRunner.cpp.o:
+
 CMakeFiles/ballalgo.dir/src/motion/MotionPipeline.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/RobotSerial.cpp.o:
 
 CMakeFiles/ballalgo.dir/src/io/GpioLidar.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/team/RoleArbiter.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/team/TeamBallFilter.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/team/TeamProto.cpp.o:
+
+CMakeFiles/ballalgo.dir/src/team/TeamLink.cpp.o:
 
 libballalgo_motion_core.a:
 

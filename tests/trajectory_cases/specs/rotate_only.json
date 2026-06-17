@@ -12,17 +12,55 @@
       "trajectory_id": 3,
       "start_delay_ms": 0,
       "dt_ms": 4,
-      "segments": [
-        {
-          "duration_ms": 200,
-          "vx": 0.0,
-          "vy": 0.0,
-          "omega": 2.5,
-          "ax": 0.0,
-          "ay": 0.0,
-          "alpha": 0.0
-        }
-      ]
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 28,
+      "start_delay_ms": 200,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 29,
+      "start_delay_ms": 400,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 30,
+      "start_delay_ms": 600,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 31,
+      "start_delay_ms": 800,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 32,
+      "start_delay_ms": 1000,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 33,
+      "start_delay_ms": 1200,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 34,
+      "start_delay_ms": 1400,
+      "dt_ms": 4,
+      "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 0.0, "omega": 2.5}]
+    },
+    {
+      "trajectory_id": 35,
+      "start_delay_ms": 1600,
+      "dt_ms": 4,
+      "stop_chunk": true
     }
   ]
 }
