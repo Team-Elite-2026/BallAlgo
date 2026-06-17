@@ -15,7 +15,7 @@
 
 ## Executive Summary
 
-Several previously documented integration issues are now genuinely fixed: the legacy ASCII perception path is gone, the Pi/Teensy binary telemetry contract matches, the TeamLink idle-poll teardown bug is fixed, the Pi/Teensy feedforward constants now agree, and the recent motion fixes closed the checked-in Teensy compile error plus the offense/defense heading and geometry regressions.
+Several previously documented integration issues are now genuinely fixed: the legacy ASCII perception path is gone, the Pi/Teensy binary telemetry contract matches, the TeamLink idle-poll teardown bug is fixed, the Pi/Teensy feedforward constants now agree, and the recent motion fixes closed the checked-in Teensy compile error plus the offense/defense heading and geometry regressions. This pass also fixed commanded-pose endpoint snapping and the degenerate same-cell commanded-goal stop-chunk bug in the planner path preview.
 
 The biggest current blockers are:
 
@@ -28,7 +28,7 @@ The biggest current blockers are:
 7. LD19 intake can still fall behind and age the localization scan stream
 8. Restarting the Pi can still lock out future chunks until the Teensy is reset
 
-The BallAlgo motion/team tests currently pass, and there is now direct coverage for offense/defense heading and shallow-angle defense geometry. There are still no tests covering chunk timing, line-avoidance integration, or Pi<->Teensy protocol edge cases. Most of the high-severity issues below still sit in untested paths.
+The BallAlgo motion/team tests currently pass, and there is now direct coverage for offense/defense heading, shallow-angle defense geometry, commanded-pose endpoint exactness, same-cell commanded-goal planning, and chunk actuator serialization. There are still no tests covering line-avoidance integration, serial fault handling, or hardware-in-loop timing drift. Most of the high-severity issues below still sit in untested runtime paths.
 
 ## Resolved Since The Previous Findings Pass
 
@@ -42,6 +42,9 @@ The BallAlgo motion/team tests currently pass, and there is now direct coverage 
 - Offense and defense terminal heading helpers now use the project convention `0 deg = +y/front`, `90 deg = +x/right`
 - Defense shallow-angle geometry now reaches the 55 cm side segment instead of collapsing inward to 40 cm
 - Pi action chunks now serialize real `kick` and `dribblerPower` bytes instead of always zero-filling them
+- Commanded-pose plans now preserve the exact requested start/goal pose instead of snapping both ends onto the A* grid
+- Commanded-pose plans no longer collapse into an all-stop chunk when start and goal fall into the same A* cell/bin
+- The trajectory replay verifier now matches the current generated artifact layouts again
 
 ## Critical
 
@@ -111,6 +114,16 @@ The BallAlgo motion/team tests currently pass, and there is now direct coverage 
 - **Files:** `BallAlgo/src/motion/MotionPlanner.cpp`, `Offense2026/src/TrajectoryExecutor.cpp`
 - **Problem:** the Pi restarts trajectory IDs from 1 on process start, while the Teensy rejects any chunk whose `trajectory_id <= active_chunk.trajectory_id`.
 - **Robot behavior:** if the Pi process restarts mid-session, the robot can ignore all subsequent chunks until the Teensy is power-cycled or otherwise reset.
+
+### H9. Offense can still blind-kick or hold stale motion when possession is detected
+
+- **Subsystem:** Teensy offense runtime
+- **Files:** `Offense2026/src/main.cpp`, `Offense2026/src/Movement.cpp`
+- **Problem:**
+  - when `goalAngle == -5`, the possession branch rewrites it to `0`, so “goal unseen” becomes “goal centered”
+  - that same branch can call `movement.kick()` blindly, and when the goal is visible but not within the aim window it may issue no fresh drive command at all
+  - the kicker pulse itself is still keyed off the broken `kick()` / `kickBackground()` interaction
+- **Robot behavior:** with the ball in the robot, offense can fire a blind shot or keep stale wheel outputs instead of continuing to aim/reposition.
 
 ## Medium
 
@@ -202,10 +215,14 @@ The BallAlgo motion/team tests currently pass, and there is now direct coverage 
 - BallAlgo tests-only build: passed
 - BallAlgo `ctest`: passed (`ballalgo_team_tests`, `ballalgo_motion_tests`, `ballalgo_protocol_tests`)
 - Full BallAlgo app configure: blocked locally by missing `libcamera` package on this machine, not by a source-level BallAlgo compile failure
+- Regenerated all checked-in trajectory replay artifacts with the current `ballalgo_planner_case` binary and re-verified them with `tools/trajectory_debug/verify_cases.py`
+- Randomized commanded-pose sweeps (180 broad cases, 120 close-range same-cell cases) completed without NaNs, out-of-bounds path samples, endpoint mismatch, or degenerate all-stop outputs after the current planner fixes
 - Direct motion tests now confirm:
   - a straight-ahead offense strike requests `heading=0`
   - an enemy goal-mouth ball enters the near-enemy-goal-line offense state
   - a straight-ahead defense block requests `heading=0`
   - shallow-angle defense geometry returns the `55 cm` side-line target
+  - commanded-pose paths start and end at the exact requested pose
+  - close-range commanded goals inside one A* cell still generate non-zero motion
 - Direct protocol tests now confirm:
   - Pi-packed action chunks carry non-zero `kick` and `dribblerPower` bytes on the wire

@@ -134,6 +134,25 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
       trajectorySpeedProfile != nullptr ? *trajectorySpeedProfile : localTrajectorySpeedProfile;
 
   astar.plan(pose.xMm, pose.yMm, st, goalXMm, goalYMm, gt, waypointsRef, astarCostS);
+  if (waypointsRef.size() == 1) {
+    Waypoint3 start{};
+    start.xMm = pose.xMm;
+    start.yMm = pose.yMm;
+    start.thetaDeg = headingDeg;
+    Waypoint3 goal{};
+    goal.xMm = goalXMm;
+    goal.yMm = goalYMm;
+    goal.thetaDeg = goalHeadingDeg;
+    waypointsRef.front() = start;
+    waypointsRef.push_back(goal);
+  } else if (!waypointsRef.empty()) {
+    waypointsRef.front().xMm = pose.xMm;
+    waypointsRef.front().yMm = pose.yMm;
+    waypointsRef.front().thetaDeg = headingDeg;
+    waypointsRef.back().xMm = goalXMm;
+    waypointsRef.back().yMm = goalYMm;
+    waypointsRef.back().thetaDeg = goalHeadingDeg;
+  }
 
   // Step 4.1: analytic Hermite spline with boundary tangent = current velocity
   // (field mm/s) so S'(0) matches the robot's real direction of travel.

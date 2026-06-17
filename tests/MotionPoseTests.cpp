@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "motion/DefensePose.hpp"
+#include "motion/MotionPlanner.hpp"
 #include "motion/OffensePose.hpp"
 
 #include <cmath>
@@ -101,6 +102,65 @@ void testDefenseWideBallUsesSideLineGoalGeometry() {
          "wide defense target should stay level with the defended goal");
 }
 
+void testCommandedPosePlanKeepsExactStartAndGoalPose() {
+  ballalgo::MotionPlanner planner;
+
+  ballalgo::PoseState pose = makePose(913.f, 417.f);
+  const float headingDeg = 17.f;
+  ballalgo::CommandedPoseGoal goal;
+  goal.xMm = 1262.f;
+  goal.yMm = 1488.f;
+  goal.headingDeg = 90.f;
+
+  const ballalgo::CommandedPosePlanDebug debug =
+      planner.debugPlanToPose(pose, goal, headingDeg);
+
+  expect(!debug.path.empty(), "commanded pose plan should produce a path");
+  expect(!debug.chunk.actions.empty(), "commanded pose plan should produce actions");
+  expect(near(debug.path.front().xMm, pose.xMm),
+         "planned path should start at the exact current x");
+  expect(near(debug.path.front().yMm, pose.yMm),
+         "planned path should start at the exact current y");
+  expect(near(debug.path.front().thetaDeg, headingDeg),
+         "planned path should start at the exact current heading");
+  expect(near(debug.path.back().xMm, goal.xMm),
+         "planned path should end at the exact commanded x");
+  expect(near(debug.path.back().yMm, goal.yMm),
+         "planned path should end at the exact commanded y");
+  expect(near(debug.path.back().thetaDeg, goal.headingDeg),
+         "planned path should end at the exact commanded heading");
+}
+
+void testCommandedPosePlanStillMovesWithinSameAstarCell() {
+  ballalgo::MotionPlanner planner;
+
+  ballalgo::PoseState pose = makePose(100.f, 100.f);
+  const float headingDeg = 0.f;
+  ballalgo::CommandedPoseGoal goal;
+  goal.xMm = 149.f;
+  goal.yMm = 149.f;
+  goal.headingDeg = 44.f;
+
+  const ballalgo::CommandedPosePlanDebug debug =
+      planner.debugPlanToPose(pose, goal, headingDeg);
+
+  expect(debug.posErrMm > ballalgo::config::kCommandGoalPositionToleranceMm,
+         "repro case should begin outside the commanded-goal tolerance");
+  expect(debug.path.size() >= 2,
+         "same-cell commanded pose should still generate a non-degenerate path");
+  expect(!debug.chunk.actions.empty(),
+         "same-cell commanded pose should still generate an action chunk");
+  bool hasMotion = false;
+  for (const auto& action : debug.chunk.actions) {
+    if (std::fabs(action.vx) > 1e-4f || std::fabs(action.vy) > 1e-4f ||
+        std::fabs(action.omega) > 1e-4f) {
+      hasMotion = true;
+      break;
+    }
+  }
+  expect(hasMotion, "same-cell commanded pose should not collapse into an all-stop chunk");
+}
+
 }  // namespace
 
 int main() {
@@ -108,6 +168,8 @@ int main() {
   testOffenseGoalMouthUsesEnemyGoalLineState();
   testDefenseStraightAheadHeadingUsesFieldForwardConvention();
   testDefenseWideBallUsesSideLineGoalGeometry();
+  testCommandedPosePlanKeepsExactStartAndGoalPose();
+  testCommandedPosePlanStillMovesWithinSameAstarCell();
 
   std::cout << "ballalgo_motion_tests passed\n";
   return 0;

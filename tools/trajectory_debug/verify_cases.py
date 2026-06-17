@@ -105,28 +105,40 @@ def verify_translate_while_rotating(artifact: dict) -> None:
 
 
 def verify_accelerate_then_stop(artifact: dict) -> None:
-    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [40, 0]
-    stop_chunk = artifact["chunks"][1]
+    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [50, 50, 0]
+    stop_chunk = artifact["chunks"][2]
     sample = sample_chunk(stop_chunk, 1_000_000 + stop_chunk["start_delay_ms"] * 1000,
                           1_000_000 + stop_chunk["start_delay_ms"] * 1000 + 4_000, 0.0)
     assert sample["valid"] and sample["stop_chunk"]
 
 
 def verify_chunk_boundary_handoff(artifact: dict) -> None:
-    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [25, 25]
+    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [50, 50, 0]
     first_chunk = artifact["chunks"][0]
     second_chunk = artifact["chunks"][1]
-    first_sample = sample_chunk(first_chunk, 1_000_000, 1_000_000 + 96_000, 0.0)
-    second_sample = sample_chunk(second_chunk, 1_100_000, 1_100_000 + 4_000, 0.0)
+    first_sample = sample_chunk(first_chunk, 1_000_000, 1_000_000 + 196_000, 0.0)
+    second_sample = sample_chunk(second_chunk, 1_200_000, 1_200_000 + 4_000, 0.0)
     assert first_sample["valid"] and first_sample["trajectory_id"] == 8
     assert second_sample["valid"] and second_sample["trajectory_id"] == 9
     assert second_sample["action_index"] == 1
 
 
 def verify_num_actions_stop_chunk(artifact: dict) -> None:
-    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [25, 0]
+    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [50, 0]
     stop_chunk = artifact["chunks"][1]
-    sample = sample_chunk(stop_chunk, 1_100_000, 1_104_000, 0.0)
+    sample = sample_chunk(stop_chunk, 1_200_000, 1_204_000, 0.0)
+    assert sample["valid"] and sample["stop_chunk"]
+
+
+def verify_trapezoid_velocity(artifact: dict) -> None:
+    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [50] * 8 + [0]
+    goal = artifact["goal_pose"]
+    assert goal["enabled"]
+    assert abs(goal["x_mm"] - artifact["start_pose"]["x_mm"]) < 1.0
+    assert goal["y_mm"] > artifact["start_pose"]["y_mm"] + 400.0
+    stop_chunk = artifact["chunks"][-1]
+    sample = sample_chunk(stop_chunk, 1_000_000 + stop_chunk["start_delay_ms"] * 1000,
+                          1_000_000 + stop_chunk["start_delay_ms"] * 1000 + 4_000, 0.0)
     assert sample["valid"] and sample["stop_chunk"]
 
 
@@ -146,6 +158,7 @@ VERIFY_BY_CASE = {
     "accelerate_then_stop": verify_accelerate_then_stop,
     "chunk_boundary_handoff": verify_chunk_boundary_handoff,
     "num_actions_0_stop_chunk": verify_num_actions_stop_chunk,
+    "trapezoid_velocity": verify_trapezoid_velocity,
     "planner_to_pose_demo": verify_planner_demo,
 }
 
