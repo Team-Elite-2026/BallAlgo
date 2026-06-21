@@ -19,7 +19,9 @@ MAX_ACTIONS = 50
 
 
 def field_to_body(vx_mm_s: float, vy_mm_s: float, heading_deg: float) -> tuple[float, float]:
-    heading_rad = math.radians(heading_deg)
+    # Heading is clockwise-positive (0 deg = field +y = robot forward). Negate to
+    # match the Teensy executor / rotateFieldVectorToBody convention.
+    heading_rad = math.radians(-heading_deg)
     c = math.cos(heading_rad)
     s = math.sin(heading_rad)
     return ((c * vx_mm_s + s * vy_mm_s) / 1000.0, (-s * vx_mm_s + c * vy_mm_s) / 1000.0)

@@ -51,7 +51,10 @@ bool parseUint8Token(const std::string& token, uint8_t& value) {
 
 void rotateFieldVectorToBody(float xField, float yField, float headingDeg, float& xBody,
                              float& yBody) {
-  const float headingRad = headingDeg * static_cast<float>(M_PI / 180.0);
+  // Heading is clockwise-positive (0 deg = field +y = robot forward), matching the
+  // Teensy executor which rotates with theta = -CompassSensor offset. Negate here
+  // so the body-frame telemetry stays in the same frame the robot actually drives.
+  const float headingRad = -headingDeg * static_cast<float>(M_PI / 180.0);
   const float c = std::cos(headingRad);
   const float s = std::sin(headingRad);
   xBody = c * xField + s * yField;

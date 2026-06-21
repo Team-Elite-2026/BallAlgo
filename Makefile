@@ -223,6 +223,45 @@ ballalgo_team_tests/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_team_tests.dir/build.make CMakeFiles/ballalgo_team_tests.dir/build
 .PHONY : ballalgo_team_tests/fast
 
+#=============================================================================
+# Target rules for targets named ballalgo_motion_tests
+
+# Build rule for target.
+ballalgo_motion_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ballalgo_motion_tests
+.PHONY : ballalgo_motion_tests
+
+# fast build rule for target.
+ballalgo_motion_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_motion_tests.dir/build.make CMakeFiles/ballalgo_motion_tests.dir/build
+.PHONY : ballalgo_motion_tests/fast
+
+#=============================================================================
+# Target rules for targets named ballalgo_protocol_tests
+
+# Build rule for target.
+ballalgo_protocol_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ballalgo_protocol_tests
+.PHONY : ballalgo_protocol_tests
+
+# fast build rule for target.
+ballalgo_protocol_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/build
+.PHONY : ballalgo_protocol_tests/fast
+
+#=============================================================================
+# Target rules for targets named ballalgo_frame_tests
+
+# Build rule for target.
+ballalgo_frame_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ballalgo_frame_tests
+.PHONY : ballalgo_frame_tests
+
+# fast build rule for target.
+ballalgo_frame_tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_frame_tests.dir/build.make CMakeFiles/ballalgo_frame_tests.dir/build
+.PHONY : ballalgo_frame_tests/fast
+
 src/FoxGloveSim/FoxgloveConfig.o: src/FoxGloveSim/FoxgloveConfig.cpp.o
 .PHONY : src/FoxGloveSim/FoxgloveConfig.o
 
@@ -698,6 +737,7 @@ src/motion/Protocol.o: src/motion/Protocol.cpp.o
 src/motion/Protocol.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_planner_case.dir/build.make CMakeFiles/ballalgo_planner_case.dir/src/motion/Protocol.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/src/motion/Protocol.cpp.o
 .PHONY : src/motion/Protocol.cpp.o
 
 src/motion/Protocol.i: src/motion/Protocol.cpp.i
@@ -707,6 +747,7 @@ src/motion/Protocol.i: src/motion/Protocol.cpp.i
 src/motion/Protocol.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_planner_case.dir/build.make CMakeFiles/ballalgo_planner_case.dir/src/motion/Protocol.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/src/motion/Protocol.cpp.i
 .PHONY : src/motion/Protocol.cpp.i
 
 src/motion/Protocol.s: src/motion/Protocol.cpp.s
@@ -716,6 +757,7 @@ src/motion/Protocol.s: src/motion/Protocol.cpp.s
 src/motion/Protocol.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_planner_case.dir/build.make CMakeFiles/ballalgo_planner_case.dir/src/motion/Protocol.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo.dir/build.make CMakeFiles/ballalgo.dir/src/motion/Protocol.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/src/motion/Protocol.cpp.s
 .PHONY : src/motion/Protocol.cpp.s
 
 src/motion/StrikePose.o: src/motion/StrikePose.cpp.o
@@ -1024,6 +1066,54 @@ src/vision/VisionMath.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_team_tests.dir/build.make CMakeFiles/ballalgo_team_tests.dir/src/vision/VisionMath.cpp.s
 .PHONY : src/vision/VisionMath.cpp.s
 
+tests/MotionPoseTests.o: tests/MotionPoseTests.cpp.o
+.PHONY : tests/MotionPoseTests.o
+
+# target to build an object file
+tests/MotionPoseTests.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_motion_tests.dir/build.make CMakeFiles/ballalgo_motion_tests.dir/tests/MotionPoseTests.cpp.o
+.PHONY : tests/MotionPoseTests.cpp.o
+
+tests/MotionPoseTests.i: tests/MotionPoseTests.cpp.i
+.PHONY : tests/MotionPoseTests.i
+
+# target to preprocess a source file
+tests/MotionPoseTests.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_motion_tests.dir/build.make CMakeFiles/ballalgo_motion_tests.dir/tests/MotionPoseTests.cpp.i
+.PHONY : tests/MotionPoseTests.cpp.i
+
+tests/MotionPoseTests.s: tests/MotionPoseTests.cpp.s
+.PHONY : tests/MotionPoseTests.s
+
+# target to generate assembly for a file
+tests/MotionPoseTests.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_motion_tests.dir/build.make CMakeFiles/ballalgo_motion_tests.dir/tests/MotionPoseTests.cpp.s
+.PHONY : tests/MotionPoseTests.cpp.s
+
+tests/ProtocolTests.o: tests/ProtocolTests.cpp.o
+.PHONY : tests/ProtocolTests.o
+
+# target to build an object file
+tests/ProtocolTests.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/tests/ProtocolTests.cpp.o
+.PHONY : tests/ProtocolTests.cpp.o
+
+tests/ProtocolTests.i: tests/ProtocolTests.cpp.i
+.PHONY : tests/ProtocolTests.i
+
+# target to preprocess a source file
+tests/ProtocolTests.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/tests/ProtocolTests.cpp.i
+.PHONY : tests/ProtocolTests.cpp.i
+
+tests/ProtocolTests.s: tests/ProtocolTests.cpp.s
+.PHONY : tests/ProtocolTests.s
+
+# target to generate assembly for a file
+tests/ProtocolTests.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_protocol_tests.dir/build.make CMakeFiles/ballalgo_protocol_tests.dir/tests/ProtocolTests.cpp.s
+.PHONY : tests/ProtocolTests.cpp.s
+
 tests/TeamCoordinationTests.o: tests/TeamCoordinationTests.cpp.o
 .PHONY : tests/TeamCoordinationTests.o
 
@@ -1048,6 +1138,30 @@ tests/TeamCoordinationTests.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_team_tests.dir/build.make CMakeFiles/ballalgo_team_tests.dir/tests/TeamCoordinationTests.cpp.s
 .PHONY : tests/TeamCoordinationTests.cpp.s
 
+tests/TrajectoryFrameTests.o: tests/TrajectoryFrameTests.cpp.o
+.PHONY : tests/TrajectoryFrameTests.o
+
+# target to build an object file
+tests/TrajectoryFrameTests.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_frame_tests.dir/build.make CMakeFiles/ballalgo_frame_tests.dir/tests/TrajectoryFrameTests.cpp.o
+.PHONY : tests/TrajectoryFrameTests.cpp.o
+
+tests/TrajectoryFrameTests.i: tests/TrajectoryFrameTests.cpp.i
+.PHONY : tests/TrajectoryFrameTests.i
+
+# target to preprocess a source file
+tests/TrajectoryFrameTests.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_frame_tests.dir/build.make CMakeFiles/ballalgo_frame_tests.dir/tests/TrajectoryFrameTests.cpp.i
+.PHONY : tests/TrajectoryFrameTests.cpp.i
+
+tests/TrajectoryFrameTests.s: tests/TrajectoryFrameTests.cpp.s
+.PHONY : tests/TrajectoryFrameTests.s
+
+# target to generate assembly for a file
+tests/TrajectoryFrameTests.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/ballalgo_frame_tests.dir/build.make CMakeFiles/ballalgo_frame_tests.dir/tests/TrajectoryFrameTests.cpp.s
+.PHONY : tests/TrajectoryFrameTests.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -1062,8 +1176,11 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... test"
 	@echo "... ballalgo"
+	@echo "... ballalgo_frame_tests"
 	@echo "... ballalgo_motion_core"
+	@echo "... ballalgo_motion_tests"
 	@echo "... ballalgo_planner_case"
+	@echo "... ballalgo_protocol_tests"
 	@echo "... ballalgo_team_tests"
 	@echo "... src/FoxGloveSim/FoxgloveConfig.o"
 	@echo "... src/FoxGloveSim/FoxgloveConfig.i"
@@ -1161,9 +1278,18 @@ help:
 	@echo "... src/vision/VisionMath.o"
 	@echo "... src/vision/VisionMath.i"
 	@echo "... src/vision/VisionMath.s"
+	@echo "... tests/MotionPoseTests.o"
+	@echo "... tests/MotionPoseTests.i"
+	@echo "... tests/MotionPoseTests.s"
+	@echo "... tests/ProtocolTests.o"
+	@echo "... tests/ProtocolTests.i"
+	@echo "... tests/ProtocolTests.s"
 	@echo "... tests/TeamCoordinationTests.o"
 	@echo "... tests/TeamCoordinationTests.i"
 	@echo "... tests/TeamCoordinationTests.s"
+	@echo "... tests/TrajectoryFrameTests.o"
+	@echo "... tests/TrajectoryFrameTests.i"
+	@echo "... tests/TrajectoryFrameTests.s"
 .PHONY : help
 
 

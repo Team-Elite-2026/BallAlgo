@@ -135,4 +135,12 @@ target_include_directories(ballalgo_protocol_tests PRIVATE src)
 target_link_libraries(ballalgo_protocol_tests PRIVATE Eigen3::Eigen)
 target_compile_options(ballalgo_protocol_tests PRIVATE -O2 -Wall -Wextra)
 add_test(NAME ballalgo_protocol_tests COMMAND ballalgo_protocol_tests)
+
+add_executable(ballalgo_frame_tests
+  tests/TrajectoryFrameTests.cpp
+)
+target_include_directories(ballalgo_frame_tests PRIVATE src)
+target_link_libraries(ballalgo_frame_tests PRIVATE ballalgo_motion_core Eigen3::Eigen)
+target_compile_options(ballalgo_frame_tests PRIVATE -O2 -Wall -Wextra)
+add_test(NAME ballalgo_frame_tests COMMAND ballalgo_frame_tests)
 endif()
