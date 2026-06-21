@@ -154,7 +154,7 @@ bool TrajectoryReplayRunner::updateAndPublish(RobotSerial& serial, uint64_t nowP
     return false;
   }
 
-  auto frame = packActionChunk(nextChunk.chunk.trajectoryId, nextChunk.startTimePiUs,
+  auto frame = packActionChunk(nextChunk.startTimePiUs, nextChunk.startTimePiUs,
                                nextChunk.chunk.dtMs, nextChunk.chunk.actions,
                                static_cast<int>(nextChunk.chunk.actions.size()),
                                artifact_.startPose.vxBody, artifact_.startPose.vyBody,
@@ -162,7 +162,7 @@ bool TrajectoryReplayRunner::updateAndPublish(RobotSerial& serial, uint64_t nowP
                                nextChunk.chunk.dribblerPower);
   if (!serial.write(frame)) {
     std::fprintf(stderr, "[REPLAY] serial write failed traj=%llu chunk_index=%zu\n",
-                 static_cast<unsigned long long>(nextChunk.chunk.trajectoryId), nextChunkToSend_);
+                 static_cast<unsigned long long>(nextChunk.startTimePiUs), nextChunkToSend_);
     std::fflush(stderr);
     return false;
   }

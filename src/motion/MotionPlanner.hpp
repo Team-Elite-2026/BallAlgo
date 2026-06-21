@@ -131,7 +131,6 @@ class MotionPlanner {
   AStar3D astar_;
   HermiteSpline spline_;
   VelocityProfile profiler_;
-  uint64_t trajId_ = 0;
 };
 
 }  // namespace ballalgo

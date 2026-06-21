@@ -25,6 +25,18 @@ float wrapAngleDeg(float angleDeg) {
   return wrapped - 180.f;
 }
 
+// Max speed (m/s) the robot can sustain pointing along `headingDeg`, given the
+// anisotropic per-axis caps (kVMaxX/kVMaxY). Heading is clockwise-positive with
+// 0 deg = field +y = robot forward, so the forward unit vector is (sin, cos) and
+// this is the radius of the velocity ellipse along that direction.
+float maxForwardSpeedMps(float headingDeg) {
+  const float r = headingDeg * static_cast<float>(M_PI / 180.0);
+  const float sx = std::sin(r) / config::kVMaxX;
+  const float cy = std::cos(r) / config::kVMaxY;
+  const float denom = std::sqrt(sx * sx + cy * cy);
+  return denom > 1e-6f ? 1.f / denom : 0.f;
+}
+
 float profileDurationS(const std::vector<ProfileSample>& profile) {
   if (profile.size() < 2) return 0.f;
   float durationS = 0.f;
@@ -74,41 +86,22 @@ void fillBallDebugFromOffensePose(BallPlanDebug& debug, const OffensePoseResult&
   debug.targetOmegaRadS = offensePose.targetOmegaRadS;
 }
 
-void applyTerminalVelocity(PlannedChunk& chunk, const DefensePoseResult& defensePose,
-                           float headingDeg) {
-  if (!defensePose.usesInterceptVelocity || chunk.actions.empty()) return;
-  (void)headingDeg;
-  // Chunks carry GLOBAL-frame targets (the Teensy rotates into the body frame),
-  // so write the field-frame intercept velocity directly.
-  const float vxField = defensePose.targetVxFieldMps;
-  const float vyField = defensePose.targetVyFieldMps;
+// Overwrite the chunk's tail (last ~10 actions) with a single held terminal
+// velocity. Chunks carry GLOBAL-frame targets (the Teensy rotates into the body
+// frame), so the field-frame velocity is written directly. No-op when inactive.
+void applyTerminalVelocity(PlannedChunk& chunk, bool active, float vxField, float vyField,
+                           float omega) {
+  if (!active || chunk.actions.empty()) return;
   const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
   for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
        i < static_cast<int>(chunk.actions.size()); ++i) {
-    chunk.actions[static_cast<size_t>(i)].vx = vxField;
-    chunk.actions[static_cast<size_t>(i)].vy = vyField;
-    chunk.actions[static_cast<size_t>(i)].omega = defensePose.targetOmegaRadS;
-    chunk.actions[static_cast<size_t>(i)].ax = 0.f;
-    chunk.actions[static_cast<size_t>(i)].ay = 0.f;
-    chunk.actions[static_cast<size_t>(i)].alpha = 0.f;
-  }
-}
-
-void applyTerminalVelocity(PlannedChunk& chunk, const OffensePoseResult& offensePose,
-                           float headingDeg) {
-  if (!offensePose.usesTerminalVelocity || chunk.actions.empty()) return;
-  (void)headingDeg;
-  const float vxField = offensePose.targetVxFieldMps;
-  const float vyField = offensePose.targetVyFieldMps;
-  const int terminalCount = std::min<int>(10, static_cast<int>(chunk.actions.size()));
-  for (int i = static_cast<int>(chunk.actions.size()) - terminalCount;
-       i < static_cast<int>(chunk.actions.size()); ++i) {
-    chunk.actions[static_cast<size_t>(i)].vx = vxField;
-    chunk.actions[static_cast<size_t>(i)].vy = vyField;
-    chunk.actions[static_cast<size_t>(i)].omega = offensePose.targetOmegaRadS;
-    chunk.actions[static_cast<size_t>(i)].ax = 0.f;
-    chunk.actions[static_cast<size_t>(i)].ay = 0.f;
-    chunk.actions[static_cast<size_t>(i)].alpha = 0.f;
+    MotionAction& a = chunk.actions[static_cast<size_t>(i)];
+    a.vx = vxField;
+    a.vy = vyField;
+    a.omega = omega;
+    a.ax = 0.f;
+    a.ay = 0.f;
+    a.alpha = 0.f;
   }
 }
 
@@ -118,7 +111,7 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
                         std::vector<Waypoint3>* waypoints, std::vector<PathSample>* path,
                         std::vector<ProfileSample>* profile,
                         std::vector<TrajectorySpeedSample>* trajectorySpeedProfile,
-                        float* astarCostS = nullptr) {
+                        float* astarCostS = nullptr, float endSpeedMps = 0.f) {
   int st = headingToBin(headingDeg, config::kAstarHeadingBins);
   int gt = headingToBin(goalHeadingDeg, config::kAstarHeadingBins);
 
@@ -154,17 +147,23 @@ void buildChunkToTarget(const PoseState& pose, float headingDeg, float goalXMm, 
     waypointsRef.back().thetaDeg = goalHeadingDeg;
   }
 
-  // Step 4.1: analytic Hermite spline with boundary tangent = current velocity
-  // (field mm/s) so S'(0) matches the robot's real direction of travel.
+  // Step 4.1: analytic Hermite spline. Start tangent = current velocity (field
+  // mm/s) so S'(0) matches the robot's real direction of travel. End tangent is
+  // forward-relative to the goal pose at endSpeedMps (0 = stop at goal), so the
+  // robot arrives moving straight along goalHeadingDeg.
+  const float goalRad = goalHeadingDeg * static_cast<float>(M_PI / 180.0);
+  const float vEndMmS = endSpeedMps * 1000.f;
+  const float vxEndMmS = vEndMmS * std::sin(goalRad);
+  const float vyEndMmS = vEndMmS * std::cos(goalRad);
   HermiteSplineData data = spline.buildData(waypointsRef, goalHeadingDeg, pose.vxMmS, pose.vyMmS,
-                                            0.f, 0.f, 10);
+                                            vxEndMmS, vyEndMmS, 10);
   pathRef = data.samples;
 
   // Step 4.3: motor-model 3-pass S-curve profile (global-frame commands).
   const float vStartMps = std::hypot(pose.vxMmS, pose.vyMmS) / 1000.f;
   const int numSteps = std::max(50, static_cast<int>(pathRef.size()));
   std::vector<ProfilePointS> motorProfile =
-      profiler.computeMotorModel(data, vStartMps, 0.f, numSteps);
+      profiler.computeMotorModel(data, vStartMps, endSpeedMps, numSteps);
 
   // Step 4.4: slice into fixed-dt GLOBAL-frame action chunk.
   chunk.actions = profiler.discretizeGlobal(motorProfile, chunk.dtMs, config::kChunkMaxActions);
@@ -194,13 +193,13 @@ MotionPlanner::MotionPlanner()
     : astar_(config::kFieldWidthMm, config::kFieldHeightMm, config::kAstarCellMm,
              config::kAstarHeadingBins) {}
 
-uint64_t MotionPlanner::nextTrajId() { return ++trajId_; }
-
 static uint64_t nowPiUs() {
   return std::chrono::duration_cast<std::chrono::microseconds>(
              std::chrono::steady_clock::now().time_since_epoch())
       .count();
 }
+
+uint64_t MotionPlanner::nextTrajId() { return nowPiUs(); }
 
 PlannedChunk MotionPlanner::plan(const PoseState& pose, const BallState& ball, float goalDeg,
                                  float headingDeg, bool fullPlanner) {
@@ -297,9 +296,14 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     // curves around it to the behind-ball strike pose.
     astar_.setObstacle(debug.ballFieldXMm, debug.ballFieldYMm, config::kAstarBallClearMm);
     float astarCostS = 0.f;
+    // Strike approaches arrive at max forward speed (forward-relative to the goal
+    // pose) to carry momentum into the kick; collect poses still stop at v=0.
+    const float strikeEndSpeedMps =
+        debug.usedStrikePosePlan ? maxForwardSpeedMps(debug.targetHeadingDeg) : 0.f;
     buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
                        astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
-                       &debug.profile, &debug.trajectorySpeedProfile, &astarCostS);
+                       &debug.profile, &debug.trajectorySpeedProfile, &astarCostS,
+                       strikeEndSpeedMps);
     astar_.clearObstacle();
     const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(debug.profile);
     const float nextInterceptTimeS =
@@ -311,7 +315,19 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     }
     interceptTimeS = nextInterceptTimeS;
   }
-  applyTerminalVelocity(debug.chunk, debug.offensePose, headingDeg);
+  if (debug.usedStrikePosePlan) {
+    // The strike profile now arrives at max forward speed; match the terminal
+    // tail-stamp to that forward-relative velocity so the held command is
+    // continuous with the planned arrival (the stamp would otherwise zero it).
+    const float vEnd = maxForwardSpeedMps(debug.targetHeadingDeg);
+    const float r = debug.targetHeadingDeg * static_cast<float>(M_PI / 180.0);
+    debug.offensePose.targetVxFieldMps = vEnd * std::sin(r);
+    debug.offensePose.targetVyFieldMps = vEnd * std::cos(r);
+    debug.offensePose.targetOmegaRadS = 0.f;
+  }
+  applyTerminalVelocity(debug.chunk, debug.offensePose.usesTerminalVelocity,
+                        debug.offensePose.targetVxFieldMps, debug.offensePose.targetVyFieldMps,
+                        debug.offensePose.targetOmegaRadS);
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
 }
@@ -377,7 +393,9 @@ DefensePlanDebug MotionPlanner::debugPlanDefense(const PoseState& pose, const Ba
                      debug.defensePose.targetHeadingDeg, astar_, spline_, profiler_, debug.chunk,
                      &debug.waypoints, &debug.path, &debug.profile,
                      &debug.trajectorySpeedProfile);
-  applyTerminalVelocity(debug.chunk, debug.defensePose, headingDeg);
+  applyTerminalVelocity(debug.chunk, debug.defensePose.usesInterceptVelocity,
+                        debug.defensePose.targetVxFieldMps, debug.defensePose.targetVyFieldMps,
+                        debug.defensePose.targetOmegaRadS);
   fillStopChunkIfEmpty(debug.chunk);
   return debug;
 }
