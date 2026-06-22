@@ -41,7 +41,7 @@ struct DeskewStats {
 //   t_i using the motion history buffer, then corrects the point so it appears as if
 //   it were measured at t_ref:
 //
-//       p_ref = R(−Δθ) · (p_i − [Δx, Δy]ᵀ)
+//       p_ref = R(+Δθ) · p_i + [Δx, Δy]ᵀ
 //
 //   Falls back to the raw scan (no crash) if timestamps or motion data are missing.
 //

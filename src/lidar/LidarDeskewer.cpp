@@ -111,8 +111,8 @@ uint64_t LidarDeskewer::computeRefTime(const std::vector<LidarPoint>& pts, int m
 //   angleCd = 0 → forward → +y body axis
 //   angleCd = 9000 → right → +x body axis
 //
-// Formula (undo robot motion from t_ref to t_i):
-//   p_ref = R(−Δθ) · (p_i − [Δx, Δy]ᵀ)
+// Formula (apply relative motion T_{ref→i} to bring p_i into t_ref body frame):
+//   p_ref = R(+Δθ) · p_i + [Δx, Δy]ᵀ
 //
 // where Δθ = omegaRadS * (t_i - t_ref)
 //       Δx = vxBodyMmS * (t_i - t_ref)
@@ -128,13 +128,13 @@ void LidarDeskewer::correctPoint(LidarPoint& p,
   const float px_i = static_cast<float>(p.distanceMm) * std::sin(angleRad);  // +x = right
   const float py_i = static_cast<float>(p.distanceMm) * std::cos(angleRad);  // +y = forward
 
-  // Remove translational displacement (subtract motion from t_ref to t_i).
-  const float px_c = px_i - deltaTx;
-  const float py_c = py_i - deltaTy;
+  // Add translational displacement to bring point back to t_ref body frame.
+  const float px_c = px_i + deltaTx;
+  const float py_c = py_i + deltaTy;
 
-  // Rotate back by −deltaTheta (undo rotational displacement).
-  const float cosD  = std::cos(-deltaTheta);
-  const float sinD  = std::sin(-deltaTheta);
+  // Rotate by +deltaTheta (forward relative motion from t_ref to t_i).
+  const float cosD  = std::cos(deltaTheta);
+  const float sinD  = std::sin(deltaTheta);
   const float px_ref = cosD * px_c - sinD * py_c;
   const float py_ref = sinD * px_c + cosD * py_c;
 
