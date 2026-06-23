@@ -52,6 +52,8 @@ float LidarLocalizer::rayEndpointGap(const Ray& a, const Ray& b) {
   return std::hypot(a.relXMm - b.relXMm, a.relYMm - b.relYMm);
 }
 
+float LidarLocalizer::externalYMm(float internalYMm) const { return fieldH_ - internalYMm; }
+
 std::vector<LidarLocalizer::HoughAngle> LidarLocalizer::buildHoughAngles(
     float centerAngleDeg) const {
   std::vector<HoughAngle> angles;
@@ -593,20 +595,22 @@ PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float
   const auto pose = choosePoseFromCandidates(xCandidates, yCandidates, rays, prevX, prevY);
   if (!pose) {
     if (!xCandidates.empty()) estimate.rawXMm = clamp(xCandidates.front().median, 0.f, fieldW_);
-    if (!yCandidates.empty()) estimate.rawYMm = clamp(yCandidates.front().median, 0.f, fieldH_);
+    if (!yCandidates.empty()) {
+      estimate.rawYMm = externalYMm(clamp(yCandidates.front().median, 0.f, fieldH_));
+    }
     if (!prevPoseMm_) return estimate;
 
     estimate.valid = true;
     estimate.held = true;
     estimate.xMm = prevPoseMm_->first;
-    estimate.yMm = prevPoseMm_->second;
+    estimate.yMm = externalYMm(prevPoseMm_->second);
     return estimate;
   }
 
   const float rawX = clamp(pose->xMm, 0.f, fieldW_);
   const float rawY = clamp(pose->yMm, 0.f, fieldH_);
   estimate.rawXMm = rawX;
-  estimate.rawYMm = rawY;
+  estimate.rawYMm = externalYMm(rawY);
   estimate.inliers = pose->score.inliers;
   estimate.xInliers = pose->score.xInliers;
   estimate.yInliers = pose->score.yInliers;
@@ -618,8 +622,8 @@ PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float
     estimate.shouldFuse = true;
     estimate.poseAlpha = 1.f;
     estimate.xMm = rawX;
-    estimate.yMm = rawY;
-    prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+    estimate.yMm = externalYMm(rawY);
+    prevPoseMm_ = std::make_pair(rawX, rawY);
     prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
     return estimate;
   }
@@ -629,8 +633,7 @@ PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float
     estimate.valid = true;
     estimate.held = true;
     estimate.xMm = prevPoseMm_->first;
-    estimate.yMm = prevPoseMm_->second;
-    prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+    estimate.yMm = externalYMm(prevPoseMm_->second);
     prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
     return estimate;
   }
@@ -651,9 +654,11 @@ PoseEstimate LidarLocalizer::update(const std::vector<LidarPoint>& points, float
   estimate.valid = true;
   estimate.shouldFuse = true;
   estimate.poseAlpha = alpha;
-  estimate.xMm = clamp(nextX, 0.f, fieldW_);
-  estimate.yMm = clamp(nextY, 0.f, fieldH_);
-  prevPoseMm_ = std::make_pair(estimate.xMm, estimate.yMm);
+  const float finalX = clamp(nextX, 0.f, fieldW_);
+  const float finalY = clamp(nextY, 0.f, fieldH_);
+  estimate.xMm = finalX;
+  estimate.yMm = externalYMm(finalY);
+  prevPoseMm_ = std::make_pair(finalX, finalY);
   prevPoseQuality_ = PoseQuality{pose->score.inliers, pose->score.medianResidualMm};
   return estimate;
 }

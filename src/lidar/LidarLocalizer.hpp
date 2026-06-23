@@ -88,6 +88,7 @@ class LidarLocalizer {
   static float percentile(std::vector<float> values, float fraction);
   static float wallAxisEstimate(float distanceMm, float directionComponent, float axisLimitMm);
   static float rayEndpointGap(const Ray& a, const Ray& b);
+  float externalYMm(float internalYMm) const;
 
   std::vector<HoughAngle> buildHoughAngles(float centerAngleDeg) const;
   std::vector<Ray> fieldRays(const std::vector<LidarPoint>& points, float headingDeg) const;
