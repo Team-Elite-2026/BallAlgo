@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config.hpp"
+#include "params.hpp"
 
 #include <algorithm>
 #include <array>
@@ -21,12 +22,13 @@ inline float vMaxDir(float phi, float vmaxX, float vmaxY) {
 // achievable chassis speed:  v <= max_wheel_vel / |cos(alpha_i - phiLocal)|.
 // Returns m/s.
 inline float wheelProjVMax(float phiLocal) {
+  const auto& p = params::get();
   const float maxWheelOmegaNoLoad =
-      (config::kMotorNoLoadRpm * 2.0f * static_cast<float>(M_PI)) / 60.0f;
-  const float maxWheelOmega = maxWheelOmegaNoLoad - config::kMotorLoadCompOmega;
-  const float maxWheelVel = maxWheelOmega * config::kWheelRadiusM;
-  const std::array<float, 4> alpha = {config::kWheelAngle0, config::kWheelAngle1,
-                                      config::kWheelAngle2, config::kWheelAngle3};
+      (p.motorNoLoadRpm * 2.0f * static_cast<float>(M_PI)) / 60.0f;
+  const float maxWheelOmega = maxWheelOmegaNoLoad - p.motorLoadCompOmega;
+  const float maxWheelVel = maxWheelOmega * p.wheelRadiusM;
+  const std::array<float, 4> alpha = {p.wheelAngle0, p.wheelAngle1,
+                                      p.wheelAngle2, p.wheelAngle3};
   float vMax = 9999.0f;
   for (int i = 0; i < 4; ++i) {
     const float proj = std::sin(alpha[i]) * std::sin(phiLocal) +

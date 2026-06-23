@@ -1,6 +1,7 @@
 #include "estimation/BallKalman.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 
 #include <cmath>
 
@@ -12,8 +13,9 @@ void BallKalman::predict(double dtS) {
   // Spec Step 1 (ball): constant-velocity with viscous friction. The velocity
   // states decay by gamma each camera frame, normalised to this dt so the model
   // is frame-rate independent:  v_{k+1} = gamma^(dt/dt_cam) * v_k.
+  const auto& p = params::get();
   const double gammaStep =
-      std::pow(static_cast<double>(config::kBallKfFrictionGamma),
+      std::pow(static_cast<double>(p.ballKfFrictionGamma),
                dtS / static_cast<double>(config::kBallKfCamDtS));
   Eigen::Matrix4d F = Eigen::Matrix4d::Identity();
   F(0, 2) = dtS;
@@ -21,8 +23,8 @@ void BallKalman::predict(double dtS) {
   F(2, 2) = gammaStep;
   F(3, 3) = gammaStep;
   Eigen::Matrix4d Q = Eigen::Matrix4d::Zero();
-  Q(0, 0) = Q(1, 1) = config::kBallKfProcessPosVar * dtS;
-  Q(2, 2) = Q(3, 3) = config::kBallKfProcessVelVar * dtS;
+  Q(0, 0) = Q(1, 1) = p.ballKfProcessPosVar * dtS;
+  Q(2, 2) = Q(3, 3) = p.ballKfProcessVelVar * dtS;
   x_ = F * x_;
   P_ = F * P_ * F.transpose() + Q;
 }
@@ -33,12 +35,12 @@ void BallKalman::update(double xM, double yM, bool found) {
     x_ << xM, yM, 0, 0;
     P_ = Eigen::Matrix4d::Identity();
     // High initial uncertainty on the (unobserved) velocity states.
-    P_(2, 2) = P_(3, 3) = config::kBallKfVelInitVar;
+    P_(2, 2) = P_(3, 3) = params::get().ballKfVelInitVar;
     init_ = true;
   } else {
     Eigen::Matrix<double, 2, 4> H;
     H << 1, 0, 0, 0, 0, 1, 0, 0;
-    Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * config::kBallKfMeasVar;
+    Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * params::get().ballKfMeasVar;
     Eigen::Vector2d z(xM, yM);
     Eigen::Vector2d y = z - H * x_;
     Eigen::Matrix2d S = H * P_ * H.transpose() + R;
@@ -51,7 +53,7 @@ void BallKalman::update(double xM, double yM, bool found) {
 
 BallState BallKalman::state() const {
   BallState s;
-  s.visible = init_ && ageSinceMeasurementS_ <= config::kBallMaxStaleS;
+  s.visible = init_ && ageSinceMeasurementS_ <= params::get().ballMaxStaleS;
   if (!init_) return s;
   s.xM = static_cast<float>(x_(0));
   s.yM = static_cast<float>(x_(1));

@@ -1,6 +1,7 @@
 #include "motion/OffensePose.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "motion/StrikePose.hpp"
 
 #include <algorithm>
@@ -11,37 +12,37 @@ namespace ballalgo {
 namespace {
 
 float minPoseXMm() {
-  return config::kOffenseBoundaryInsetXMm;
+  return params::get().offenseBoundaryInsetXMm;
 }
 
 float maxPoseXMm() {
-  return config::kFieldWidthMm - config::kOffenseBoundaryInsetXMm;
+  return config::kFieldWidthMm - params::get().offenseBoundaryInsetXMm;
 }
 
 float minPoseYMm() {
-  return config::kOffenseBoundaryInsetYMm;
+  return params::get().offenseBoundaryInsetYMm;
 }
 
 float maxPoseYMm() {
-  return config::kFieldHeightMm - config::kOffenseBoundaryInsetYMm;
+  return config::kFieldHeightMm - params::get().offenseBoundaryInsetYMm;
 }
 
 bool ballPastLeftBoundary(float ballXMm) {
-  return ballXMm - config::kOffenseBallRadiusMm <= config::kOffenseBoundaryInsetXMm;
+  return ballXMm - config::kOffenseBallRadiusMm <= params::get().offenseBoundaryInsetXMm;
 }
 
 bool ballPastRightBoundary(float ballXMm) {
   return ballXMm + config::kOffenseBallRadiusMm >=
-         config::kFieldWidthMm - config::kOffenseBoundaryInsetXMm;
+         config::kFieldWidthMm - params::get().offenseBoundaryInsetXMm;
 }
 
 bool ballPastBottomBoundary(float ballYMm) {
-  return ballYMm - config::kOffenseBallRadiusMm <= config::kOffenseBoundaryInsetYMm;
+  return ballYMm - config::kOffenseBallRadiusMm <= params::get().offenseBoundaryInsetYMm;
 }
 
 bool ballPastTopBoundary(float ballYMm) {
   return ballYMm + config::kOffenseBallRadiusMm >=
-         config::kFieldHeightMm - config::kOffenseBoundaryInsetYMm;
+         config::kFieldHeightMm - params::get().offenseBoundaryInsetYMm;
 }
 
 void clampPoseToSafeBox(float& xMm, float& yMm) {
@@ -145,7 +146,7 @@ void setForwardSafeStrikeTarget(OffensePoseResult& result, const PoseState& pose
   const float attackSignY = attackPositiveY ? 1.f : -1.f;
   float targetXMm = result.predictedBallFieldXMm;
   float targetYMm =
-      result.predictedBallFieldYMm - attackSignY * config::kOffenseIntakeOffsetMm;
+      result.predictedBallFieldYMm - attackSignY * params::get().offenseIntakeOffsetMm;
   clampPoseToSafeBox(targetXMm, targetYMm);
   result.targetXMm = targetXMm;
   result.targetYMm = targetYMm;
@@ -156,7 +157,7 @@ void setForwardSafeStrikeTarget(OffensePoseResult& result, const PoseState& pose
 
 void fillDirectBallTarget(OffensePoseResult& result, const PoseState& pose, float headingDeg,
                           bool attackPositiveY) {
-  const float strikeOffsetMm = config::kOffenseIntakeOffsetMm;
+  const float strikeOffsetMm = params::get().offenseIntakeOffsetMm;
   const float attackSignY = attackPositiveY ? 1.f : -1.f;
   result.usesDirectBallPose = true;
 
@@ -170,10 +171,10 @@ void fillDirectBallTarget(OffensePoseResult& result, const PoseState& pose, floa
   }
 
   if (result.state == OffensePoseState::CollectBallAtBoundary) {
-    const float leftLineXMm = config::kOffenseBoundaryInsetXMm;
-    const float rightLineXMm = config::kFieldWidthMm - config::kOffenseBoundaryInsetXMm;
-    const float bottomLineYMm = config::kOffenseBoundaryInsetYMm;
-    const float topLineYMm = config::kFieldHeightMm - config::kOffenseBoundaryInsetYMm;
+    const float leftLineXMm = params::get().offenseBoundaryInsetXMm;
+    const float rightLineXMm = config::kFieldWidthMm - params::get().offenseBoundaryInsetXMm;
+    const float bottomLineYMm = params::get().offenseBoundaryInsetYMm;
+    const float topLineYMm = config::kFieldHeightMm - params::get().offenseBoundaryInsetYMm;
 
     const float leftDistMm = std::fabs(result.predictedBallFieldXMm - leftLineXMm);
     const float rightDistMm = std::fabs(result.predictedBallFieldXMm - rightLineXMm);
@@ -276,9 +277,9 @@ OffensePoseResult computeOffensePose(const PoseState& pose, const BallState& bal
     const float goalDistMm = std::hypot(goalDxMm, goalDyMm);
     if (goalDistMm > 1e-3f) {
       const float targetXMm =
-          result.predictedBallFieldXMm - config::kOffenseIntakeOffsetMm * (goalDxMm / goalDistMm);
+          result.predictedBallFieldXMm - params::get().offenseIntakeOffsetMm * (goalDxMm / goalDistMm);
       const float targetYMm =
-          result.predictedBallFieldYMm - config::kOffenseIntakeOffsetMm * (goalDyMm / goalDistMm);
+          result.predictedBallFieldYMm - params::get().offenseIntakeOffsetMm * (goalDyMm / goalDistMm);
       if (poseOutsideSafeBox(targetXMm, targetYMm)) {
         setForwardSafeStrikeTarget(result, pose, headingDeg, attackPositiveY);
         return result;
@@ -295,9 +296,9 @@ OffensePoseResult computeOffensePose(const PoseState& pose, const BallState& bal
   }
   const float goalRad = goalDeg * static_cast<float>(M_PI / 180.0);
   const float fallbackTargetBodyXM =
-      predicted.xM - config::kOffenseIntakeOffsetMm / 1000.f * std::cos(goalRad);
+      predicted.xM - params::get().offenseIntakeOffsetMm / 1000.f * std::cos(goalRad);
   const float fallbackTargetBodyYM =
-      predicted.yM - config::kOffenseIntakeOffsetMm / 1000.f * std::sin(goalRad);
+      predicted.yM - params::get().offenseIntakeOffsetMm / 1000.f * std::sin(goalRad);
   ballFieldMm(pose.xMm, pose.yMm, fallbackTargetBodyXM, fallbackTargetBodyYM, headingDeg,
               result.targetXMm, result.targetYMm);
   if (poseOutsideSafeBox(result.targetXMm, result.targetYMm)) {

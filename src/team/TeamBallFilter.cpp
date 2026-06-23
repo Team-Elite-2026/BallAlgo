@@ -1,5 +1,7 @@
 #include "team/TeamBallFilter.hpp"
 
+#include "params.hpp"
+
 #include <algorithm>
 #include <cmath>
 
@@ -83,7 +85,7 @@ void TeamBallFilter::reset() {
 
 FusedBallFieldState TeamBallFilter::state() const {
   FusedBallFieldState result;
-  if (!init_ || ageSinceMeasurementS_ > config::kBallMaxStaleS) return result;
+  if (!init_ || ageSinceMeasurementS_ > params::get().ballMaxStaleS) return result;
 
   result.valid = true;
   result.xMm = static_cast<float>(x_(0));

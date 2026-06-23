@@ -1,6 +1,7 @@
 #include "motion/DefensePose.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "motion/MotionLimits.hpp"
 #include "motion/StrikePose.hpp"
 
@@ -46,19 +47,20 @@ void goalLinePointFromBall(float ballRelXCm, float ballRelYCm, float& targetRelX
                            float& targetRelYCm, DefenseGoalLineSegment& segment) {
   const float absX = std::max(std::fabs(ballRelXCm), 1e-3f);
   const float m = ballRelYCm / absX;
+  const auto& p = params::get();
   if (m >= 1.f) {
     segment = DefenseGoalLineSegment::TopLine;
-    targetRelXCm = config::kDefenseGoalLineYMinCm / m;
-    targetRelYCm = config::kDefenseGoalLineYMinCm;
+    targetRelXCm = p.defenseGoalLineYMinCm / m;
+    targetRelYCm = p.defenseGoalLineYMinCm;
   } else if (m <= 5.f / 11.f) {
     segment = DefenseGoalLineSegment::SideLine;
-    targetRelXCm = config::kDefenseGoalLineXMaxCm;
-    targetRelYCm = config::kDefenseGoalLineXMaxCm * m;
+    targetRelXCm = p.defenseGoalLineXMaxCm;
+    targetRelYCm = p.defenseGoalLineXMaxCm * m;
   } else {
     segment = DefenseGoalLineSegment::Arc;
     const float a = 1.f + m * m;
-    const float b = -2.f * (config::kDefenseGoalLineYMinCm + 25.f * m);
-    const float c = config::kDefenseGoalLineQuadraticC;
+    const float b = -2.f * (p.defenseGoalLineYMinCm + 25.f * m);
+    const float c = p.defenseGoalLineQuadraticC;
     const float disc = std::max(0.f, b * b - 4.f * a * c);
     targetRelXCm = (-b + std::sqrt(disc)) / (2.f * a);
     targetRelYCm = m * targetRelXCm;
@@ -123,7 +125,7 @@ DefensePoseResult blockPoseForBall(float ballXMm, float ballYMm, float ballVxMps
 float impactTimeForDampedTravel(float distanceMm, float approachSpeedMps) {
   const float distanceM = distanceMm / 1000.f;
   const float dtCam = 1.f / static_cast<float>(config::kCameraFps);
-  const float gamma = config::kBallPredictionDamping;
+  const float gamma = params::get().ballPredictionDamping;
   if (distanceM <= 1e-6f) return 0.f;
   if (approachSpeedMps <= 1e-6f) return -1.f;
   if (std::fabs(1.f - gamma) <= 1e-5f) return distanceM / approachSpeedMps;
@@ -159,13 +161,13 @@ void maybeApplyInterceptVelocity(DefensePoseResult& result,
   if (result.approachSpeedMps <= 0.f) return;
 
   const float dtCam = 1.f / static_cast<float>(config::kCameraFps);
-  const float gamma = config::kBallPredictionDamping;
+  const float gamma = params::get().ballPredictionDamping;
   result.maxApproachDistanceMm =
       result.approachSpeedMps * dtCam / std::max(1e-5f, 1.f - gamma) * 1000.f;
   if (result.maxApproachDistanceMm < result.scoreDistanceMm) return;
 
   result.impactTimeS = impactTimeForDampedTravel(result.scoreDistanceMm, result.approachSpeedMps);
-  if (result.impactTimeS < 0.f || result.impactTimeS > pathTimeS + config::kDefenseImpactMarginS) {
+  if (result.impactTimeS < 0.f || result.impactTimeS > pathTimeS + params::get().defenseImpactMarginS) {
     return;
   }
 
@@ -176,7 +178,7 @@ void maybeApplyInterceptVelocity(DefensePoseResult& result,
       std::atan2(target.yMm - previous.yMm, target.xMm - previous.xMm);
   const float localEndPhi =
       approachPhiGlobal - previous.thetaDeg * static_cast<float>(M_PI / 180.0);
-  const float vMax = motion::vMaxDir(localEndPhi, config::kVMaxX, config::kVMaxY);
+  const float vMax = motion::vMaxDir(localEndPhi, params::get().vMaxX, params::get().vMaxY);
 
   const float targetRelX = result.initialTargetXMm - defendedGoal.xMm;
   const float targetRelY = result.initialTargetYMm - defendedGoal.yMm;
@@ -188,9 +190,9 @@ void maybeApplyInterceptVelocity(DefensePoseResult& result,
   const float targetRelXCm = targetRelX / kMmPerCm;
   const float targetRelYCm = targetRelY / kMmPerCm;
   DefenseGoalLineSegment targetSegment = DefenseGoalLineSegment::Arc;
-  if (std::fabs(targetRelYCm - config::kDefenseGoalLineYMinCm) <= 1e-3f) {
+  if (std::fabs(targetRelYCm - params::get().defenseGoalLineYMinCm) <= 1e-3f) {
     targetSegment = DefenseGoalLineSegment::TopLine;
-  } else if (std::fabs(std::fabs(targetRelXCm) - config::kDefenseGoalLineXMaxCm) <= 1e-3f) {
+  } else if (std::fabs(std::fabs(targetRelXCm) - params::get().defenseGoalLineXMaxCm) <= 1e-3f) {
     targetSegment = DefenseGoalLineSegment::SideLine;
   }
 
@@ -220,7 +222,7 @@ void maybeApplyInterceptVelocity(DefensePoseResult& result,
     const float vRelX = result.futureBallVxMps - result.targetVxFieldMps;
     const float vRelY = result.futureBallVyMps - result.targetVyFieldMps;
     result.targetOmegaRadS =
-        clampMagnitude((dRelY * vRelX - dRelX * vRelY) / dRelLenSq, config::kOmegaMaxRadS);
+        clampMagnitude((dRelY * vRelX - dRelX * vRelY) / dRelLenSq, params::get().omegaMaxRadS);
   }
 
   result.usesInterceptVelocity = true;
@@ -243,7 +245,7 @@ DefensePoseResult computeDefensePose(const PoseState& pose, const BallState& bal
   fieldBallFromBody(pose, ball, headingDeg, ballXMm, ballYMm, ballVxMps, ballVyMps);
   result = blockPoseForBall(ballXMm, ballYMm, ballVxMps, ballVyMps, defendedGoal);
 
-  const float safeTimeS = std::min(pathTimeS, config::kDefenseFutureBallMaxTimeS);
+  const float safeTimeS = std::min(pathTimeS, params::get().defenseFutureBallMaxTimeS);
   if (safeTimeS > 0.f) {
     const float bodyHeadingRad = headingDeg * static_cast<float>(M_PI / 180.0);
     const float c = std::cos(-bodyHeadingRad);

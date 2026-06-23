@@ -1,6 +1,7 @@
 #include "motion/VelocityProfile.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,11 +20,11 @@ struct MotorModel {
 
 MotorModel makeMotorModel() {
   MotorModel m;
+  const auto& p = params::get();
   const float omegaNoLoad =
-      (config::kMotorNoLoadRpm * 2.0f * static_cast<float>(M_PI)) / 60.0f;
-  m.maxWheelVel = (omegaNoLoad - config::kMotorLoadCompOmega) * config::kWheelRadiusM;
-  m.alpha = {config::kWheelAngle0, config::kWheelAngle1, config::kWheelAngle2,
-             config::kWheelAngle3};
+      (p.motorNoLoadRpm * 2.0f * static_cast<float>(M_PI)) / 60.0f;
+  m.maxWheelVel = (omegaNoLoad - p.motorLoadCompOmega) * p.wheelRadiusM;
+  m.alpha = {p.wheelAngle0, p.wheelAngle1, p.wheelAngle2, p.wheelAngle3};
   return m;
 }
 
@@ -34,12 +35,12 @@ float calcCeiling(const SplineDerivState& st, const MotorModel& m) {
   for (int i = 0; i < 4; ++i) {
     const float projTrans = std::sin(m.alpha[i]) * static_cast<float>(st.dx_ds) +
                             std::cos(m.alpha[i]) * static_cast<float>(st.dy_ds);
-    const float projRot = -config::kChassisRadiusM * static_cast<float>(st.dtheta_ds);
+    const float projRot = -params::get().chassisRadiusM * static_cast<float>(st.dtheta_ds);
     const float Ki = projTrans + projRot;
     if (std::fabs(Ki) > 0.001f) sDotLim = std::min(sDotLim, m.maxWheelVel / std::fabs(Ki));
   }
   if (std::fabs(st.kappa) > 0.001f) {
-    const float vCurve = std::sqrt(config::kAMaxGripAccel / static_cast<float>(std::fabs(st.kappa)));
+    const float vCurve = std::sqrt(params::get().aMaxGripAccel / static_cast<float>(std::fabs(st.kappa)));
     const float pathRatio =
         std::sqrt(static_cast<float>(st.dx_ds * st.dx_ds + st.dy_ds * st.dy_ds));
     if (pathRatio > 0.001f) sDotLim = std::min(sDotLim, vCurve / pathRatio);
@@ -58,23 +59,24 @@ DynLimits calcDynLimits(const SplineDerivState& st, float sDot, float vx, float 
   const float sDotSq = sDot * sDot;
   constexpr float EPS = 0.001f;
   for (int i = 0; i < 4; ++i) {
+    const auto& p = params::get();
     const float vWheel = std::sin(m.alpha[i]) * vx + std::cos(m.alpha[i]) * vy -
-                         config::kChassisRadiusM * omega;
-    const float wMotor = vWheel / config::kWheelRadiusM;
-    const float vEmf = config::kMotorKv * wMotor;
+                         p.chassisRadiusM * omega;
+    const float wMotor = vWheel / p.wheelRadiusM;
+    const float vEmf = p.motorKv * wMotor;
     const float friction =
-        (wMotor > EPS) ? config::kMotorKs : (wMotor < -EPS) ? -config::kMotorKs : 0.0f;
-    const float vPos = config::kMotorVBus - friction - vEmf;
-    const float vNeg = -config::kMotorVBus - friction - vEmf;
-    const float aWhPos = (vPos * config::kWheelRadiusM) / config::kMotorKa;
-    const float aWhNeg = (vNeg * config::kWheelRadiusM) / config::kMotorKa;
+        (wMotor > EPS) ? p.motorKs : (wMotor < -EPS) ? -p.motorKs : 0.0f;
+    const float vPos = p.motorVBus - friction - vEmf;
+    const float vNeg = -p.motorVBus - friction - vEmf;
+    const float aWhPos = (vPos * p.wheelRadiusM) / p.motorKa;
+    const float aWhNeg = (vNeg * p.wheelRadiusM) / p.motorKa;
 
     const float Ki = std::sin(m.alpha[i]) * static_cast<float>(st.dx_ds) +
                      std::cos(m.alpha[i]) * static_cast<float>(st.dy_ds) -
-                     config::kChassisRadiusM * static_cast<float>(st.dtheta_ds);
+                     p.chassisRadiusM * static_cast<float>(st.dtheta_ds);
     const float Ci = std::sin(m.alpha[i]) * static_cast<float>(st.d2x_ds2) +
                      std::cos(m.alpha[i]) * static_cast<float>(st.d2y_ds2) -
-                     config::kChassisRadiusM * static_cast<float>(st.d2theta_ds2);
+                     p.chassisRadiusM * static_cast<float>(st.d2theta_ds2);
     const float curveTerm = Ci * sDotSq;
     if (std::fabs(Ki) > EPS) {
       const float b1 = (aWhPos - curveTerm) / Ki;
@@ -93,9 +95,9 @@ DynLimits calcDynLimits(const SplineDerivState& st, float sDot, float vx, float 
   if (pathRatio > EPS) {
     const float vSq = vx * vx + vy * vy;
     const float aLat = std::min(vSq * static_cast<float>(std::fabs(st.kappa)),
-                                config::kAMaxGripAccel);
+                                params::get().aMaxGripAccel);
     const float aTang = std::sqrt(std::max(
-        0.0f, config::kAMaxGripAccel * config::kAMaxGripAccel - aLat * aLat));
+        0.0f, params::get().aMaxGripAccel * params::get().aMaxGripAccel - aLat * aLat));
     const float sDdotTr = aTang / pathRatio;
     lim.accel = std::min(lim.accel, sDdotTr);
     lim.decel = std::min(lim.decel, sDdotTr);
@@ -146,7 +148,7 @@ std::vector<ProfilePointS> VelocityProfile::computeMotorModel(const HermiteSplin
       const float omega = static_cast<float>(st.dtheta_ds) * sDot;
       const DynLimits dl = calcDynLimits(st, sDot, vx, vy, omega, m);
       const float sdotSafe = std::max(sDot, EPS);
-      const float dSdot = config::kProfilerJMax * ds / sdotSafe;
+      const float dSdot = params::get().profilerJMax * ds / sdotSafe;
       sDdot += (sDdot < dl.accel) ? dSdot : -dSdot;
       sDdot = std::clamp(sDdot, 0.0f, dl.accel);
       const float v2 = sDot * sDot + 2.0f * sDdot * ds;
@@ -168,7 +170,7 @@ std::vector<ProfilePointS> VelocityProfile::computeMotorModel(const HermiteSplin
       const float omega = static_cast<float>(st.dtheta_ds) * sDot;
       const DynLimits dl = calcDynLimits(st, sDot, vx, vy, omega, m);
       const float sdotSafe = std::max(sDot, EPS);
-      const float dSdot = config::kProfilerJMax * ds / sdotSafe;
+      const float dSdot = params::get().profilerJMax * ds / sdotSafe;
       sDdotDecel += dSdot;
       sDdotDecel = std::clamp(sDdotDecel, 0.0f, dl.decel);
       const float v2 = sDot * sDot + 2.0f * sDdotDecel * ds;

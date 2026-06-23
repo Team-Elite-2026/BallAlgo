@@ -1,6 +1,7 @@
 #include "motion/MotionPipeline.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "vision/VisionMath.hpp"
 
 #include <cmath>
@@ -82,7 +83,7 @@ void MotionPipeline::updateGoalBearings(const GoalBearingObs* obs, int count, fl
     const GoalBearingObs& o = obs[i];
     if (!o.valid) continue;
     // Aside (spec): skip very low certainty observations entirely.
-    if (o.certainty < config::kGoalCertaintyThreshold) continue;
+    if (o.certainty < params::get().goalCertaintyThreshold) continue;
     poseKf_.updateGoalBearing(o.bearingRad, o.goalXMm, o.goalYMm, headingDeg, o.certainty);
   }
 }

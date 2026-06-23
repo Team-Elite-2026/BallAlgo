@@ -1,5 +1,7 @@
 #include "team/RoleArbiter.hpp"
 
+#include "params.hpp"
+
 namespace ballalgo {
 namespace {
 
@@ -67,13 +69,13 @@ bool RoleArbiter::shouldSwitchRoles(bool localBallVisible, float localBallDistan
   if (currentRole_ == TeamRole::Offense) {
     if (!peerBallVisible) return false;
     if (!localBallVisible) return true;
-    return (localBallDistanceCm - peerDistance) >= config::kRoleSwitchMarginCm;
+    return (localBallDistanceCm - peerDistance) >= params::get().roleSwitchMarginCm;
   }
 
   if (!localBallVisible) return false;
   if (!peerOffense) return false;
   if (!peerBallVisible) return true;
-  return (peerDistance - localBallDistanceCm) >= config::kRoleSwitchMarginCm;
+  return (peerDistance - localBallDistanceCm) >= params::get().roleSwitchMarginCm;
 }
 
 TeamRole RoleArbiter::update(uint64_t nowUs, ModeOverride localOverride, bool localBallVisible,
@@ -99,7 +101,7 @@ TeamRole RoleArbiter::update(uint64_t nowUs, ModeOverride localOverride, bool lo
 
   if (shouldSwitchRoles(localBallVisible, localBallDistanceCm, peer)) {
     ++betterSampleCount_;
-    if (betterSampleCount_ >= config::kRoleConfirmSamples) {
+    if (betterSampleCount_ >= params::get().roleConfirmSamples) {
       currentRole_ = oppositeRole(currentRole_);
       betterSampleCount_ = 0;
     }

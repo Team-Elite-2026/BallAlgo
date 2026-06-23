@@ -1,6 +1,7 @@
 #include "motion/StrikePose.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "vision/VisionMath.hpp"
 
 #include <algorithm>
@@ -12,8 +13,8 @@ void strikePoseBody(float bx, float by, float goalDeg, float& tx, float& ty) {
   double ux = 0.0;
   double uy = 0.0;
   polarToBodyXY(goalDeg, 1.0, ux, uy);
-  tx = bx - static_cast<float>(config::kStrikeOffsetM * ux);
-  ty = by - static_cast<float>(config::kStrikeOffsetM * uy);
+  tx = bx - static_cast<float>(params::get().strikeOffsetM * ux);
+  ty = by - static_cast<float>(params::get().strikeOffsetM * uy);
 }
 
 void ballFieldMm(float rx, float ry, float bx, float by, float headingDeg, float& fx, float& fy) {
@@ -30,7 +31,7 @@ PredictedBallPose predictBallBody(float bx, float by, float vx, float vy, float 
 
   const float dtCam = 1.f / static_cast<float>(config::kCameraFps);
   const float samples = std::max(0.f, timeS / dtCam);
-  const float gamma = config::kBallPredictionDamping;
+  const float gamma = params::get().ballPredictionDamping;
   float dampedTime = timeS;
   if (std::fabs(1.f - gamma) > 1e-5f) {
     dampedTime = dtCam * (1.f - std::pow(gamma, samples)) / (1.f - gamma);

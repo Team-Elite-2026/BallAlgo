@@ -1,6 +1,7 @@
 #include "motion/MotionPlanner.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "motion/MotionLimits.hpp"
 #include "motion/OffensePose.hpp"
 #include "vision/VisionMath.hpp"
@@ -31,8 +32,8 @@ float wrapAngleDeg(float angleDeg) {
 // this is the radius of the velocity ellipse along that direction.
 float maxForwardSpeedMps(float headingDeg) {
   const float r = headingDeg * static_cast<float>(M_PI / 180.0);
-  const float sx = std::sin(r) / config::kVMaxX;
-  const float cy = std::cos(r) / config::kVMaxY;
+  const float sx = std::sin(r) / params::get().vMaxX;
+  const float cy = std::cos(r) / params::get().vMaxY;
   const float denom = std::sqrt(sx * sx + cy * cy);
   return denom > 1e-6f ? 1.f / denom : 0.f;
 }
@@ -48,17 +49,17 @@ float profileDurationS(const std::vector<ProfileSample>& profile) {
       durationS += dsM / avgV;
       continue;
     }
-    const float aMax = motion::aMaxDir(profile[i].phi, config::kAMaxX, config::kAMaxY);
+    const float aMax = motion::aMaxDir(profile[i].phi, params::get().aMaxX, params::get().aMaxY);
     durationS += std::sqrt(2.f * dsM / std::max(0.1f, aMax));
   }
   return durationS;
 }
 
 float initialOffenseInterceptTimeS(const BallState& ball) {
-  const float maxPlanSpeedMps = std::max(config::kVMaxX, config::kVMaxY);
+  const float maxPlanSpeedMps = std::max(params::get().vMaxX, params::get().vMaxY);
   const float travelTimeS =
       std::hypot(ball.xM, ball.yM) / std::max(0.05f, maxPlanSpeedMps);
-  return std::clamp(travelTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
+  return std::clamp(travelTimeS, 0.f, params::get().strikeInterceptMaxTimeS);
 }
 
 void fillStopChunkIfEmpty(PlannedChunk& chunk) {
@@ -243,7 +244,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
       debug.targetHeadingDeg = headingDeg;
       debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
       debug.withinTargetTolerance =
-          debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+          debug.targetErrMm <= params::get().commandGoalPositionToleranceMm;
       buildChunkToTarget(pose, headingDeg, debug.targetXMm, debug.targetYMm, debug.targetHeadingDeg,
                          astar_, spline_, profiler_, debug.chunk, &debug.waypoints, &debug.path,
                          &debug.profile, &debug.trajectorySpeedProfile);
@@ -256,7 +257,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     debug.usedBodyChaseFallback = true;
     debug.targetErrMm = std::hypot(ball.xM * 1000.f, ball.yM * 1000.f);
     debug.withinTargetTolerance =
-        debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+        debug.targetErrMm <= params::get().commandGoalPositionToleranceMm;
     float dist = std::hypot(ball.xM, ball.yM);
     float sp = std::min(0.3f, dist * 0.5f);
     MotionAction action{};
@@ -281,7 +282,7 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
   const float goalFieldYMm = hasGoalFieldTarget ? goalFieldTarget->yMm : 0.f;
   float interceptTimeS = initialOffenseInterceptTimeS(ball);
 
-  for (int iteration = 0; iteration < config::kStrikeInterceptMaxIterations; ++iteration) {
+  for (int iteration = 0; iteration < params::get().strikeInterceptMaxIterations; ++iteration) {
     const OffensePoseResult offensePose =
         computeOffensePose(pose, ball, goalDeg, headingDeg, hasGoalFieldTarget, goalFieldXMm,
                            goalFieldYMm, interceptTimeS);
@@ -290,11 +291,11 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     fillBallDebugFromOffensePose(debug, offensePose);
     debug.targetErrMm = std::hypot(debug.targetXMm - pose.xMm, debug.targetYMm - pose.yMm);
     debug.withinTargetTolerance =
-        debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+        debug.targetErrMm <= params::get().commandGoalPositionToleranceMm;
 
     // Step 3: inflate the (predicted) ball as a circular obstacle so the path
     // curves around it to the behind-ball strike pose.
-    astar_.setObstacle(debug.ballFieldXMm, debug.ballFieldYMm, config::kAstarBallClearMm);
+    astar_.setObstacle(debug.ballFieldXMm, debug.ballFieldYMm, params::get().astarBallClearMm);
     float astarCostS = 0.f;
     // Strike approaches arrive at max forward speed (forward-relative to the goal
     // pose) to carry momentum into the kick; collect poses still stop at v=0.
@@ -307,10 +308,10 @@ BallPlanDebug MotionPlanner::debugPlan(const PoseState& pose, const BallState& b
     astar_.clearObstacle();
     const float pathTimeS = astarCostS > 0.f ? astarCostS : profileDurationS(debug.profile);
     const float nextInterceptTimeS =
-        std::clamp(pathTimeS, 0.f, config::kStrikeInterceptMaxTimeS);
-    if (std::fabs(nextInterceptTimeS - interceptTimeS) <= config::kStrikeInterceptConvergeS ||
-        pathTimeS >= config::kStrikeInterceptMaxTimeS ||
-        iteration + 1 == config::kStrikeInterceptMaxIterations) {
+        std::clamp(pathTimeS, 0.f, params::get().strikeInterceptMaxTimeS);
+    if (std::fabs(nextInterceptTimeS - interceptTimeS) <= params::get().strikeInterceptConvergeS ||
+        pathTimeS >= params::get().strikeInterceptMaxTimeS ||
+        iteration + 1 == params::get().strikeInterceptMaxIterations) {
       break;
     }
     interceptTimeS = nextInterceptTimeS;
@@ -387,7 +388,7 @@ DefensePlanDebug MotionPlanner::debugPlanDefense(const PoseState& pose, const Ba
 
   debug.targetErrMm =
       std::hypot(debug.defensePose.targetXMm - pose.xMm, debug.defensePose.targetYMm - pose.yMm);
-  debug.withinTargetTolerance = debug.targetErrMm <= config::kCommandGoalPositionToleranceMm;
+  debug.withinTargetTolerance = debug.targetErrMm <= params::get().commandGoalPositionToleranceMm;
 
   buildChunkToTarget(pose, headingDeg, debug.defensePose.targetXMm, debug.defensePose.targetYMm,
                      debug.defensePose.targetHeadingDeg, astar_, spline_, profiler_, debug.chunk,
@@ -419,8 +420,8 @@ CommandedPosePlanDebug MotionPlanner::debugPlanToPose(const PoseState& pose,
   debug.posErrMm = std::hypot(goal.xMm - pose.xMm, goal.yMm - pose.yMm);
   debug.headingErrDeg = std::fabs(wrapAngleDeg(goal.headingDeg - headingDeg));
   debug.withinTolerance =
-      debug.posErrMm <= config::kCommandGoalPositionToleranceMm &&
-      debug.headingErrDeg <= config::kCommandGoalHeadingToleranceDeg;
+      debug.posErrMm <= params::get().commandGoalPositionToleranceMm &&
+      debug.headingErrDeg <= params::get().commandGoalHeadingToleranceDeg;
   if (debug.withinTolerance) {
     fillStopChunkIfEmpty(debug.chunk);
     return debug;

@@ -1,5 +1,6 @@
 #include "camera/CameraCapture.hpp"
 #include "config.hpp"
+#include "params.hpp"
 #include "FoxGloveSim/FoxgloveTelemetryPublisher.hpp"
 #include "estimation/BallKalman.hpp"
 #include "estimation/PoseKalman.hpp"
@@ -194,6 +195,8 @@ int main(int argc, char** argv) {
   if (options.trajectoryReplayEnabled) {
     std::cout << "trajectory replay artifact: " << options.trajectoryReplayArtifactPath << "\n";
   }
+
+  params::load("params.json");
 
   ThresholdsData thr;
   loadThresholds(config::kThresholdsJson, thr);

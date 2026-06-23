@@ -17,6 +17,7 @@ set(BALLALGO_TEAM_CORE_SOURCES
 )
 
 set(BALLALGO_MOTION_CORE_SOURCES
+  src/params.cpp
   src/motion/AStar3D.cpp
   src/motion/DefensePose.cpp
   src/motion/HermiteSpline.cpp
@@ -105,6 +106,7 @@ target_compile_options(ballalgo PRIVATE -O3 -Wall -Wextra)
 
 install(TARGETS ballalgo RUNTIME DESTINATION bin)
 install(FILES thresholds.json DESTINATION share/ballalgo OPTIONAL)
+install(FILES params.json DESTINATION share/ballalgo OPTIONAL)
 endif()
 
 if(BALLALGO_BUILD_TESTS)

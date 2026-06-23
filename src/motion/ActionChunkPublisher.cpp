@@ -1,6 +1,7 @@
 #include "motion/ActionChunkPublisher.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "motion/Protocol.hpp"
 #include "vision/VisionMath.hpp"
 
@@ -85,23 +86,24 @@ ActuatorCommand chooseActuatorCommand(const PoseState& pose, const BallState& ba
   if (!offenseActive) return command;
 
   const float ballDistanceMm = std::hypot(ball.xM, ball.yM) * 1000.f;
-  if (hasBall || (ball.visible && ballDistanceMm <= config::kDribblerCaptureDistMm)) {
-    command.dribblerPower = config::kDribblerActivePower;
+  const auto& p = params::get();
+  if (hasBall || (ball.visible && ballDistanceMm <= p.dribblerCaptureDistMm)) {
+    command.dribblerPower = static_cast<uint8_t>(p.dribblerActivePower);
   }
 
   if (!hasBall || !pose.valid || offenseGoalFieldTarget == nullptr) return command;
-  if (lastKickPiUs != 0 && nowPiUs - lastKickPiUs < config::kKickCooldownUs) return command;
+  if (lastKickPiUs != 0 && nowPiUs - lastKickPiUs < p.kickCooldownUs) return command;
 
   float goalBodyXMm = 0.f;
   float goalBodyYMm = 0.f;
   fieldToBodyOffsetMm(offenseGoalFieldTarget->xMm - pose.xMm,
                       offenseGoalFieldTarget->yMm - pose.yMm, headingDeg, goalBodyXMm,
                       goalBodyYMm);
-  if (goalBodyYMm < config::kKickMinGoalForwardMm) return command;
+  if (goalBodyYMm < p.kickMinGoalForwardMm) return command;
 
   const float goalAngleDeg =
       std::atan2(goalBodyXMm, goalBodyYMm) * 180.f / static_cast<float>(M_PI);
-  if (std::fabs(goalAngleDeg) > config::kKickAimToleranceDeg) return command;
+  if (std::fabs(goalAngleDeg) > p.kickAimToleranceDeg) return command;
 
   command.kick = 1u;
   lastKickPiUs = nowPiUs;

@@ -1,6 +1,7 @@
 #include "estimation/PoseKalman.hpp"
 
 #include "config.hpp"
+#include "params.hpp"
 #include "vision/VisionMath.hpp"
 
 #include <algorithm>
@@ -51,8 +52,8 @@ void PoseKalman::predict(double dtS) {
   F(0, 2) = dtS;
   F(1, 3) = dtS;
   Eigen::Matrix4d Q = Eigen::Matrix4d::Zero();
-  Q(0, 0) = Q(1, 1) = config::kPoseKfProcessPosVar * dtS;
-  Q(2, 2) = Q(3, 3) = config::kPoseKfProcessVelVar * dtS;
+  Q(0, 0) = Q(1, 1) = params::get().poseKfProcessPosVar * dtS;
+  Q(2, 2) = Q(3, 3) = params::get().poseKfProcessVelVar * dtS;
   x_ = F * x_;
   P_ = F * P_ * F.transpose() + Q;
 }
@@ -62,7 +63,7 @@ void PoseKalman::predictMouse(double vxBodyMmS, double vyBodyMmS, float headingD
   ageSinceMeasurementS_ += dtS;
 
   // Dead-reckoning propagation (DWNA constant-velocity model).
-  cvPredict(x_, P_, dtS, config::kPoseKfMouseAccelVar);
+  cvPredict(x_, P_, dtS, params::get().poseKfMouseAccelVar);
 
   // Measurement update: the heading-rotated mouse velocity observes [vx, vy].
   // The time-varying rotation by the IMU heading is what makes this an EKF.
@@ -74,7 +75,7 @@ void PoseKalman::predictMouse(double vxBodyMmS, double vyBodyMmS, float headingD
   H.setZero();
   H(0, 2) = 1.0;
   H(1, 3) = 1.0;
-  Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * config::kPoseKfMouseMeasVar;
+  Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * params::get().poseKfMouseMeasVar;
   Eigen::Vector2d z(zx, zy);
   Eigen::Vector2d y = z - H * x_;
   Eigen::Matrix2d S = H * P_ * H.transpose() + R;
@@ -94,7 +95,7 @@ void PoseKalman::update(const PoseEstimate& meas, float headingDeg) {
   } else {
     Eigen::Matrix<double, 2, 4> H;
     H << 1, 0, 0, 0, 0, 1, 0, 0;
-    Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * config::kPoseKfMeasPosVar;
+    Eigen::Matrix2d R = Eigen::Matrix2d::Identity() * params::get().poseKfMeasPosVar;
     Eigen::Vector2d z(meas.xMm, meas.yMm);
     Eigen::Vector2d y = z - H * x_;
     Eigen::Matrix2d S = H * P_ * H.transpose() + R;
@@ -142,8 +143,8 @@ void PoseKalman::updateGoalBearing(double measBearingRad, double goalXMm, double
   // Occlusion-scaled measurement variance: R = base + penalty*(1-cert)^2.
   const double cert = std::clamp(certainty, 0.0, 1.0);
   const double oneMinusC = 1.0 - cert;
-  const double R = config::kGoalBearingBaseVarRad2 +
-                   config::kGoalBearingPenaltyRad2 * oneMinusC * oneMinusC;
+  const double R = params::get().goalBearingBaseVarRad2 +
+                   params::get().goalBearingPenaltyRad2 * oneMinusC * oneMinusC;
 
   const double S = (H * P_ * H.transpose())(0, 0) + R;
   if (S < 1e-9) return;
@@ -154,7 +155,7 @@ void PoseKalman::updateGoalBearing(double measBearingRad, double goalXMm, double
 
 PoseState PoseKalman::state(float headingDeg) const {
   PoseState s;
-  s.valid = init_ && ageSinceMeasurementS_ <= config::kPoseMaxStaleS;
+  s.valid = init_ && ageSinceMeasurementS_ <= params::get().poseMaxStaleS;
   if (!init_) return s;
   s.xMm = static_cast<float>(x_(0));
   s.yMm = static_cast<float>(x_(1));
