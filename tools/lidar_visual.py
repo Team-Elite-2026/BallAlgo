@@ -106,6 +106,12 @@ def mm_to_field_pixel(x_mm, y_mm, width_px, height_px, margin=30):
     return px, py
 
 
+def display_field_y_mm(y_mm):
+    # Visual-only fix: the live field overlay is mirrored over the field x-axis
+    # relative to the static field outline, so flip dynamic y before drawing.
+    return cfg.FIELD_HEIGHT_MM - y_mm
+
+
 def draw_polar_panel(points):
     panel = np.zeros((POLAR_SIZE, POLAR_SIZE, 3), dtype=np.uint8)
     cv2.circle(panel, (POLAR_SIZE // 2, POLAR_SIZE // 2), int(POLAR_SIZE * 0.45), (40, 40, 40), 1)
@@ -139,26 +145,32 @@ def draw_field_panel(points, heading_deg, pose, heading_live=False):
     else:
         robot_x, robot_y = fw * 0.5, fh * 0.5
 
-    robot_px = mm_to_field_pixel(robot_x, robot_y, FIELD_PANEL_W, FIELD_PANEL_H)
+    robot_px = mm_to_field_pixel(
+        robot_x, display_field_y_mm(robot_y), FIELD_PANEL_W, FIELD_PANEL_H
+    )
     cv2.circle(panel, robot_px, 6, (0, 255, 255), -1)
 
     heading_rad = math.radians(heading_deg)
     arrow_len_mm = 250.0
     tip_x = robot_x + arrow_len_mm * math.cos(heading_rad)
     tip_y = robot_y + arrow_len_mm * math.sin(heading_rad)
-    tip_px = mm_to_field_pixel(tip_x, tip_y, FIELD_PANEL_W, FIELD_PANEL_H)
+    tip_px = mm_to_field_pixel(
+        tip_x, display_field_y_mm(tip_y), FIELD_PANEL_W, FIELD_PANEL_H
+    )
     cv2.arrowedLine(panel, robot_px, tip_px, (0, 200, 255), 2, tipLength=0.25)
 
     for point in points:
         end_x, end_y = field_ray_endpoint(robot_x, robot_y, point, heading_deg)
-        hit_px = mm_to_field_pixel(end_x, end_y, FIELD_PANEL_W, FIELD_PANEL_H)
+        hit_px = mm_to_field_pixel(
+            end_x, display_field_y_mm(end_y), FIELD_PANEL_W, FIELD_PANEL_H
+        )
         cv2.line(panel, robot_px, hit_px, (60, 140, 60), 1)
         cv2.circle(panel, hit_px, 2, (80, 200, 80), -1)
 
     status = "pose OK" if pose["valid"] else "pose invalid"
     if pose["valid"]:
         cx = (pose["x_mm"] - cfg.FIELD_WIDTH_MM / 2) / 10
-        cy = (pose["y_mm"] - cfg.FIELD_HEIGHT_MM / 2) / 10
+        cy = (display_field_y_mm(pose["y_mm"]) - cfg.FIELD_HEIGHT_MM / 2) / 10
         status += f"  ({cx:.1f}, {cy:.1f}) cm"
     heading_src = "teensy" if heading_live else "manual"
     heading_color = (80, 220, 80) if heading_live else (180, 180, 180)
