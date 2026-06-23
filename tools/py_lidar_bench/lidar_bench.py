@@ -93,6 +93,12 @@ class PoseCandidate:
     score: Optional[PoseScore] = None
 
 
+@dataclass
+class PoseQuality:
+    inliers: int = 0
+    median_residual_mm: float = 0.0
+
+
 # ---------------------------------------------------------------------------
 # LidarLocalizer — mirrors LidarLocalizer.cpp exactly
 # ---------------------------------------------------------------------------
@@ -129,10 +135,16 @@ class LidarLocalizer:
         self._wall_axis_margin_mm = 180.0
         self._min_pose_inliers = 28
         self._min_pose_axis_inliers = 8
+        self._max_pose_step_mm = 70.0
+        self._pose_jump_reject_mm = 240.0
+        self._good_residual_mm = 55.0
+        self._pose_alpha_slow = 0.10
+        self._pose_alpha_fast = 0.28
 
         self._hough_angles_x = self._build_hough_angles(0.0)
         self._hough_angles_y = self._build_hough_angles(90.0)
         self._prev_pose: Optional[Tuple[float, float]] = None
+        self._prev_pose_quality: Optional[PoseQuality] = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -170,12 +182,58 @@ class LidarLocalizer:
                 "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
 
         pose = self._choose_pose_from_candidates(x_candidates, y_candidates, rays, prev_x, prev_y)
-        if pose is None:
-            return base
 
-        self._prev_pose = (pose.x_mm, pose.y_mm)
-        return {"valid": True, "x_mm": pose.x_mm, "y_mm": pose.y_mm,
+        if pose is None:
+            if self._prev_pose is None:
+                return base
+            # Hold previous pose when current estimate fails.
+            return {"valid": True, "x_mm": self._prev_pose[0], "y_mm": self._prev_pose[1],
+                    "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+        raw_x = self._clamp(pose.x_mm, 0.0, self.field_width_mm)
+        raw_y = self._clamp(pose.y_mm, 0.0, self.field_height_mm)
+        score = pose.score
+
+        if self._prev_pose is None:
+            # First fix — snap directly.
+            self._prev_pose = (raw_x, raw_y)
+            self._prev_pose_quality = PoseQuality(score.inliers, score.median_residual_mm)
+            return {"valid": True, "x_mm": raw_x, "y_mm": raw_y,
+                    "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+        innovation_mm = math.hypot(raw_x - self._prev_pose[0], raw_y - self._prev_pose[1])
+
+        if self._should_hold_pose(innovation_mm, score):
+            # Large suspicious jump — hold current.
+            self._prev_pose_quality = PoseQuality(score.inliers, score.median_residual_mm)
+            return {"valid": True, "x_mm": self._prev_pose[0], "y_mm": self._prev_pose[1],
+                    "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+        alpha = self._pose_alpha_fast if score.median_residual_mm <= self._good_residual_mm else self._pose_alpha_slow
+        next_x = self._prev_pose[0] + (raw_x - self._prev_pose[0]) * alpha
+        next_y = self._prev_pose[1] + (raw_y - self._prev_pose[1]) * alpha
+
+        step_x = next_x - self._prev_pose[0]
+        step_y = next_y - self._prev_pose[1]
+        step_mag = math.hypot(step_x, step_y)
+        if step_mag > self._max_pose_step_mm:
+            scale = self._max_pose_step_mm / step_mag
+            next_x = self._prev_pose[0] + step_x * scale
+            next_y = self._prev_pose[1] + step_y * scale
+
+        next_x = self._clamp(next_x, 0.0, self.field_width_mm)
+        next_y = self._clamp(next_y, 0.0, self.field_height_mm)
+        self._prev_pose = (next_x, next_y)
+        self._prev_pose_quality = PoseQuality(score.inliers, score.median_residual_mm)
+        return {"valid": True, "x_mm": next_x, "y_mm": next_y,
                 "x_samples": len(x_estimates), "y_samples": len(y_estimates)}
+
+    def _should_hold_pose(self, innovation_mm: float, score: PoseScore) -> bool:
+        if innovation_mm <= self._pose_jump_reject_mm:
+            return False
+        if score.median_residual_mm <= self._good_residual_mm and self._prev_pose_quality is not None:
+            return score.inliers < (self._prev_pose_quality.inliers + 12)
+        return True
 
     # ------------------------------------------------------------------
     # Geometry helpers

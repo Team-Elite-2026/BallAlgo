@@ -125,3 +125,47 @@ python3 tools/trajectory_debug/run_replay.py tests/trajectory_cases/generated/fo
 That launches the runtime in `--trajectory-replay-artifact` mode so the Pi can
 still read Teensy telemetry, LiDAR, and publish Foxglove topics while the chunk
 sequence is being replayed.
+
+## LiDAR Pose-Track Test (drive a rectangle, record + plot the LiDAR pose)
+
+This validates the real C++ `LidarLocalizer` (with deskewing) by driving the robot
+in a closed rectangle while recording the estimated pose, then plotting the track
+with time as a color gradient.
+
+The `rectangle_loop` case drives a 600 mm × 600 mm CCW square at 0.30 m/s with a
+fixed heading (pure translation, `omega = 0`), starting at field `(600, 900)` mm.
+
+1. Generate the artifact:
+
+   ```bash
+   python3 tools/trajectory_debug/generate_cases.py \
+       --spec tests/trajectory_cases/specs/rectangle_loop.json
+   ```
+
+2. On the Pi, replay it **with the sidecar** so `/robot/pose` is recorded to MCAP
+   (`foxglove_sim/recordings/<label>.mcap`). The pose comes from the same
+   `MotionPipeline::updateLidar` path the robot normally uses, so deskewing applies:
+
+   ```bash
+   python3 tools/trajectory_debug/run_replay.py rectangle_loop --with-sidecar
+   ```
+
+3. Plot the recorded track (newest recording is picked automatically). Overlay the
+   commanded rectangle for comparison:
+
+   ```bash
+   python3 tools/trajectory_debug/plot_pose_track.py \
+       --artifact tests/trajectory_cases/generated/rectangle_loop.traj
+   ```
+
+   This writes two SVGs next to the recording: `…​.pose_track.svg` (position track
+   colored by elapsed time — dark = start, yellow = end, circle = start, square =
+   end, with a time colorbar and the dashed commanded square overlaid) and
+   `…​.pose_track.velocity.svg` (field-frame `vx(t)` and `vy(t)` LiDAR velocity).
+
+For the full step-by-step writeup (build flags, deps, Foxglove notes), see
+[docs/lidar_pose_track_test.md](../../docs/lidar_pose_track_test.md).
+
+> Note: the LiDAR localizer uses `kLidarYawOffsetDeg = 180` in `src/config.hpp`
+> (matching `tools/py_lidar_bench/config.py`). Changing it requires rebuilding the
+> `ballalgo` runtime.

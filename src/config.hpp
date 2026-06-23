@@ -16,7 +16,7 @@ inline constexpr bool kLidarPwmHoldLow = true;
 
 inline constexpr float kFieldWidthMm = 1820.f;
 inline constexpr float kFieldHeightMm = 2430.f;
-inline constexpr float kLidarYawOffsetDeg = 0.f;
+inline constexpr float kLidarYawOffsetDeg = 180.f;
 
 inline constexpr int kFrameWidth = 655;
 inline constexpr int kFrameHeight = 600;
@@ -187,6 +187,11 @@ inline constexpr int kLostSentinel = -5;
 
 // LiDAR scan deskewing (2D SE(2) motion compensation)
 inline constexpr bool  kEnableLidarDeskew  = true;
+// TEMPORARY (bench/rectangle test): derive the deskew motion estimate from the
+// LiDAR pose Kalman filter (smoothed, one-frame-delayed) instead of the mouse
+// sensor. When true, the pose KF is driven purely by LiDAR (no mouse fusion) so
+// its velocity reflects LiDAR only. Set back to false to restore mouse-based deskew.
+inline constexpr bool  kDeskewVelocityFromLidar = true;
 inline constexpr int   kDeskewRefTimeMode  = 1;      // 0=scan start, 1=midpoint, 2=scan end
 inline constexpr float kLidarScanPeriodS   = 0.1f;   // LD19 nominal 10 Hz; fallback only
 inline constexpr float kMaxMotionDataAgeS  = 0.5f;   // stale motion → fallback to raw scan

@@ -338,7 +338,7 @@ int main(int argc, char** argv) {
           if (static_cast<int>(lidarWindow.size()) > config::kLidarPointsWindow) lidarWindow.pop_front();
         }
         std::vector<LidarPoint> window(lidarWindow.begin(), lidarWindow.end());
-        pose = motion.updateLidar(window, headingDeg);  // Step 1a map snap
+        pose = motion.updateLidar(window, headingDeg, nowUs);  // Step 1a map snap
       } else {
         pose = motion.poseState(headingDeg);
       }

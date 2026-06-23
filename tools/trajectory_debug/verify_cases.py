@@ -142,6 +142,23 @@ def verify_trapezoid_velocity(artifact: dict) -> None:
     assert sample["valid"] and sample["stop_chunk"]
 
 
+def verify_rectangle_loop(artifact: dict) -> None:
+    # 40 driving chunks (50 actions each) + a final stop chunk, forming a closed box.
+    assert [len(chunk["actions"]) for chunk in artifact["chunks"]] == [50] * 40 + [0]
+    start = artifact["start_pose"]
+    goal = artifact["goal_pose"]
+    assert goal["enabled"]
+    assert abs(goal["x_mm"] - start["x_mm"]) < 1.0, "rectangle must return to start x"
+    assert abs(goal["y_mm"] - start["y_mm"]) < 1.0, "rectangle must return to start y"
+    xs = [p["x_mm"] for p in artifact["path"]]
+    ys = [p["y_mm"] for p in artifact["path"]]
+    assert (max(xs) - min(xs)) > 400.0 and (max(ys) - min(ys)) > 400.0, "expected a box-sized extent"
+    stop_chunk = artifact["chunks"][-1]
+    sample = sample_chunk(stop_chunk, 1_000_000 + stop_chunk["start_delay_ms"] * 1000,
+                          1_000_000 + stop_chunk["start_delay_ms"] * 1000 + 4_000, 0.0)
+    assert sample["valid"] and sample["stop_chunk"]
+
+
 def verify_planner_demo(artifact: dict) -> None:
     assert artifact["case_kind"] == "planner_goal"
     assert len(artifact["path"]) > 1
@@ -159,6 +176,7 @@ VERIFY_BY_CASE = {
     "chunk_boundary_handoff": verify_chunk_boundary_handoff,
     "num_actions_0_stop_chunk": verify_num_actions_stop_chunk,
     "trapezoid_velocity": verify_trapezoid_velocity,
+    "rectangle_loop": verify_rectangle_loop,
     "planner_to_pose_demo": verify_planner_demo,
 }
 

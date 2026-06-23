@@ -1,0 +1,19 @@
+{
+  "case_name": "forward_fast",
+  "kind": "manual_sequence",
+  "start_pose": {
+    "valid": true,
+    "x_mm": 910.0,
+    "y_mm": 500.0,
+    "heading_deg": 0.0
+  },
+  "chunks": [
+    {"trajectory_id": 1,  "start_delay_ms": 0,    "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 2.0, "omega": 0.0}]},
+    {"trajectory_id": 12, "start_delay_ms": 200,  "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 2.0, "omega": 0.0}]},
+    {"trajectory_id": 13, "start_delay_ms": 400,  "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 2.0, "omega": 0.0}]},
+    {"trajectory_id": 14, "start_delay_ms": 600,  "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 2.0, "omega": 0.0}]},
+    {"trajectory_id": 15, "start_delay_ms": 800,  "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": 2.0,  "omega": 0.0}]},
+    {"trajectory_id": 16, "start_delay_ms": 1000, "dt_ms": 4, "segments": [{"duration_ms": 200, "vx": 0.0, "vy": -0.5,  "omega": 0.0}]},
+    {"trajectory_id": 80, "start_delay_ms": 1200, "dt_ms": 4, "stop_chunk": true}
+  ]
+}

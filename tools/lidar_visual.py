@@ -1,12 +1,13 @@
 """
 Standalone LD19 visualization for bench testing.
 
-Does not start the camera, open Teensy UART, or send perception packets.
+Does not start the camera or send perception packets.
+Opens the Teensy UART to get live heading; pass --no-teensy to skip.
 Run from this directory on the Pi:
 
     python lidar_visual.py
 
-Keys: q quit, +/- or [/] adjust heading for localization preview.
+Keys: q quit, +/- or [/] manually nudge heading.
 """
 
 import argparse
@@ -24,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from py_lidar_bench import config as cfg
 from py_lidar_bench.gpio_utils import cleanup_gpio, setup_lidar_pwm_ground
 from py_lidar_bench.lidar_bench import LD19Reader, LidarLocalizer
+from py_lidar_bench.teensy_reader import TeensyReader
 
 
 POLAR_SIZE = 520
@@ -49,6 +51,11 @@ def parse_args():
         "--no-gpio",
         action="store_true",
         help="Skip holding LIDAR PWM GPIO LOW (only if your setup does not need it).",
+    )
+    parser.add_argument(
+        "--no-teensy",
+        action="store_true",
+        help="Skip opening the Teensy UART; heading stays at --heading value.",
     )
     return parser.parse_args()
 
@@ -116,7 +123,7 @@ def draw_polar_panel(points):
     return panel
 
 
-def draw_field_panel(points, heading_deg, pose):
+def draw_field_panel(points, heading_deg, pose, heading_live=False):
     panel = np.full((FIELD_PANEL_H, FIELD_PANEL_W, 3), 28, dtype=np.uint8)
     fw = cfg.FIELD_WIDTH_MM
     fh = cfg.FIELD_HEIGHT_MM
@@ -150,9 +157,14 @@ def draw_field_panel(points, heading_deg, pose):
 
     status = "pose OK" if pose["valid"] else "pose invalid"
     if pose["valid"]:
-        status += f"  ({pose['x_mm']:.0f}, {pose['y_mm']:.0f}) mm"
+        cx = (pose["x_mm"] - cfg.FIELD_WIDTH_MM / 2) / 10
+        cy = (pose["y_mm"] - cfg.FIELD_HEIGHT_MM / 2) / 10
+        status += f"  ({cx:.1f}, {cy:.1f}) cm"
+    heading_src = "teensy" if heading_live else "manual"
+    heading_color = (80, 220, 80) if heading_live else (180, 180, 180)
     cv2.putText(panel, "Field frame", (10, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 220, 220), 1)
-    cv2.putText(panel, f"heading {heading_deg:.1f} deg", (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 180, 180), 1)
+    cv2.putText(panel, f"heading {heading_deg:.1f} deg  [{heading_src}]", (10, 48),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, heading_color, 1)
     cv2.putText(panel, status, (10, 72), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (180, 220, 180), 1)
     return panel
 
@@ -160,6 +172,7 @@ def draw_field_panel(points, heading_deg, pose):
 def run():
     args = parse_args()
     heading_deg = args.heading
+    heading_live = False
     gpio_handle = None if args.no_gpio else setup_lidar_pwm_ground()
 
     reader = LD19Reader(cfg.LIDAR_PORT, cfg.LIDAR_BAUD, cfg.LIDAR_TIMEOUT)
@@ -168,6 +181,8 @@ def run():
         if gpio_handle is not None:
             cleanup_gpio(gpio_handle)
         return
+
+    teensy = None if args.no_teensy else TeensyReader(cfg.TEENSY_PORT, cfg.TEENSY_BAUD)
 
     localizer = None
     if not args.no_localizer:
@@ -180,10 +195,18 @@ def run():
     points_window = deque(maxlen=cfg.LIDAR_POINTS_WINDOW)
     last_pose = {"valid": False, "x_mm": None, "y_mm": None}
 
-    print("LiDAR visual running. q=quit  +/- or [/]=heading")
+    print("LiDAR visual running. q=quit  +/- or [/]=heading (manual override)")
+    if teensy is None:
+        print("[TEENSY] skipped — heading is manual-only")
 
     try:
         while True:
+            if teensy is not None:
+                live = teensy.poll()
+                if live is not None:
+                    heading_deg = live
+                    heading_live = True
+
             new_points = reader.poll_points()
             if new_points:
                 points_window.extend(new_points)
@@ -199,7 +222,7 @@ def run():
                 pose = last_pose
 
             polar = draw_polar_panel(points)
-            field = draw_field_panel(points, heading_deg, pose)
+            field = draw_field_panel(points, heading_deg, pose, heading_live)
             combined = np.hstack([polar, field])
             cv2.imshow("LiDAR test (no pipeline)", combined)
 
@@ -213,6 +236,8 @@ def run():
 
     finally:
         reader.close()
+        if teensy is not None:
+            teensy.close()
         if gpio_handle is not None:
             cleanup_gpio(gpio_handle)
         cv2.destroyAllWindows()
