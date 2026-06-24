@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import select
 import signal
 import socket
@@ -27,6 +28,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import requests as _requests
 
 from config import FoxgloveConfig, load_config
 from field_geometry import FieldGeometry, center_field_mm
@@ -157,6 +160,30 @@ def _pose_from_mm(x_mm: float, y_mm: float, heading_deg: float) -> Any:
         position=Vector3(x=x_mm / 1000.0, y=y_mm / 1000.0, z=0.0),
         orientation=yaw_to_quaternion(heading_deg),
     )
+
+
+def _load_dotenv(*candidate_paths: Path) -> None:
+    """Load KEY=VALUE pairs from the first existing .env file into os.environ.
+
+    Existing environment variables are NOT overwritten, so an exported value
+    (e.g. from .bashrc or the shell) still wins over the .env file.
+    """
+    for env_path in candidate_paths:
+        if not env_path.is_file():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+        print(f"Loaded environment from {env_path}")
+        return
 
 
 def _git_sha(repo_root: Path) -> str:
@@ -529,6 +556,77 @@ class BallAlgoFoxgloveSidecar:
         )
 
     # ------------------------------------------------------------------
+    # Foxglove Data Platform upload
+    # ------------------------------------------------------------------
+
+    def _upload_recording(self) -> None:
+        """Upload the finished MCAP to Foxglove Data Platform.
+
+        Requires env vars:
+          FOXGLOVE_API_KEY   — secret key (fox_sk_...)
+          FOXGLOVE_DEVICE_ID — device id  (dev_...)
+        """
+        api_key = os.environ.get("FOXGLOVE_API_KEY", "")
+        device_id = os.environ.get("FOXGLOVE_DEVICE_ID", "")
+        if not api_key or not device_id:
+            missing = [v for v, val in [("FOXGLOVE_API_KEY", api_key), ("FOXGLOVE_DEVICE_ID", device_id)] if not val]
+            print(f"MCAP upload skipped: env var(s) not set: {', '.join(missing)}")
+            return
+
+        path = self.recording_path
+        if not path or not path.exists():
+            print("MCAP upload skipped: recording file not found.")
+            return
+
+        file_size_kb = path.stat().st_size // 1024
+        print(f"Uploading {path.name} ({file_size_kb} KB) to Foxglove Data Platform ...")
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+        # Step 1 — request a signed upload URL from the Foxglove Data Platform.
+        # `key` is the idempotency key: unique+immutable per recording, so we use
+        # the session filename stem. Re-running with the same content is a no-op;
+        # different content under the same key is rejected by Foxglove.
+        try:
+            resp = _requests.post(
+                "https://api.foxglove.dev/v1/data/upload",
+                json={"deviceId": device_id, "filename": path.name, "key": path.stem},
+                headers=headers,
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except Exception as exc:
+            detail = getattr(getattr(exc, "response", None), "text", "")
+            print(f"MCAP upload failed (request upload URL): {exc} {detail[:300]}")
+            return
+
+        upload_url = resp.json().get("link")
+        if not upload_url:
+            print(f"MCAP upload failed: no 'link' in response: {resp.text[:300]}")
+            return
+
+        # Step 2 — stream the file to the signed URL. The signed URL requires
+        # Content-Type: application/octet-stream to match Foxglove's signature.
+        try:
+            with path.open("rb") as f:
+                put = _requests.put(
+                    upload_url,
+                    data=f,
+                    headers={"Content-Type": "application/octet-stream"},
+                    timeout=600,
+                )
+            put.raise_for_status()
+        except Exception as exc:
+            detail = getattr(getattr(exc, "response", None), "text", "")
+            print(f"MCAP upload failed (file PUT): {exc} {detail[:300]}")
+            return
+
+        print(
+            f"Upload complete: {path.name} uploaded to Foxglove device {device_id}. "
+            "It will appear under Recordings after server-side processing."
+        )
+
+    # ------------------------------------------------------------------
     # Entry point
     # ------------------------------------------------------------------
 
@@ -587,6 +685,10 @@ class BallAlgoFoxgloveSidecar:
                 if socket_path.exists():
                     socket_path.unlink()
 
+        # ExitStack has exited here — MCAP writer is closed and file is flushed.
+        if self.cfg.record_mcap and self.cfg.foxglove_upload and self.recording_path:
+            self._upload_recording()
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -606,6 +708,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     repo_root = Path(__file__).resolve().parent.parent
+    # Load secrets (FOXGLOVE_API_KEY / FOXGLOVE_DEVICE_ID) from a .env file if
+    # present. Checked in priority order; real exported env vars still win.
+    _load_dotenv(
+        repo_root / ".env",
+        repo_root / "foxglove_sim" / ".env",
+    )
     config_path = Path(args.config)
     if not config_path.is_absolute():
         config_path = (repo_root / config_path).resolve()

@@ -1,6 +1,11 @@
 *.mp4
 *.pyc
 __pycache__/
+
+# Secrets — Foxglove API key / device id live here, never commit
+.env
+foxglove_sim/.env
+
 .pytest_cache/
 .mypy_cache/
 .DS_Store

@@ -130,6 +130,14 @@ def field_panel() -> fl.ThreeDeePanel:
                     show_outlines=False,
                     compute_vertex_normals=False,
                 ),
+                "/lidar/scan": fl.BaseRendererPointCloudTopicSettings(
+                    visible=True,
+                    color_mode="flat",
+                    flat_color="#50c850",
+                    point_size=3.0,
+                    point_shape="circle",
+                    decay_time=0.15,
+                ),
                 "/robot/pose": fl.BaseRendererPoseTopicSettings(
                     visible=False,
                     type="arrow",
@@ -143,6 +151,55 @@ def field_panel() -> fl.ThreeDeePanel:
                 "/field/scene/static": False,
                 "/field/scene/live": True,
                 "/planner/scene/path": True,
+                "/lidar/scan": True,
+            },
+        ),
+    )
+
+
+def lidar_panel() -> fl.ThreeDeePanel:
+    """Robot position + compass heading arrow on the field, no point cloud."""
+    return fl.ThreeDeePanel(
+        title="Robot Position (Lidar Session)",
+        config=fl.ThreeDeeConfig(
+            fixed_frame="field",
+            follow_tf="field",
+            follow_mode="follow-none",
+            scene=fl.BaseRendererSceneSettings(
+                background_color="#1a1e22",
+                sync_camera=False,
+                transforms=fl.BaseRendererTransforms(
+                    visible=False,
+                    show_label=False,
+                    axis_size=0.2,
+                    line_width=1.0,
+                ),
+            ),
+            camera_state=fl.ThreeDeeCameraState(
+                perspective=False,
+                distance=2.6,
+                target=(0.0, 0.0, 0.0),
+                theta_offset=0.0,
+                phi=0.0,
+                near=0.05,
+                far=50.0,
+                log_depth=False,
+            ),
+            topics={
+                "/field/scene/static": fl.BaseRendererSceneUpdateTopicSettings(
+                    visible=True,
+                    show_outlines=False,
+                    compute_vertex_normals=False,
+                ),
+                "/field/scene/live": fl.BaseRendererSceneUpdateTopicSettings(
+                    visible=True,
+                    show_outlines=False,
+                    compute_vertex_normals=False,
+                ),
+            },
+            synced_topics={
+                "/field/scene/static": False,
+                "/field/scene/live": True,
             },
         ),
     )
@@ -295,6 +352,48 @@ def ball_range_panel() -> fl.PlotPanel:
     )
 
 
+def robot_xy_trace_panel() -> fl.PlotPanel:
+    """XY scatter of robot position over the full recording — shows the path the robot took."""
+    return fl.PlotPanel(
+        title="Robot Position Trace (XY)",
+        config=fl.PlotConfig(
+            paths=[
+                fl.PlotSeries(
+                    value="/robot/pose.pose.position.y",
+                    label="robot path",
+                    color="#4cf5ae",
+                    line_size=1.5,
+                    show_line=True,
+                    timestamp_method="receiveTime",
+                ),
+            ],
+            x_axis_val="custom",
+            x_axis_path=fl.PlotXAxisPath(value="/robot/pose.pose.position.x"),
+            time_range="all",
+            show_legend=True,
+            legend_display="floating",
+            show_plot_values_in_legend=True,
+            show_x_axis_labels=True,
+            show_y_axis_labels=True,
+            x_axis_label="Field X (m)",
+            y_axis_label="Field Y (m)",
+        ),
+    )
+
+
+def commanded_velocity_panel() -> fl.PlotPanel:
+    return timestamp_plot(
+        "Commanded vs Measured Velocity",
+        [
+            series("/traj/target.vx_body_target_m_s", label="cmd vx", color="#4e98e2"),
+            series("/traj/target.vy_body_target_m_s", label="cmd vy", color="#f5774d"),
+            series("/robot/twist.vx_body_m_s", label="actual vx", color="#9ed3ff"),
+            series("/robot/twist.vy_body_m_s", label="actual vy", color="#ffb68c"),
+        ],
+        y_axis_label="m/s",
+    )
+
+
 def debug_log_panel() -> fl.LogPanel:
     return fl.LogPanel(
         title="Debug Log",
@@ -341,6 +440,43 @@ def camera_panel() -> fl.ImagePanel:
                 "/camera/front/annotations": True,
             },
         ),
+    )
+
+
+def lidar_tab() -> fl.SplitContainer:
+    """Field-frame lidar view + angular kinematics, mirroring tools/lidar_visual.py right panel."""
+    return fl.SplitContainer(
+        direction="row",
+        items=[
+            fl.SplitItem(proportion=2, content=lidar_panel()),
+            fl.SplitItem(proportion=1, content=angular_panel()),
+        ],
+    )
+
+
+def trajectory_tab() -> fl.SplitContainer:
+    """Robot trajectory trace + commanded vs measured velocity for MCAP replay."""
+    left_col = fl.SplitContainer(
+        direction="column",
+        items=[
+            fl.SplitItem(proportion=1, content=field_panel()),
+            fl.SplitItem(proportion=1, content=robot_xy_trace_panel()),
+        ],
+    )
+    right_col = fl.SplitContainer(
+        direction="column",
+        items=[
+            fl.SplitItem(proportion=1, content=commanded_velocity_panel()),
+            fl.SplitItem(proportion=1, content=robot_velocity_panel()),
+            fl.SplitItem(proportion=1, content=angular_panel()),
+        ],
+    )
+    return fl.SplitContainer(
+        direction="row",
+        items=[
+            fl.SplitItem(proportion=1.8, content=left_col),
+            fl.SplitItem(proportion=1.4, content=right_col),
+        ],
     )
 
 
@@ -406,6 +542,8 @@ def build_layout() -> fl.Layout:
             selected_tab_index=0,
             tabs=[
                 fl.TabItem(title="Overview", content=overview_tab()),
+                fl.TabItem(title="Lidar", content=lidar_tab()),
+                fl.TabItem(title="Trajectory", content=trajectory_tab()),
                 fl.TabItem(title="Camera", content=camera_tab()),
             ],
         )

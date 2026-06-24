@@ -43,6 +43,15 @@
                       "showOutlines": false,
                       "computeVertexNormals": false
                     },
+                    "/lidar/scan": {
+                      "visible": true,
+                      "pointSize": 3.0,
+                      "cubeOutline": false,
+                      "pointShape": "circle",
+                      "decayTime": 0.15,
+                      "colorMode": "flat",
+                      "flatColor": "#50c850"
+                    },
                     "/robot/pose": {
                       "visible": false,
                       "type": "arrow"
@@ -55,7 +64,8 @@
                   "syncedTopics": {
                     "/field/scene/static": false,
                     "/field/scene/live": true,
-                    "/planner/scene/path": true
+                    "/planner/scene/path": true,
+                    "/lidar/scan": true
                   },
                   "cameraState": {
                     "distance": 2.6,
@@ -356,11 +366,11 @@
                               "showXAxisLabels": true,
                               "showYAxisLabels": true,
                               "xAxisVal": "custom",
+                              "timeRange": "latest",
                               "xAxisPath": {
                                 "value": "/planner/profile.samples[:].progress_01"
                               },
                               "xAxisLabel": "Trajectory Progress (0-1)",
-                              "timeRange": "latest",
                               "yAxisLabel": "m/s"
                             },
                             "title": "Trajectory Speed Profile",
@@ -368,6 +378,421 @@
                           }
                         }
                       ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "title": "Lidar",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 2,
+              "content": {
+                "type": "panel",
+                "panelType": "ThreeDee",
+                "config": {
+                  "scene": {
+                    "backgroundColor": "#1a1e22",
+                    "transforms": {
+                      "visible": false,
+                      "showLabel": false,
+                      "axisSize": 0.2,
+                      "lineWidth": 1.0
+                    },
+                    "syncCamera": false
+                  },
+                  "topics": {
+                    "/field/scene/static": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    },
+                    "/field/scene/live": {
+                      "visible": true,
+                      "showOutlines": false,
+                      "computeVertexNormals": false
+                    }
+                  },
+                  "syncedTopics": {
+                    "/field/scene/static": false,
+                    "/field/scene/live": true
+                  },
+                  "cameraState": {
+                    "distance": 2.6,
+                    "perspective": false,
+                    "phi": 0.0,
+                    "target": [
+                      0.0,
+                      0.0,
+                      0.0
+                    ],
+                    "thetaOffset": 0.0,
+                    "near": 0.05,
+                    "far": 50.0,
+                    "logDepth": false
+                  },
+                  "followTf": "field",
+                  "fixedFrame": "field",
+                  "followMode": "follow-none"
+                },
+                "title": "Robot Position (Lidar Session)",
+                "version": 1
+              }
+            },
+            {
+              "proportion": 1,
+              "content": {
+                "type": "panel",
+                "panelType": "Plot",
+                "config": {
+                  "paths": [
+                    {
+                      "value": "/robot/angular.heading_deg",
+                      "color": "#c84fe3",
+                      "label": "heading",
+                      "timestampMethod": "receiveTime",
+                      "showLine": true,
+                      "lineSize": 2.0,
+                      "useRightYAxis": false
+                    },
+                    {
+                      "value": "/robot/angular.omega_deg_s",
+                      "color": "#4cf5ae",
+                      "label": "omega",
+                      "timestampMethod": "receiveTime",
+                      "showLine": true,
+                      "lineSize": 2.0,
+                      "useRightYAxis": false
+                    },
+                    {
+                      "value": "/robot/angular.alpha_deg_s2",
+                      "color": "#f7df71",
+                      "label": "alpha",
+                      "timestampMethod": "receiveTime",
+                      "showLine": true,
+                      "lineSize": 2.0,
+                      "useRightYAxis": false
+                    }
+                  ],
+                  "showLegend": true,
+                  "legendDisplay": "floating",
+                  "showPlotValuesInLegend": true,
+                  "showXAxisLabels": true,
+                  "showYAxisLabels": true,
+                  "isSynced": true,
+                  "xAxisVal": "timestamp",
+                  "xAxisLabel": "Time (s)",
+                  "timeWindowMode": "sliding",
+                  "yAxisLabel": "deg / deg/s / deg/s^2",
+                  "followingViewWidth": 10.0
+                },
+                "title": "Angular Kinematics",
+                "version": 1
+              }
+            }
+          ]
+        }
+      },
+      {
+        "title": "Trajectory",
+        "content": {
+          "type": "split",
+          "direction": "row",
+          "items": [
+            {
+              "proportion": 1.8,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "ThreeDee",
+                      "config": {
+                        "scene": {
+                          "backgroundColor": "#101215",
+                          "transforms": {
+                            "visible": false,
+                            "showLabel": false,
+                            "axisSize": 0.2,
+                            "lineWidth": 1.0
+                          },
+                          "syncCamera": false
+                        },
+                        "topics": {
+                          "/field/scene/static": {
+                            "visible": true,
+                            "showOutlines": false,
+                            "computeVertexNormals": false
+                          },
+                          "/field/scene/live": {
+                            "visible": true,
+                            "showOutlines": false,
+                            "selectedIdVariable": "selected_id",
+                            "computeVertexNormals": false
+                          },
+                          "/planner/scene/path": {
+                            "visible": true,
+                            "showOutlines": false,
+                            "computeVertexNormals": false
+                          },
+                          "/lidar/scan": {
+                            "visible": true,
+                            "pointSize": 3.0,
+                            "cubeOutline": false,
+                            "pointShape": "circle",
+                            "decayTime": 0.15,
+                            "colorMode": "flat",
+                            "flatColor": "#50c850"
+                          },
+                          "/robot/pose": {
+                            "visible": false,
+                            "type": "arrow"
+                          },
+                          "/ball/pose": {
+                            "visible": false,
+                            "type": "arrow"
+                          }
+                        },
+                        "syncedTopics": {
+                          "/field/scene/static": false,
+                          "/field/scene/live": true,
+                          "/planner/scene/path": true,
+                          "/lidar/scan": true
+                        },
+                        "cameraState": {
+                          "distance": 2.6,
+                          "perspective": false,
+                          "phi": 0.0,
+                          "target": [
+                            0.0,
+                            0.0,
+                            0.0
+                          ],
+                          "thetaOffset": 0.0,
+                          "near": 0.05,
+                          "far": 50.0,
+                          "logDepth": false
+                        },
+                        "followTf": "field",
+                        "fixedFrame": "field",
+                        "followMode": "follow-none"
+                      },
+                      "title": "Field Overview",
+                      "version": 1
+                    }
+                  },
+                  {
+                    "proportion": 1,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "Plot",
+                      "config": {
+                        "paths": [
+                          {
+                            "value": "/robot/pose.pose.position.y",
+                            "color": "#4cf5ae",
+                            "label": "robot path",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 1.5
+                          }
+                        ],
+                        "showLegend": true,
+                        "legendDisplay": "floating",
+                        "showPlotValuesInLegend": true,
+                        "showXAxisLabels": true,
+                        "showYAxisLabels": true,
+                        "xAxisVal": "custom",
+                        "timeRange": "all",
+                        "xAxisPath": {
+                          "value": "/robot/pose.pose.position.x"
+                        },
+                        "xAxisLabel": "Field X (m)",
+                        "yAxisLabel": "Field Y (m)"
+                      },
+                      "title": "Robot Position Trace (XY)",
+                      "version": 1
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "proportion": 1.4,
+              "content": {
+                "type": "split",
+                "direction": "column",
+                "items": [
+                  {
+                    "proportion": 1,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "Plot",
+                      "config": {
+                        "paths": [
+                          {
+                            "value": "/traj/target.vx_body_target_m_s",
+                            "color": "#4e98e2",
+                            "label": "cmd vx",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/traj/target.vy_body_target_m_s",
+                            "color": "#f5774d",
+                            "label": "cmd vy",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/twist.vx_body_m_s",
+                            "color": "#9ed3ff",
+                            "label": "actual vx",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/twist.vy_body_m_s",
+                            "color": "#ffb68c",
+                            "label": "actual vy",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          }
+                        ],
+                        "showLegend": true,
+                        "legendDisplay": "floating",
+                        "showPlotValuesInLegend": true,
+                        "showXAxisLabels": true,
+                        "showYAxisLabels": true,
+                        "isSynced": true,
+                        "xAxisVal": "timestamp",
+                        "xAxisLabel": "Time (s)",
+                        "timeWindowMode": "sliding",
+                        "yAxisLabel": "m/s",
+                        "followingViewWidth": 10.0
+                      },
+                      "title": "Commanded vs Measured Velocity",
+                      "version": 1
+                    }
+                  },
+                  {
+                    "proportion": 1,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "Plot",
+                      "config": {
+                        "paths": [
+                          {
+                            "value": "/robot/twist.vx_body_m_s",
+                            "color": "#4e98e2",
+                            "label": "vx body",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/twist.vy_body_m_s",
+                            "color": "#f5774d",
+                            "label": "vy body",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/twist.speed_body_m_s",
+                            "color": "#f7df71",
+                            "label": "speed body",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          }
+                        ],
+                        "showLegend": true,
+                        "legendDisplay": "floating",
+                        "showPlotValuesInLegend": true,
+                        "showXAxisLabels": true,
+                        "showYAxisLabels": true,
+                        "isSynced": true,
+                        "xAxisVal": "timestamp",
+                        "xAxisLabel": "Time (s)",
+                        "timeWindowMode": "sliding",
+                        "yAxisLabel": "m/s",
+                        "followingViewWidth": 10.0
+                      },
+                      "title": "Robot Velocity",
+                      "version": 1
+                    }
+                  },
+                  {
+                    "proportion": 1,
+                    "content": {
+                      "type": "panel",
+                      "panelType": "Plot",
+                      "config": {
+                        "paths": [
+                          {
+                            "value": "/robot/angular.heading_deg",
+                            "color": "#c84fe3",
+                            "label": "heading",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/angular.omega_deg_s",
+                            "color": "#4cf5ae",
+                            "label": "omega",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          },
+                          {
+                            "value": "/robot/angular.alpha_deg_s2",
+                            "color": "#f7df71",
+                            "label": "alpha",
+                            "timestampMethod": "receiveTime",
+                            "showLine": true,
+                            "lineSize": 2.0,
+                            "useRightYAxis": false
+                          }
+                        ],
+                        "showLegend": true,
+                        "legendDisplay": "floating",
+                        "showPlotValuesInLegend": true,
+                        "showXAxisLabels": true,
+                        "showYAxisLabels": true,
+                        "isSynced": true,
+                        "xAxisVal": "timestamp",
+                        "xAxisLabel": "Time (s)",
+                        "timeWindowMode": "sliding",
+                        "yAxisLabel": "deg / deg/s / deg/s^2",
+                        "followingViewWidth": 10.0
+                      },
+                      "title": "Angular Kinematics",
+                      "version": 1
                     }
                   }
                 ]

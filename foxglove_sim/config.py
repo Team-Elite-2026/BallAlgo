@@ -26,6 +26,8 @@ class FoxgloveConfig:
     logs_hz: float = 1.0
     camera_hz: float = 10.0
 
+    foxglove_upload: bool = False
+
     socket_path: str = "/tmp/ballalgo_foxglove.sock"
     websocket_host: str = "0.0.0.0"
     websocket_port: int = 8765
@@ -66,6 +68,7 @@ def load_config(path: str | Path) -> FoxgloveConfig:
         "trajectory_hz": float,
         "logs_hz": float,
         "camera_hz": float,
+        "foxglove_upload": _parse_bool,
         "socket_path": str,
         "websocket_host": str,
         "websocket_port": int,
