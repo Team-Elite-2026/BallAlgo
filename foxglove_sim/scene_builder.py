@@ -23,6 +23,7 @@ from foxglove.messages import (
     Quaternion,
     SceneEntity,
     SpherePrimitive,
+    TextPrimitive,
     Timestamp,
     Vector3,
 )
@@ -36,11 +37,18 @@ FIELD_SURFACE_COLOR = Color(r=0.1, g=0.42, b=0.2, a=0.96)
 
 ROBOT_BODY_COLOR = Color(r=0.1, g=0.65, b=1.0, a=0.95)
 ROBOT_NOSE_COLOR = Color(r=1.0, g=1.0, b=1.0, a=0.95)
-ROBOT_HEADING_COLOR = Color(r=0.1, g=0.65, b=1.0, a=1.0)
-ROBOT_VELOCITY_COLOR = Color(r=0.2, g=1.0, b=0.45, a=0.95)
+# The three robot arrows — kept visually distinct (and matched in the legend).
+ACTUAL_HEADING_COLOR = Color(r=0.20, g=0.85, b=1.0, a=1.0)       # cyan
+DESIRED_HEADING_COLOR = Color(r=1.0, g=0.30, b=0.85, a=1.0)      # magenta
+COMMANDED_VELOCITY_COLOR = Color(r=1.0, g=0.62, b=0.10, a=1.0)   # orange
 BALL_COLOR = Color(r=1.0, g=0.55, b=0.1, a=1.0)
 PATH_COLOR = Color(r=0.1, g=0.8, b=0.3, a=1.0)
 TARGET_COLOR = Color(r=1.0, g=0.2, b=0.1, a=0.95)
+
+# Fixed lengths (m) for direction-only heading arrows; desired is longer so the
+# two heading arrows stay distinguishable even when actual ≈ desired.
+ACTUAL_HEADING_LEN_M = 0.16
+DESIRED_HEADING_LEN_M = 0.24
 
 
 def yaw_to_quaternion(yaw_deg: float) -> Quaternion:
@@ -98,7 +106,7 @@ def build_live_scene_entities(snapshot: dict[str, Any], timestamp: Timestamp) ->
     field = FieldGeometry.from_snapshot(snapshot["field"])
     pose = snapshot.get("pose")
     ball = snapshot.get("ball")
-    entities: list[SceneEntity] = []
+    entities: list[SceneEntity] = [_legend_entity(field, timestamp)]
 
     if pose and pose.get("valid"):
         entities.append(_robot_entity(field, timestamp, snapshot))
@@ -188,25 +196,37 @@ def _robot_entity(field: FieldGeometry, timestamp: Timestamp, snapshot: dict[str
     robot_x_mm, robot_y_mm = center_field_mm(pose["x_mm"], pose["y_mm"], field)
     robot_heading_deg = pose["heading_deg"]
 
-    heading_arrow = _heading_arrow(
-        robot_x_mm,
-        robot_y_mm,
-        robot_heading_deg,
-        0.15,
-        ROBOT_HEADING_COLOR,
-        z_m=0.01,
+    arrows: list[ArrowPrimitive] = []
+
+    # 1. Actual heading — robot's measured heading (compass). Cyan.
+    actual_heading = _heading_arrow(
+        robot_x_mm, robot_y_mm, robot_heading_deg,
+        ACTUAL_HEADING_LEN_M, ACTUAL_HEADING_COLOR, z_m=0.012,
     )
-    velocity_arrow = None
-    robot_twist = snapshot.get("robot_twist")
-    if robot_twist is not None:
-        velocity_arrow = _arrow_from_components(
-            robot_x_mm,
-            robot_y_mm,
-            robot_twist.get("vx_field_m_s", 0.0),
-            robot_twist.get("vy_field_m_s", 0.0),
-            ROBOT_VELOCITY_COLOR,
-            z_m=0.012,
+    if actual_heading is not None:
+        arrows.append(actual_heading)
+
+    # 2. Desired heading — planner target heading. Magenta.
+    planner = snapshot.get("planner_path")
+    if planner is not None and planner.get("target_heading_deg") is not None:
+        desired_heading = _heading_arrow(
+            robot_x_mm, robot_y_mm, float(planner["target_heading_deg"]),
+            DESIRED_HEADING_LEN_M, DESIRED_HEADING_COLOR, z_m=0.013,
         )
+        if desired_heading is not None:
+            arrows.append(desired_heading)
+
+    # 3. Commanded velocity — trajectory target velocity (field frame). Orange.
+    target = snapshot.get("traj_target")
+    if target is not None:
+        commanded_velocity = _arrow_from_components(
+            robot_x_mm, robot_y_mm,
+            float(target.get("vx_global_m_s", 0.0)),
+            float(target.get("vy_global_m_s", 0.0)),
+            COMMANDED_VELOCITY_COLOR, z_m=0.014,
+        )
+        if commanded_velocity is not None:
+            arrows.append(commanded_velocity)
 
     # Nose dot is 55 mm in front of the robot body center.
     nose_x_mm = robot_x_mm + 55.0 * math.cos(math.radians(robot_heading_deg))
@@ -227,7 +247,41 @@ def _robot_entity(field: FieldGeometry, timestamp: Timestamp, snapshot: dict[str
                 color=ROBOT_NOSE_COLOR,
             ),
         ],
-        arrows=[arrow for arrow in (heading_arrow, velocity_arrow) if arrow is not None],
+        arrows=arrows,
+    )
+
+
+def _legend_entity(field: FieldGeometry, timestamp: Timestamp) -> SceneEntity:
+    """In-scene color key for the robot arrows, anchored at the field's top-left."""
+    half_w_m = field.half_width_mm / 1000.0
+    half_h_m = field.half_height_mm / 1000.0
+    anchor_x = -half_w_m + 0.42
+    top_y = half_h_m - 0.12
+    spacing = 0.16
+    rows = [
+        ("Actual heading", ACTUAL_HEADING_COLOR),
+        ("Desired heading", DESIRED_HEADING_COLOR),
+        ("Commanded velocity", COMMANDED_VELOCITY_COLOR),
+    ]
+    texts = [
+        TextPrimitive(
+            pose=Pose(
+                position=Vector3(x=anchor_x, y=top_y - index * spacing, z=0.02),
+                orientation=Quaternion(x=0.0, y=0.0, z=0.0, w=1.0),
+            ),
+            billboard=True,
+            font_size=14.0,
+            scale_invariant=True,
+            color=color,
+            text=label,
+        )
+        for index, (label, color) in enumerate(rows)
+    ]
+    return SceneEntity(
+        timestamp=timestamp,
+        frame_id=field.frame_id,
+        id="robot-arrow-legend",
+        texts=texts,
     )
 
 
