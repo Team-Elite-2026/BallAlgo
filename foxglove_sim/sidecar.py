@@ -219,6 +219,12 @@ class BallAlgoFoxgloveSidecar:
         self.snapshot_count = 0
         self.last_snapshot_ns = 0
         self.last_transport_report_ns = 0
+        # The runtime only sends planner_path on replan and traj_target on its own
+        # cadence, so cache the latest of each and reuse them when a frame omits
+        # them — keeps the spline + desired-heading + commanded-velocity drawn on
+        # every live frame instead of flickering.
+        self._last_planner_path: dict[str, Any] | None = None
+        self._last_traj_target: dict[str, Any] | None = None
 
     # ------------------------------------------------------------------
     # Setup helpers
@@ -390,9 +396,24 @@ class BallAlgoFoxgloveSidecar:
         )
         self.last_static_scene_ns = timestamp_ns
 
+    def _scene_view(self, snapshot: dict[str, Any]) -> dict[str, Any]:
+        """Snapshot augmented with the last-known planner path / trajectory target.
+
+        Only the scene builders see this merged view; the direct (plot) channels
+        still publish the raw per-frame snapshot, so /traj/target etc. stay honest.
+        """
+        if "planner_path" in snapshot and "traj_target" in snapshot:
+            return snapshot
+        merged = dict(snapshot)
+        if "planner_path" not in merged and self._last_planner_path is not None:
+            merged["planner_path"] = self._last_planner_path
+        if "traj_target" not in merged and self._last_traj_target is not None:
+            merged["traj_target"] = self._last_traj_target
+        return merged
+
     def _publish_live_scene(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         ts = _timestamp_from_ns(timestamp_ns)
-        entities = build_live_scene_entities(snapshot, ts)
+        entities = build_live_scene_entities(self._scene_view(snapshot), ts)
         if entities:
             self.channels["/field/scene/live"].log(SceneUpdate(entities=entities))
 
@@ -422,7 +443,9 @@ class BallAlgoFoxgloveSidecar:
 
     def _publish_path(self, snapshot: dict[str, Any], timestamp_ns: int) -> None:
         ts = _timestamp_from_ns(timestamp_ns)
-        entities = build_path_scene_entities(snapshot, ts)
+        # Use the cached planner path so the full spline is redrawn every frame,
+        # not only on the frames where the runtime resends it (on replan).
+        entities = build_path_scene_entities(self._scene_view(snapshot), ts)
         if entities:
             self.channels["/planner/scene/path"].log(SceneUpdate(entities=entities))
 
@@ -509,6 +532,10 @@ class BallAlgoFoxgloveSidecar:
 
     def _handle_snapshot(self, snapshot: dict[str, Any]) -> None:
         self._enrich_snapshot(snapshot)
+        if snapshot.get("planner_path"):
+            self._last_planner_path = snapshot["planner_path"]
+        if snapshot.get("traj_target"):
+            self._last_traj_target = snapshot["traj_target"]
         timestamp_ns = int(snapshot["timestamp_ns"])
         self.snapshot_count += 1
         self.last_snapshot_ns = timestamp_ns

@@ -50,6 +50,10 @@ TARGET_COLOR = Color(r=1.0, g=0.2, b=0.1, a=0.95)
 ACTUAL_HEADING_LEN_M = 0.16
 DESIRED_HEADING_LEN_M = 0.24
 
+# Commanded velocity arrow is drawn to scale: this many meters of arrow per m/s.
+# 1.0 means a 1 m/s command renders as a 1 m arrow on the field.
+COMMANDED_VELOCITY_SCALE_M_PER_M_S = 1.0
+
 
 def yaw_to_quaternion(yaw_deg: float) -> Quaternion:
     half = math.radians(yaw_deg) * 0.5
@@ -216,13 +220,14 @@ def _robot_entity(field: FieldGeometry, timestamp: Timestamp, snapshot: dict[str
         if desired_heading is not None:
             arrows.append(desired_heading)
 
-    # 3. Commanded velocity — trajectory target velocity (field frame). Orange.
+    # 3. Commanded velocity — trajectory target velocity (field frame), drawn to
+    #    scale (arrow length = speed * COMMANDED_VELOCITY_SCALE_M_PER_M_S). Orange.
     target = snapshot.get("traj_target")
     if target is not None:
         commanded_velocity = _arrow_from_components(
             robot_x_mm, robot_y_mm,
-            float(target.get("vx_global_m_s", 0.0)),
-            float(target.get("vy_global_m_s", 0.0)),
+            float(target.get("vx_global_m_s", 0.0)) * COMMANDED_VELOCITY_SCALE_M_PER_M_S,
+            float(target.get("vy_global_m_s", 0.0)) * COMMANDED_VELOCITY_SCALE_M_PER_M_S,
             COMMANDED_VELOCITY_COLOR, z_m=0.014,
         )
         if commanded_velocity is not None:
