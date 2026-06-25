@@ -12,7 +12,7 @@ import serial
 # ========================
 # Config
 # ========================
-SERIAL_PORT = "/dev/serial0"   # Pi hardware UART
+SERIAL_PORT = "/dev/ttyAMA2"   # Pi hardware UART
 SERIAL_BAUD = 2000000
 SERIAL_TIMEOUT = 0.01
 ENABLE_SERIAL = True
