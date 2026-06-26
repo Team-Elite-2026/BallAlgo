@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import struct
 import time
 from dataclasses import dataclass
 from typing import Any
+import zlib
 
 try:
     import serial
@@ -11,6 +13,11 @@ except ModuleNotFoundError:  # pragma: no cover - hardware dependency
 
 
 LOST_SENTINEL = -5
+PROTOCOL_MAGIC = 0xCEFAEDFE
+MSG_PI_CONTROL = 0x05
+_FRAME_HEADER = struct.Struct("<IBH")
+_PI_CONTROL_PAYLOAD = struct.Struct("<IQffffBBBBBBBB")
+PI_CONTROL_PAYLOAD_SIZE = _PI_CONTROL_PAYLOAD.size
 
 
 @dataclass(slots=True)
@@ -124,6 +131,51 @@ def format_detection_packet(
     )
 
 
+def _wire_u8(value: float | int | bool | None) -> int:
+    if value is None:
+        return 0
+    return max(0, min(255, int(value)))
+
+
+def format_control_frame(
+    *,
+    seq: int,
+    pi_time_us: int,
+    ball_angle_deg: float,
+    ball_distance_cm: float,
+    blue_goal_angle_deg: float,
+    yellow_goal_angle_deg: float,
+    ball_found: bool,
+    blue_goal_found: bool,
+    yellow_goal_found: bool,
+    role_command: int,
+    manual_mode: int,
+    offense_command: int,
+    dribbler_power: int,
+    kick_request: bool,
+) -> bytes:
+    """Build the fixed-size PiControlPayload frame consumed by the Teensy."""
+    payload = _PI_CONTROL_PAYLOAD.pack(
+        int(seq) & 0xFFFFFFFF,
+        int(pi_time_us) & 0xFFFFFFFFFFFFFFFF,
+        float(ball_angle_deg),
+        float(ball_distance_cm),
+        float(blue_goal_angle_deg),
+        float(yellow_goal_angle_deg),
+        _wire_u8(ball_found),
+        _wire_u8(blue_goal_found),
+        _wire_u8(yellow_goal_found),
+        _wire_u8(role_command),
+        _wire_u8(manual_mode),
+        _wire_u8(offense_command),
+        _wire_u8(dribbler_power),
+        _wire_u8(kick_request),
+    )
+    header = _FRAME_HEADER.pack(PROTOCOL_MAGIC, MSG_PI_CONTROL, len(payload))
+    crc = zlib.crc32(header + payload) & 0xFFFFFFFF
+    return header + payload + struct.pack("<I", crc)
+
+
 class SerialLink:
     """Full-duplex ASCII serial link.
 
@@ -163,6 +215,34 @@ class SerialLink:
             yellow_goal_angle_deg,
         )
         self._serial.write(packet.encode("ascii"))
+
+    def send_control(
+        self,
+        *,
+        seq: int,
+        pi_time_us: int,
+        ball_angle_deg: float,
+        ball_distance_cm: float,
+        blue_goal_angle_deg: float,
+        yellow_goal_angle_deg: float,
+        ball_found: bool,
+        blue_goal_found: bool,
+        yellow_goal_found: bool,
+        role_command: int,
+        manual_mode: int,
+        offense_command: int,
+        dribbler_power: int,
+        kick_request: bool,
+    ) -> None:
+        frame = format_control_frame(
+            seq=seq, pi_time_us=pi_time_us, ball_angle_deg=ball_angle_deg,
+            ball_distance_cm=ball_distance_cm, blue_goal_angle_deg=blue_goal_angle_deg,
+            yellow_goal_angle_deg=yellow_goal_angle_deg, ball_found=ball_found,
+            blue_goal_found=blue_goal_found, yellow_goal_found=yellow_goal_found,
+            role_command=role_command, manual_mode=manual_mode,
+            offense_command=offense_command, dribbler_power=dribbler_power,
+            kick_request=kick_request)
+        self._serial.write(frame)
 
     def poll_telemetry(self) -> TeensyTelemetry:
         try:

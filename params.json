@@ -33,6 +33,7 @@
   "pose_kf_mouse_accel_var": 250000.0,
   "pose_kf_mouse_meas_var":  2500.0,
   "use_mouse_sensor":        true,
+  "teensy_telemetry_stale_s": 0.25,
 
   "goal_bearing_base_var_rad2": 0.0035,
   "goal_bearing_penalty_rad2":  0.5,
@@ -46,6 +47,19 @@
   "defense_impact_margin_s":         0.08,
   "role_switch_margin_cm":           15.0,
   "role_confirm_samples":            3,
+
+  "enable_offense_state_machine":    true,
+  "enable_pi_control_packet":        false,
+  "ball_front_angle_deg":            90.0,
+  "kick_max_scoring_goal_heading_deg": 70.0,
+  "own_goal_heading_block_deg":      70.0,
+  "kick_aim_tolerance_deg":          12.0,
+  "spin_shot_possession_hold_ms":    90,
+  "spin_shot_align_hold_ms":         80,
+  "kick_cooldown_us":                750000,
+  "dribbler_capture_power":          140,
+  "dribbler_capture_dist_mm":        220.0,
+  "spin_shot_dribbler_power":        255,
 
   "use_ball_distance_onnx_model":    false,
   "ball_distance_min_cm":             0.0,
