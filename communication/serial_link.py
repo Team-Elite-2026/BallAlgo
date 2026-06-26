@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import struct
 import time
 from dataclasses import dataclass
@@ -110,11 +111,56 @@ def _wire_int(value: float | int | None) -> int:
     return int(value)
 
 
+def compute_orbit_derivative(
+    ball_angle_deg: float,
+    ball_distance_cm: float,
+    prev_ball_angle_deg: float,
+    prev_ball_distance_cm: float,
+) -> float:
+    """Replicate the legacy camera-side derivative used by orbit.cpp."""
+    if (
+        ball_angle_deg == LOST_SENTINEL
+        or ball_distance_cm == LOST_SENTINEL
+        or prev_ball_angle_deg == LOST_SENTINEL
+        or prev_ball_distance_cm == LOST_SENTINEL
+    ):
+        return LOST_SENTINEL
+
+    new_ball_angle = 360 - ball_angle_deg if ball_angle_deg > 180 else ball_angle_deg
+    prev_new_ball_angle = 360 - prev_ball_angle_deg if prev_ball_angle_deg > 180 else prev_ball_angle_deg
+    d_input = (
+        math.sin(math.radians(int(new_ball_angle))) * int(ball_distance_cm)
+        - math.sin(math.radians(int(prev_new_ball_angle))) * int(prev_ball_distance_cm)
+    )
+    if d_input < 0 and (ball_angle_deg < 90 or ball_angle_deg > 270):
+        return round((-d_input) * 100) / 100
+    return LOST_SENTINEL
+
+
+@dataclass(slots=True)
+class OrbitDerivativeTracker:
+    prev_ball_angle_deg: float = LOST_SENTINEL
+    prev_ball_distance_cm: float = LOST_SENTINEL
+
+    def update(self, ball_angle_deg: float, ball_distance_cm: float) -> float:
+        derivative = compute_orbit_derivative(
+            ball_angle_deg,
+            ball_distance_cm,
+            self.prev_ball_angle_deg,
+            self.prev_ball_distance_cm,
+        )
+        if ball_angle_deg != LOST_SENTINEL and ball_distance_cm != LOST_SENTINEL:
+            self.prev_ball_angle_deg = ball_angle_deg
+            self.prev_ball_distance_cm = ball_distance_cm
+        return derivative
+
+
 def format_detection_packet(
     ball_angle_deg: float,
     ball_distance_cm: float,
     blue_goal_angle_deg: float,
     yellow_goal_angle_deg: float,
+    derivative: float = LOST_SENTINEL,
 ) -> str:
     """Format the ASCII packet consumed by Offense2026's Cam.cpp."""
     return (
@@ -122,6 +168,7 @@ def format_detection_packet(
         f"{_wire_int(ball_distance_cm)}a"
         f"{_wire_int(blue_goal_angle_deg)}c"
         f"{_wire_int(yellow_goal_angle_deg)}d"
+        f"{derivative}f"
     )
 
 
@@ -183,6 +230,7 @@ class SerialLink:
         self._serial = serial.Serial(port=port, baudrate=baud, timeout=timeout)
         self._rx_text = ""
         self.latest_telemetry = TeensyTelemetry()
+        self._orbit_derivative = OrbitDerivativeTracker()
         time.sleep(0.1)
         print(f"[SERIAL] Connected on {port} @ {baud}")
 
@@ -202,11 +250,13 @@ class SerialLink:
         blue_goal_angle_deg: float,
         yellow_goal_angle_deg: float,
     ) -> None:
+        derivative = self._orbit_derivative.update(ball_angle_deg, ball_distance_cm)
         packet = format_detection_packet(
             ball_angle_deg,
             ball_distance_cm,
             blue_goal_angle_deg,
             yellow_goal_angle_deg,
+            derivative,
         )
         self._serial.write(packet.encode("ascii"))
 

@@ -5,7 +5,9 @@ import unittest
 import zlib
 
 from communication import (
+    OrbitDerivativeTracker,
     PI_CONTROL_PAYLOAD_SIZE,
+    compute_orbit_derivative,
     format_control_frame,
     format_detection_packet,
 )
@@ -14,7 +16,24 @@ from communication.serial_link import parse_teensy_telemetry_line
 
 class SerialLinkTests(unittest.TestCase):
     def test_detection_packet_stays_legacy_ascii(self):
-        self.assertEqual(format_detection_packet(12.9, 34.2, -5, 270), "12b34a-5c270d")
+        self.assertEqual(format_detection_packet(12.9, 34.2, -5, 270), "12b34a-5c270d-5f")
+
+    def test_compute_orbit_derivative_matches_legacy_camera_logic(self):
+        self.assertEqual(compute_orbit_derivative(350, 20, 340, 30), 6.79)
+        self.assertEqual(compute_orbit_derivative(300, 40, 320, 30), -5)
+        self.assertEqual(compute_orbit_derivative(-5, 20, 340, 30), -5)
+
+    def test_orbit_derivative_tracker_only_updates_on_valid_ball(self):
+        tracker = OrbitDerivativeTracker()
+
+        self.assertEqual(tracker.update(340, 30), -5)
+        self.assertEqual(tracker.prev_ball_angle_deg, 340)
+        self.assertEqual(tracker.prev_ball_distance_cm, 30)
+
+        self.assertEqual(tracker.update(350, 20), 6.79)
+        self.assertEqual(tracker.update(-5, -5), -5)
+        self.assertEqual(tracker.prev_ball_angle_deg, 350)
+        self.assertEqual(tracker.prev_ball_distance_cm, 20)
 
     def test_control_frame_layout_and_crc(self):
         frame = format_control_frame(
