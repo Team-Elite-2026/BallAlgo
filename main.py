@@ -632,9 +632,12 @@ class PiCameraSource:
             "AeEnable": False,
             "AwbEnable": False,
             "ExposureTime": int(exposure.get("time", 10000)),
+            "ColourTemperature": int(self.thresholds.raw.get("wb", 4000)),
             "Brightness": int(self.thresholds.raw.get("brightness", 0)),
             "Contrast": int(self.thresholds.raw.get("contrast", 1)),
             "Saturation": int(self.thresholds.raw.get("saturation", 1)),
+            "AfMode": 0,
+            "LensPosition": int(self.thresholds.raw.get("focus", 108)),
         }
         if "sens" in exposure:
             controls["AnalogueGain"] = max(0.0, float(exposure["sens"]) / 100.0)

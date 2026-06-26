@@ -88,7 +88,50 @@ def dry_run(args: argparse.Namespace, thresholds: ThresholdSet, estimator: Dista
     print(f"distance={distance_cm:.2f} cm ({distance_cm / 2.54:.2f} in)")
 
 
-def run_live(args: argparse.Namespace, thresholds: ThresholdSet, estimator: DistanceEstimator) -> None:
+def draw_status_overlay(
+    display,
+    result,
+    thresholds: ThresholdSet,
+    feature_mode: str,
+    model_path: Path,
+) -> None:
+    import cv2
+
+    cv2.drawMarker(display, thresholds.offsets, (255, 0, 0), cv2.MARKER_CROSS, 18, 2)
+    if result.ball.found:
+        cx, cy = result.ball.center or (0, 0)
+        dx = cx - thresholds.offsets[0]
+        dy = cy - thresholds.offsets[1]
+        lines = [
+            f"BALL FOUND  raw=({cx},{cy}) centered=({dx},{dy})",
+            f"distance={result.ball.distance_cm:.1f} cm  {result.ball.distance_cm / 2.54:.1f} in  radius={result.ball.dist_px:.1f}px",
+            f"angle={result.ball.angle_deg:.1f} deg  sector={result.ball.sector}",
+        ]
+        color = (0, 255, 0)
+    else:
+        lines = [
+            "NO BALL DETECTED",
+            "Check ball color/lighting, HSV thresholds, and that the ball is inside the yellow ROI.",
+        ]
+        color = (0, 0, 255)
+
+    lines.extend([
+        f"center={thresholds.offsets}  feature_mode={feature_mode}",
+        f"model={model_path.name}",
+    ])
+    y = 28
+    for line in lines:
+        cv2.putText(display, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.52, color, 2, cv2.LINE_AA)
+        y += 24
+
+
+def run_live(
+    args: argparse.Namespace,
+    thresholds: ThresholdSet,
+    estimator: DistanceEstimator,
+    feature_mode: str,
+    model_path: Path,
+) -> None:
     try:
         import cv2
     except ModuleNotFoundError:
@@ -129,8 +172,10 @@ def run_live(args: argparse.Namespace, thresholds: ThresholdSet, estimator: Dist
 
             if not args.no_display:
                 display = result.annotated_frame if result.annotated_frame is not None else frame
-                cv2.drawMarker(display, thresholds.offsets, (255, 0, 0), cv2.MARKER_CROSS, 18, 2)
+                draw_status_overlay(display, result, thresholds, feature_mode, model_path)
                 cv2.imshow("Ball distance live test", display)
+                if args.show_mask and result.mask_display is not None:
+                    cv2.imshow("Ball distance mask", result.mask_display)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
             elif args.frames is not None and frame_count >= args.frames:
@@ -151,6 +196,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--centered-y", type=float, help="Centered y for --dry-run.")
     parser.add_argument("--size", type=int, nargs=2, default=RESIZE_TO, metavar=("W", "H"), help="Camera/detection size.")
     parser.add_argument("--no-display", action="store_true", help="Run without OpenCV window; useful over SSH.")
+    parser.add_argument("--show-mask", action="store_true", help="Also show the searched ball mask window.")
     parser.add_argument("--frames", type=int, default=None, help="Stop after this many frames in --no-display mode.")
     parser.add_argument("--print-interval", type=float, default=0.15, help="Minimum seconds between console prints.")
     parser.add_argument("--print-missing", action="store_true", help="Print periodic lines when no ball is detected.")
@@ -178,7 +224,7 @@ def main() -> None:
     if args.dry_run:
         dry_run(args, thresholds, estimator)
     else:
-        run_live(args, thresholds, estimator)
+        run_live(args, thresholds, estimator, feature_mode, model_path)
 
 
 if __name__ == "__main__":
