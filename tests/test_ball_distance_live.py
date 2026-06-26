@@ -60,11 +60,24 @@ def model_feature_mode(model_path: Path) -> str:
     return session.get_modelmeta().custom_metadata_map.get("feature_mode", "xy_radius")
 
 
-def make_distance_estimator(model_path: Path) -> DistanceEstimator:
-    params = dict(load_params())
-    params["use_ball_distance_onnx_model"] = True
-    params["ball_distance_model_path"] = str(model_path)
-    return DistanceEstimator(params=params, repo_root=BALLALGO_DIR)
+def build_estimator(args: argparse.Namespace, params: dict) -> tuple[DistanceEstimator, str]:
+    """Build a DistanceEstimator for the requested (or params.json) mode and a
+    short human-readable label for the on-screen overlay."""
+    mode = args.mode or params.get("ball_distance_mode")
+    if mode is None:
+        mode = "onnx" if params.get("use_ball_distance_onnx_model") else "exponential"
+    params = dict(params)
+    params["ball_distance_mode"] = mode
+    label = mode
+    if mode == "onnx":
+        model_path = resolve_model_path(args.model)
+        if not model_path.exists():
+            sys.exit(f"ONNX model not found: {model_path}")
+        feature_mode = model_feature_mode(model_path)
+        params["ball_distance_model_path"] = str(model_path)
+        label = f"onnx:{model_path.name} ({feature_mode})"
+    estimator = DistanceEstimator(params=params, repo_root=BALLALGO_DIR)
+    return estimator, label
 
 
 def dry_run(args: argparse.Namespace, thresholds: ThresholdSet, estimator: DistanceEstimator) -> None:
@@ -92,8 +105,7 @@ def draw_status_overlay(
     display,
     result,
     thresholds: ThresholdSet,
-    feature_mode: str,
-    model_path: Path,
+    mode_label: str,
 ) -> None:
     import cv2
 
@@ -103,7 +115,7 @@ def draw_status_overlay(
         dx = cx - thresholds.offsets[0]
         dy = cy - thresholds.offsets[1]
         lines = [
-            f"BALL FOUND  raw=({cx},{cy}) centered=({dx},{dy})",
+            f"BALL FOUND  raw=({cx:.1f},{cy:.1f}) centered=({dx:.1f},{dy:.1f})",
             f"distance={result.ball.distance_cm:.1f} cm  {result.ball.distance_cm / 2.54:.1f} in  radius={result.ball.dist_px:.1f}px",
             f"angle={result.ball.angle_deg:.1f} deg  sector={result.ball.sector}",
         ]
@@ -116,8 +128,8 @@ def draw_status_overlay(
         color = (0, 0, 255)
 
     lines.extend([
-        f"center={thresholds.offsets}  feature_mode={feature_mode}",
-        f"model={model_path.name}",
+        f"center={thresholds.offsets}",
+        f"distance_mode={mode_label}",
     ])
     y = 28
     for line in lines:
@@ -158,8 +170,7 @@ def run_live(
     args: argparse.Namespace,
     thresholds: ThresholdSet,
     estimator: DistanceEstimator,
-    feature_mode: str,
-    model_path: Path,
+    mode_label: str,
 ) -> None:
     try:
         import cv2
@@ -186,7 +197,7 @@ def run_live(
                 dx = cx - thresholds.offsets[0]
                 dy = cy - thresholds.offsets[1]
                 print(
-                    f"{cx:4d},{cy:4d} "
+                    f"{cx:6.1f},{cy:6.1f} "
                     f"{dx:7.1f},{dy:7.1f} "
                     f"{result.ball.dist_px:8.1f} "
                     f"{result.ball.distance_cm:8.2f} "
@@ -206,7 +217,7 @@ def run_live(
                 raw_display = frame.copy()
                 draw_raw_feed_overlay(raw_display, thresholds)
                 display = result.annotated_frame if result.annotated_frame is not None else frame
-                draw_status_overlay(display, result, thresholds, feature_mode, model_path)
+                draw_status_overlay(display, result, thresholds, mode_label)
                 cv2.imshow("Ball distance raw feed", raw_display)
                 cv2.imshow("Ball distance annotated", display)
                 if result.mask_display is not None:
@@ -223,7 +234,13 @@ def run_live(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=None, help="ONNX model path. Defaults to params.json model path.")
+    parser.add_argument(
+        "--mode",
+        choices=("parametric", "onnx", "exponential"),
+        default=None,
+        help="Distance estimation mode. Defaults to params.json 'ball_distance_mode'.",
+    )
+    parser.add_argument("--model", type=Path, default=None, help="ONNX model path (onnx mode). Defaults to params.json model path.")
     parser.add_argument("--dry-run", action="store_true", help="Do not open camera; run one coordinate through the model.")
     parser.add_argument("--raw-x", type=float, help="Raw frame x for --dry-run.")
     parser.add_argument("--raw-y", type=float, help="Raw frame y for --dry-run.")
@@ -240,25 +257,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     thresholds = load_thresholds(BALLALGO_DIR / "thresholds.json")
-    model_path = resolve_model_path(args.model)
-    if not model_path.exists():
-        sys.exit(f"ONNX model not found: {model_path}")
-
-    feature_mode = model_feature_mode(model_path)
-    if feature_mode not in ("xy_radius", "polar"):
-        sys.exit(f"Unsupported ONNX feature_mode {feature_mode!r} in {model_path}")
-    if feature_mode == "xy_radius":
-        print("Warning: model has no polar metadata or uses xy_radius features.")
+    params = dict(load_params())
     print(f"Thresholds: {BALLALGO_DIR / 'thresholds.json'}")
     print(f"Camera center offsets: {thresholds.offsets}")
-    print(f"ONNX model: {model_path}")
-    print(f"ONNX feature mode: {feature_mode}")
 
-    estimator = make_distance_estimator(model_path)
+    estimator, mode_label = build_estimator(args, params)
+    print(f"Distance mode: {mode_label}")
+
     if args.dry_run:
         dry_run(args, thresholds, estimator)
     else:
-        run_live(args, thresholds, estimator, feature_mode, model_path)
+        run_live(args, thresholds, estimator, mode_label)
 
 
 if __name__ == "__main__":

@@ -140,8 +140,8 @@ class FrameDetections:
     def snapshot_dict(self) -> dict[str, Any]:
         ball_px = {
             "found": self.ball.found,
-            "cx": self.ball.center[0] if self.ball.center else 0,
-            "cy": self.ball.center[1] if self.ball.center else 0,
+            "cx": int(round(self.ball.center[0])) if self.ball.center else 0,
+            "cy": int(round(self.ball.center[1])) if self.ball.center else 0,
         }
         return {
             "ball_found": self.ball.found,
@@ -244,24 +244,81 @@ def apply_ball_distance_calibration(dist_px: float) -> float:
     return 0.00255386 * math.pow(dist_px, 2.09612)
 
 
-class DistanceEstimator:
-    """Camera pixel distance API.
+DISTANCE_MODES = ("parametric", "onnx", "exponential")
 
-    ONNX is imported and used only when ``use_ball_distance_onnx_model`` is true
-    in params.json.
+
+class DistanceEstimator:
+    """Camera pixel distance API with three switchable modes (params.json
+    ``ball_distance_mode``):
+
+    * ``parametric``  -- closed-form log-poly(r) x Fourier(theta) surface loaded
+      from ``ball_distance_parametric_path`` (no torch/onnxruntime needed).
+    * ``onnx``        -- the trained MLP exported to ONNX.
+    * ``exponential`` -- the legacy ``apply_ball_distance_calibration`` power law.
+
+    For backward compatibility, if ``ball_distance_mode`` is absent the old
+    ``use_ball_distance_onnx_model`` boolean selects onnx vs exponential.
     """
 
     def __init__(self, params: dict[str, Any] | None = None, repo_root: str | Path = "."):
         self.params = params or load_params()
         self.repo_root = Path(repo_root)
-        self.use_onnx = bool(self.params.get("use_ball_distance_onnx_model", False))
         self.min_cm = float(self.params.get("ball_distance_min_cm", 0.0))
         self.max_cm = float(self.params.get("ball_distance_max_cm", 350.0))
+        self.mode = self._resolve_mode()
+        # onnx state
         self._session = None
         self._input_name = ""
         self._feature_mode = "xy_radius"
-        if self.use_onnx:
+        # parametric state
+        self._param_weights: np.ndarray | None = None
+        self._param_radial_degree = 0
+        self._param_angular_order = 0
+        if self.mode == "onnx":
             self._load_onnx()
+        elif self.mode == "parametric":
+            self._load_parametric()
+        print(f"[DISTANCE] mode = {self.mode}")
+
+    def _resolve_mode(self) -> str:
+        mode = self.params.get("ball_distance_mode")
+        if mode is not None:
+            mode = str(mode).lower()
+            if mode not in DISTANCE_MODES:
+                raise RuntimeError(f"ball_distance_mode must be one of {DISTANCE_MODES}, got {mode!r}")
+            return mode
+        return "onnx" if bool(self.params.get("use_ball_distance_onnx_model", False)) else "exponential"
+
+    def _load_parametric(self) -> None:
+        model_path = Path(self.params.get("ball_distance_parametric_path", "training/parametric_model.json"))
+        if not model_path.is_absolute():
+            model_path = self.repo_root / model_path
+        if not model_path.exists():
+            raise RuntimeError(f"ball_distance_mode=parametric but model file not found: {model_path}")
+        spec = json.loads(model_path.read_text())
+        self._param_radial_degree = int(spec["radial_degree"])
+        self._param_angular_order = int(spec["angular_order"])
+        self._param_weights = np.asarray(spec["weights"], dtype=np.float64)
+        print(f"[DISTANCE] parametric model: {model_path.name} "
+              f"(radial_degree={self._param_radial_degree}, angular_order={self._param_angular_order})")
+
+    def _predict_parametric(self, dx: float, dy: float) -> float:
+        # Must match training/fit_parametric_model.py design_matrix column order:
+        # base = [1, cos1, sin1, ..., cosM, sinM]; row = concat_p (logr**p * base).
+        radius = max(math.hypot(dx, dy), 1e-6)
+        log_r = math.log(radius)
+        theta = math.atan2(dy, dx)
+        base = [1.0]
+        for k in range(1, self._param_angular_order + 1):
+            base.append(math.cos(k * theta))
+            base.append(math.sin(k * theta))
+        row: list[float] = []
+        scale = 1.0
+        for _ in range(self._param_radial_degree + 1):
+            row.extend(scale * value for value in base)
+            scale *= log_r
+        log_cm = float(np.dot(self._param_weights, np.asarray(row, dtype=np.float64)))
+        return math.exp(log_cm)
 
     def _load_onnx(self) -> None:
         try:
@@ -284,9 +341,12 @@ class DistanceEstimator:
     def estimate_cm(self, cx: int, cy: int, dist_px: float, thresholds: ThresholdSet) -> float:
         if dist_px == LOST_SENTINEL:
             return LOST_SENTINEL
-        if not self.use_onnx:
+        if self.mode == "exponential":
             distance = apply_ball_distance_calibration(dist_px)
-        else:
+        elif self.mode == "parametric":
+            xoff, yoff = thresholds.offsets
+            distance = self._predict_parametric(float(cx - xoff), float(cy - yoff))
+        else:  # onnx
             xoff, yoff = thresholds.offsets
             dx = float(cx - xoff)
             dy = float(cy - yoff)
@@ -319,7 +379,7 @@ def clamp_vec(vx: float, vy: float, vmax: float) -> tuple[float, float]:
     return vx * scale, vy * scale
 
 
-def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tuple[int, int, int, int], tuple[int, int], float] | None:
+def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tuple[int, int, int, int], tuple[float, float], float] | None:
     require_cv2()
     cnts, _ = cv2.findContours(bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not cnts:
@@ -334,7 +394,16 @@ def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tu
     if max_cnt is None:
         return None
     x, y, w, h = cv2.boundingRect(max_cnt)
-    return (x, y, w, h), (x + w // 2, y + h // 2), max_area
+    # Sub-pixel centroid via image moments. More accurate and stable than the
+    # bounding-box midpoint, especially near the mirror rim where 1px maps to
+    # many cm and for partially-occluded (non-symmetric) blobs. Falls back to
+    # the bbox midpoint for degenerate (zero-area) contours.
+    moments = cv2.moments(max_cnt)
+    if moments["m00"] > 0.0:
+        center = (moments["m10"] / moments["m00"], moments["m01"] / moments["m00"])
+    else:
+        center = (x + w / 2.0, y + h / 2.0)
+    return (x, y, w, h), center, max_area
 
 
 class CameraDetector:
@@ -519,12 +588,13 @@ class CameraDetector:
         distance_cm = self.distance_estimator.estimate_cm(center[0], center[1], dist_px, self.thresholds)
         if draw_frame is not None:
             x, y, w, h = bbox
+            center_px = (int(round(center[0])), int(round(center[1])))
             cv2.rectangle(draw_frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
-            cv2.circle(draw_frame, center, 4, (0, 0, 255), -1)
+            cv2.circle(draw_frame, center_px, 4, (0, 0, 255), -1)
             cv2.arrowedLine(
                 draw_frame,
-                center,
-                (center[0] + int(5 * self.v_ema[0]), center[1] + int(5 * self.v_ema[1])),
+                center_px,
+                (center_px[0] + int(5 * self.v_ema[0]), center_px[1] + int(5 * self.v_ema[1])),
                 (255, 0, 0),
                 2,
                 tipLength=0.3,

@@ -100,6 +100,112 @@ def far_distance_weighted_mse(
     return torch.mean(squared_errors * distance_weights)
 
 
+def transform_target(cm: np.ndarray, mode: str) -> np.ndarray:
+    """Map cm -> training target. ``log`` optimises relative (percentage) error."""
+    if mode == "log":
+        return np.log(np.clip(cm, 1e-6, None))
+    return cm
+
+
+def invert_target(values: np.ndarray, mode: str) -> np.ndarray:
+    if mode == "log":
+        return np.exp(values)
+    return values
+
+
+def _fit_on_indices(
+    features: np.ndarray,
+    measured_cm: np.ndarray,
+    train_idx: np.ndarray,
+    args: argparse.Namespace,
+) -> tuple[DistanceMLP, dict[str, np.ndarray]]:
+    """Train one model on a subset; mirrors train_model's normalization/loss."""
+    feats = features[train_idx]
+    target = transform_target(measured_cm[train_idx], args.target_transform)
+
+    f_mean = feats.mean(axis=0, keepdims=True)
+    f_std = feats.std(axis=0, keepdims=True)
+    f_std[f_std < 1e-6] = 1.0
+    t_mean = target.mean(axis=0, keepdims=True)
+    t_std = target.std(axis=0, keepdims=True)
+    t_std[t_std < 1e-6] = 1.0
+    feats_norm = (feats - f_mean) / f_std
+    target_norm = (target - t_mean) / t_std
+
+    torch.manual_seed(args.seed)
+    model = DistanceMLP(input_dim=features.shape[1], hidden_sizes=(32, 32))
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=1e-4)
+    dataset = TensorDataset(
+        torch.from_numpy(feats_norm.astype(np.float32)),
+        torch.from_numpy(target_norm.astype(np.float32)),
+    )
+    loader = DataLoader(dataset, batch_size=min(args.batch_size, len(dataset)), shuffle=True)
+    t_mean_t = torch.from_numpy(t_mean.astype(np.float32))
+    t_std_t = torch.from_numpy(t_std.astype(np.float32))
+    max_distance_cm = float(measured_cm[train_idx].max())
+    # With a log target the loss is already relative; the cm-weighting only makes
+    # sense for the raw-cm target.
+    use_weighted = args.target_transform == "none"
+
+    for _ in range(args.max_epochs):
+        model.train()
+        for batch_x, batch_y in loader:
+            optimizer.zero_grad()
+            predictions = model(batch_x)
+            if use_weighted:
+                loss = far_distance_weighted_mse(predictions, batch_y, t_mean_t, t_std_t, max_distance_cm)
+            else:
+                loss = torch.mean((predictions - batch_y) ** 2)
+            loss.backward()
+            optimizer.step()
+
+    normalization = {"feature_mean": f_mean, "feature_std": f_std, "target_mean": t_mean, "target_std": t_std}
+    return model, normalization
+
+
+def _predict_cm_np(
+    model: DistanceMLP,
+    normalization: dict[str, np.ndarray],
+    features: np.ndarray,
+    transform: str,
+) -> np.ndarray:
+    feats_norm = (features - normalization["feature_mean"]) / normalization["feature_std"]
+    model.eval()
+    with torch.no_grad():
+        target = (
+            model(torch.from_numpy(feats_norm.astype(np.float32))).numpy() * normalization["target_std"]
+            + normalization["target_mean"]
+        )
+    return invert_target(target, transform)
+
+
+def cross_validate(args: argparse.Namespace) -> dict[str, float]:
+    """K-fold CV with the production architecture; returns out-of-fold metrics."""
+    require_torch()
+    coords, measured_cm = read_distance_csv(args.train_csv)
+    features = build_input_features(coords, feature_mode=args.feature_mode)
+    measured = measured_cm.reshape(-1)
+
+    rng = np.random.default_rng(args.seed)
+    idx = rng.permutation(len(measured))
+    oof = np.zeros_like(measured)
+
+    print(f"\n{args.cv_folds}-fold cross-validation (feature_mode={args.feature_mode}, "
+          f"target_transform={args.target_transform}); out-of-fold metrics are honest generalisation.")
+    for fold in range(args.cv_folds):
+        test_idx = idx[fold::args.cv_folds]
+        train_idx = np.setdiff1d(idx, test_idx, assume_unique=False)
+        model, normalization = _fit_on_indices(features, measured_cm, train_idx, args)
+        pred = _predict_cm_np(model, normalization, features[test_idx], args.target_transform).reshape(-1)
+        oof[test_idx] = pred
+        fm = metric_summary(pred, measured[test_idx])
+        print(f"  fold {fold + 1}/{args.cv_folds}: MAE {fm['mae_cm']:.3f}  RMSE {fm['rmse_cm']:.3f}  "
+              f"max {fm['max_abs_error_cm']:.2f}")
+    overall = metric_summary(oof, measured)
+    print_metrics("Cross-validated (out-of-fold) MLP", oof.reshape(-1, 1), measured.reshape(-1, 1))
+    return overall
+
+
 def print_metrics(name: str, pred_cm: np.ndarray, measured_cm: np.ndarray) -> None:
     metrics = metric_summary(pred_cm, measured_cm)
     print(f"\n{name}")
@@ -378,6 +484,19 @@ def parse_args() -> argparse.Namespace:
         help="Input features: xy_radius -> [x,y,r], polar -> [r,sin(theta),cos(theta)].",
     )
     parser.add_argument("--skip-plots", action="store_true", help="Skip PNG plot generation")
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=0,
+        help="If > 0, run K-fold cross-validation first and report out-of-fold (honest) error.",
+    )
+    parser.add_argument(
+        "--target-transform",
+        choices=("none", "log"),
+        default="none",
+        help="none -> raw cm with far-distance weighting; log -> fit log(cm) (uniform percentage error). "
+        "NOTE: 'log' changes the output scale; ONNX export + main.py inference currently assume 'none'.",
+    )
     return parser.parse_args()
 
 
@@ -386,10 +505,17 @@ def main() -> None:
     if args.max_epochs < 1 or args.batch_size < 1 or args.learning_rate <= 0:
         raise SystemExit("--max-epochs, --batch-size, and --learning-rate must be positive")
 
+    if args.cv_folds < 0:
+        raise SystemExit("--cv-folds must be >= 0")
+
     checkpoint_dir, plots_dir = resolve_output_paths(args)
     args.checkpoint_dir = checkpoint_dir
     if args.run_dir is not None:
         print(f"Run output directory: {resolve_run_dir(args.run_dir)}")
+
+    if args.cv_folds > 0:
+        cross_validate(args)
+
     model, normalization, history, coords, measured_cm, pred_cm = train_model(args)
     print_metrics("Neural network fit on training data (final epoch weights)", pred_cm, measured_cm)
 
