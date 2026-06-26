@@ -5,7 +5,9 @@ The exported ONNX graph bakes in the feature normalization and distance
 denormalization, so the runtime contract stays simple:
 
 input:
-  [dx, dy, radius] pixel features
+  feature vector saved in the checkpoint metadata:
+  - xy_radius: [dx, dy, radius]
+  - polar: [radius, sin(theta), cos(theta)]
 
 output:
   scalar distance in centimeters
@@ -71,8 +73,9 @@ def main() -> None:
     if input_dim != REQUIRED_INPUT_DIM:
         raise SystemExit(
             f"Unsupported checkpoint input dimension {input_dim}. "
-            f"Expected exactly {REQUIRED_INPUT_DIM} features: dx, dy, radius."
+            f"Expected exactly {REQUIRED_INPUT_DIM} features."
         )
+    feature_mode = str(normalization.get("feature_mode", "xy_radius"))
 
     if len(model.hidden) != 4:
         raise SystemExit("Unsupported architecture: expected exactly two hidden Linear+ReLU blocks.")
@@ -136,6 +139,7 @@ def main() -> None:
         producer_name="ballalgo_manual_export",
         opset_imports=[helper.make_operatorsetid("", args.opset)],
     )
+    onnx_model.metadata_props.add(key="feature_mode", value=feature_mode)
     onnx.checker.check_model(onnx_model)
 
     args.onnx_out.parent.mkdir(parents=True, exist_ok=True)
@@ -143,6 +147,7 @@ def main() -> None:
 
     print(f"Exported ONNX model: {args.onnx_out}")
     print(f"Input dimension: {input_dim}")
+    print(f"Feature mode: {feature_mode}")
     print("Runtime output units: centimeters")
 
 

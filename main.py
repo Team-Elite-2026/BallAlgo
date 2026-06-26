@@ -259,6 +259,7 @@ class DistanceEstimator:
         self.max_cm = float(self.params.get("ball_distance_max_cm", 350.0))
         self._session = None
         self._input_name = ""
+        self._feature_mode = "xy_radius"
         if self.use_onnx:
             self._load_onnx()
 
@@ -274,7 +275,11 @@ class DistanceEstimator:
             model_path = self.repo_root / model_path
         self._session = ort.InferenceSession(str(model_path))
         self._input_name = self._session.get_inputs()[0].name
-        print(f"[DISTANCE] ONNX model enabled: {model_path}")
+        metadata = self._session.get_modelmeta().custom_metadata_map
+        self._feature_mode = metadata.get("feature_mode", "xy_radius")
+        if self._feature_mode not in ("xy_radius", "polar"):
+            raise RuntimeError(f"Unsupported ball distance ONNX feature_mode: {self._feature_mode}")
+        print(f"[DISTANCE] ONNX model enabled: {model_path} ({self._feature_mode})")
 
     def estimate_cm(self, cx: int, cy: int, dist_px: float, thresholds: ThresholdSet) -> float:
         if dist_px == LOST_SENTINEL:
@@ -286,7 +291,11 @@ class DistanceEstimator:
             dx = float(cx - xoff)
             dy = float(cy - yoff)
             radius = math.hypot(dx, dy)
-            features = np.array([[dx, dy, radius]], dtype=np.float32)
+            if self._feature_mode == "polar":
+                theta = math.atan2(dy, dx)
+                features = np.array([[radius, math.sin(theta), math.cos(theta)]], dtype=np.float32)
+            else:
+                features = np.array([[dx, dy, radius]], dtype=np.float32)
             result = self._session.run(None, {self._input_name: features})
             distance = float(result[0].flat[0])
         return max(self.min_cm, min(self.max_cm, distance))

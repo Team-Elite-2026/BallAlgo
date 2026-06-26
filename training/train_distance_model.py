@@ -29,11 +29,11 @@ except ModuleNotFoundError as exc:
 else:
     TORCH_IMPORT_ERROR = None
 
-from distance_model import DistanceMLP, build_input_features
+from distance_model import DistanceMLP, FEATURE_MODES, FEATURE_MODE_XY_RADIUS, build_input_features
 
 
 TRAINING_DIR = Path(__file__).resolve().parent
-DEFAULT_TRAIN_CSV = TRAINING_DIR / "training_data.csv"
+DEFAULT_TRAIN_CSV = TRAINING_DIR / "distance_training_data.csv"
 DEFAULT_PLOTS_DIR = TRAINING_DIR / "training_plots"
 CHECKPOINT_INTERVAL_EPOCHS = 50
 
@@ -117,7 +117,7 @@ def train_model(
 ) -> tuple[DistanceMLP, dict[str, torch.Tensor], list[dict[str, float]], np.ndarray, np.ndarray, np.ndarray]:
     require_torch()
     coords, measured_cm = read_distance_csv(args.train_csv)
-    features = build_input_features(coords)
+    features = build_input_features(coords, feature_mode=args.feature_mode)
 
     feature_mean_np = features.mean(axis=0, keepdims=True)
     feature_std_np = features.std(axis=0, keepdims=True)
@@ -142,6 +142,7 @@ def train_model(
         "feature_std": torch.from_numpy(feature_std_np.astype(np.float32)),
         "distance_mean": torch.from_numpy(distance_mean_np.astype(np.float32)),
         "distance_std": torch.from_numpy(distance_std_np.astype(np.float32)),
+        "feature_mode": args.feature_mode,
     }
     distance_mean_t = normalization["distance_mean"]
     distance_std_t = normalization["distance_std"]
@@ -153,9 +154,10 @@ def train_model(
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Training on all {len(coords)} CSV rows; no train/test split.")
+    print(f"Feature mode: {args.feature_mode}")
     print(f"Learning rate: {args.learning_rate:g}")
     print(f"Max epochs: {epoch_limit}")
-    print(f"Loss: far-distance weighted MSE (weight = 1.0 + 1.5 * distance_cm / {max_distance_cm:.1f})")
+    print(f"Loss: far-distance weighted MSE (weight = 1.0 + 1.5 * (distance_cm / {max_distance_cm:.1f})^2)")
     print(f"Checkpoints every {CHECKPOINT_INTERVAL_EPOCHS} epochs -> {checkpoint_dir}")
 
     for epoch in range(1, epoch_limit + 1):
@@ -212,6 +214,7 @@ def save_checkpoint(
         {
             "model_state_dict": model.state_dict(),
             "normalization": normalization,
+            "feature_mode": normalization.get("feature_mode", FEATURE_MODE_XY_RADIUS),
             "input_dim": model.input_dim,
             "hidden_sizes": list(model.hidden_sizes),
         },
@@ -311,7 +314,8 @@ def save_training_plots(
     y_grid = np.linspace(float(coords[:, 1].min()), float(coords[:, 1].max()), 120)
     xx, yy = np.meshgrid(x_grid, y_grid)
     grid_coords = np.column_stack((xx.reshape(-1), yy.reshape(-1))).astype(np.float32)
-    grid_features = build_input_features(grid_coords)
+    feature_mode = str(normalization.get("feature_mode", FEATURE_MODE_XY_RADIUS))
+    grid_features = build_input_features(grid_coords, feature_mode=feature_mode)
     feature_mean = normalization["feature_mean"].numpy()
     feature_std = normalization["feature_std"].numpy()
     distance_mean = normalization["distance_mean"].numpy()
@@ -351,7 +355,7 @@ def resolve_output_paths(args: argparse.Namespace) -> tuple[Path, Path]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train a 3-input dx/dy/radius ball distance model using all CSV rows.",
+        description="Train a 3-input ball distance model using all CSV rows.",
     )
     parser.add_argument("train_csv", nargs="?", type=Path, default=DEFAULT_TRAIN_CSV, help="Training CSV with x,y,measured_cm columns")
     parser.add_argument("--plots-dir", type=Path, default=DEFAULT_PLOTS_DIR, help="Directory for training plots (without --run-dir)")
@@ -367,6 +371,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--print-every", type=int, default=10)
+    parser.add_argument(
+        "--feature-mode",
+        choices=FEATURE_MODES,
+        default=FEATURE_MODE_XY_RADIUS,
+        help="Input features: xy_radius -> [x,y,r], polar -> [r,sin(theta),cos(theta)].",
+    )
     parser.add_argument("--skip-plots", action="store_true", help="Skip PNG plot generation")
     return parser.parse_args()
 

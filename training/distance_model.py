@@ -16,6 +16,9 @@ except ModuleNotFoundError as exc:
 else:
     TORCH_IMPORT_ERROR = None
 
+FEATURE_MODE_XY_RADIUS = "xy_radius"
+FEATURE_MODE_POLAR = "polar"
+FEATURE_MODES = (FEATURE_MODE_XY_RADIUS, FEATURE_MODE_POLAR)
 NORMALIZATION_KEYS = ("feature_mean", "feature_std", "distance_mean", "distance_std")
 
 
@@ -80,7 +83,7 @@ else:
         pass
 
 
-def build_input_features(coords: np.ndarray) -> np.ndarray:
+def build_input_features(coords: np.ndarray, feature_mode: str = FEATURE_MODE_XY_RADIUS) -> np.ndarray:
     coords_array = np.asarray(coords, dtype=np.float32)
     if coords_array.ndim == 1:
         coords_array = coords_array.reshape(1, -1)
@@ -90,12 +93,20 @@ def build_input_features(coords: np.ndarray) -> np.ndarray:
     if coords_array.shape[1] != 2:
         raise ValueError(f"Expected 2 or 3 input columns, got shape {coords_array.shape}")
 
-    radius = np.hypot(coords_array[:, 0], coords_array[:, 1]).reshape(-1, 1).astype(np.float32)
-    return np.concatenate((coords_array, radius), axis=1)
+    x = coords_array[:, 0:1]
+    y = coords_array[:, 1:2]
+    radius = np.hypot(x, y).astype(np.float32)
+    if feature_mode == FEATURE_MODE_XY_RADIUS:
+        return np.concatenate((x, y, radius), axis=1).astype(np.float32)
+    if feature_mode == FEATURE_MODE_POLAR:
+        theta = np.arctan2(y, x).astype(np.float32)
+        return np.concatenate((radius, np.sin(theta), np.cos(theta)), axis=1).astype(np.float32)
+    raise ValueError(f"Unknown feature_mode {feature_mode!r}; expected one of {FEATURE_MODES}")
 
 
 def prepare_model_inputs(coords: np.ndarray, normalization: dict[str, torch.Tensor]) -> np.ndarray:
     expected_dim = int(normalization["feature_mean"].shape[-1])
+    feature_mode = str(normalization.get("feature_mode", FEATURE_MODE_XY_RADIUS))
     coords_array = np.asarray(coords, dtype=np.float32)
     if coords_array.ndim == 1:
         coords_array = coords_array.reshape(1, -1)
@@ -103,7 +114,7 @@ def prepare_model_inputs(coords: np.ndarray, normalization: dict[str, torch.Tens
     if coords_array.shape[1] == expected_dim:
         return coords_array.astype(np.float32)
     if coords_array.shape[1] == 2 and expected_dim == 3:
-        return build_input_features(coords_array)
+        return build_input_features(coords_array, feature_mode=feature_mode)
     raise ValueError(f"Model expects {expected_dim} inputs, but received shape {coords_array.shape}")
 
 
@@ -114,7 +125,8 @@ def predict_model(
 ) -> np.ndarray:
     require_torch()
     raw_features = prepare_model_inputs(coords, normalization)
-    wrapped = NormalizedDistanceModel(model, **normalization)
+    tensor_normalization = {key: normalization[key] for key in NORMALIZATION_KEYS}
+    wrapped = NormalizedDistanceModel(model, **tensor_normalization)
     wrapped.eval()
     with torch.no_grad():
         prediction = wrapped(torch.from_numpy(raw_features.astype(np.float32))).numpy()
@@ -128,6 +140,7 @@ def load_checkpoint_model(checkpoint_path: Path) -> tuple[DistanceMLP, dict[str,
     missing = [key for key in NORMALIZATION_KEYS if key not in checkpoint["normalization"]]
     if missing:
         raise KeyError(f"Checkpoint missing normalization keys: {missing}")
+    checkpoint["normalization"].setdefault("feature_mode", checkpoint.get("feature_mode", FEATURE_MODE_XY_RADIUS))
 
     model = DistanceMLP(
         input_dim=int(checkpoint["input_dim"]),

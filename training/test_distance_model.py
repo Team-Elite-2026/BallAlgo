@@ -35,15 +35,25 @@ def load_camera_center() -> tuple[int, int]:
     return off["x"], off["y"]
 
 
+def build_onnx_features(cx: float, cy: float, feature_mode: str) -> np.ndarray:
+    radius = float(np.hypot(cx, cy))
+    if feature_mode == "polar":
+        theta = float(np.arctan2(cy, cx))
+        return np.array([[radius, np.sin(theta), np.cos(theta)]], dtype=np.float32)
+    if feature_mode == "xy_radius":
+        return np.array([[cx, cy, radius]], dtype=np.float32)
+    raise ValueError(f"Unsupported ONNX feature_mode: {feature_mode}")
+
+
 def predict_onnx(cx: float, cy: float) -> float:
     try:
         import onnxruntime as ort
     except ModuleNotFoundError:
         sys.exit("onnxruntime not installed. Run: pip install onnxruntime")
 
-    radius = float(np.hypot(cx, cy))
-    features = np.array([[cx, cy, radius]], dtype=np.float32)
     sess = ort.InferenceSession(str(ONNX_MODEL))
+    feature_mode = sess.get_modelmeta().custom_metadata_map.get("feature_mode", "xy_radius")
+    features = build_onnx_features(cx, cy, feature_mode)
     input_name = sess.get_inputs()[0].name
     result = sess.run(None, {input_name: features})
     return float(result[0].flat[0])
