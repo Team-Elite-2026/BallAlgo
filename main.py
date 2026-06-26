@@ -628,14 +628,16 @@ class PiCameraSource:
         self.picam2.start()
         time.sleep(0.5)
         exposure = self.thresholds.raw.get("exposure", {})
+        contrast = float(self.thresholds.raw.get("contrast", 1.0))
+        saturation = float(self.thresholds.raw.get("saturation", 1.0))
         controls = {
             "AeEnable": False,
             "AwbEnable": False,
             "ExposureTime": int(exposure.get("time", 10000)),
             "ColourTemperature": int(self.thresholds.raw.get("wb", 4000)),
-            "Brightness": int(self.thresholds.raw.get("brightness", 0)),
-            "Contrast": int(self.thresholds.raw.get("contrast", 1)),
-            "Saturation": int(self.thresholds.raw.get("saturation", 1)),
+            "Brightness": float(self.thresholds.raw.get("brightness", 0.0)),
+            "Contrast": contrast if contrast > 0.0 else 1.0,
+            "Saturation": saturation if saturation > 0.0 else 1.0,
             "AfMode": 0,
             "LensPosition": int(self.thresholds.raw.get("focus", 108)),
         }
@@ -949,6 +951,9 @@ def run_runtime(
                 )
 
             if show_video:
+                raw_view = frame.copy()
+                cv2.putText(raw_view, "Raw camera feed", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA)
+                cv2.imshow("Raw Camera", raw_view)
                 view = detections.annotated_frame if detections.annotated_frame is not None else frame
                 cv2.imshow("Ball Detection", view)
                 if detections.mask_display is not None:

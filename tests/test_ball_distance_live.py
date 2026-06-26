@@ -128,6 +128,9 @@ def draw_status_overlay(
 def draw_raw_feed_overlay(display, thresholds: ThresholdSet) -> None:
     import cv2
 
+    frame_min = int(display.min())
+    frame_max = int(display.max())
+    frame_mean = float(display.mean())
     cv2.drawMarker(display, thresholds.offsets, (255, 0, 0), cv2.MARKER_CROSS, 18, 2)
     cv2.putText(
         display,
@@ -141,7 +144,7 @@ def draw_raw_feed_overlay(display, thresholds: ThresholdSet) -> None:
     )
     cv2.putText(
         display,
-        f"center={thresholds.offsets}",
+        f"center={thresholds.offsets}  min/mean/max={frame_min}/{frame_mean:.1f}/{frame_max}",
         (10, 54),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.55,
@@ -193,7 +196,10 @@ def run_live(
                 )
                 last_print_s = now
             elif not result.ball.found and args.print_missing and (now - last_print_s) >= args.print_interval:
-                print(f"No ball detected ({result.process_ms:.2f} ms)")
+                print(
+                    f"No ball detected ({result.process_ms:.2f} ms) "
+                    f"frame min/mean/max={int(frame.min())}/{float(frame.mean()):.1f}/{int(frame.max())}"
+                )
                 last_print_s = now
 
             if not args.no_display:
