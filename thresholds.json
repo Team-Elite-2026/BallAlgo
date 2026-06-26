@@ -41,7 +41,7 @@
     "time": 5000,
     "sens": 1600
   },
-  "contrast": 0,
+  "contrast": 1,
   "saturation": 1,
   "sharpness": 0,
   "offsets": {
