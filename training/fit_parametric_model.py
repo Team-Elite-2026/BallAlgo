@@ -170,6 +170,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--save-coeffs", type=Path, default=TRAINING_DIR / "parametric_model.json")
     p.add_argument("--plots-dir", type=Path, default=TRAINING_DIR / "parametric_plots")
     p.add_argument("--skip-plots", action="store_true")
+    p.add_argument("--eval-csv", type=Path, default=None, help="Optional held-out CSV (x,y,measured_cm) to report metrics on.")
     return p.parse_args()
 
 
@@ -217,6 +218,17 @@ def main() -> None:
     }
     args.save_coeffs.write_text(json.dumps(coeffs, indent=2))
     print(f"Saved coefficients -> {args.save_coeffs}")
+
+    if args.eval_csv is not None:
+        eval_coords, eval_cm = read_csv(args.eval_csv)
+        eval_pred = predict(eval_coords, weights, radial_degree, angular_order)
+        em = metrics(eval_pred, eval_cm)
+        print(f"\nHeld-out evaluation on {args.eval_csv.name} ({len(eval_cm)} points):")
+        print(f"  MAE {em['mae_cm']:.3f} cm | RMSE {em['rmse_cm']:.3f} cm | "
+              f"MAPE {em['mape_percent']:.2f}% | max {em['max_abs_error_cm']:.2f} cm")
+        print(f"  {'x':>8}{'y':>8}{'meas_cm':>9}{'pred_cm':>9}{'err_cm':>8}")
+        for (ex, ey), m_cm, p_cm in zip(eval_coords, eval_cm, eval_pred):
+            print(f"  {ex:>8.1f}{ey:>8.1f}{m_cm:>9.1f}{p_cm:>9.1f}{p_cm - m_cm:>8.1f}")
 
     if not args.skip_plots:
         save_plots(coords, cm, weights, radial_degree, angular_order, args.plots_dir)
