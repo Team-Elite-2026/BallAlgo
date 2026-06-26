@@ -11,9 +11,8 @@ where ``x``/``y`` are the *centered* pixel coordinates ``cx - offset_x`` /
 ``cy - offset_y`` (same convention used by ``main.py`` at inference time).
 
 This uses the production detector from ``main.py`` (``CameraDetector`` +
-``PiCameraSource``) so the pixel centers — sub-pixel contour centroids — match
-exactly what the robot sees at runtime. When you press Enter the center is
-averaged over several frames to reduce labelling noise on a stationary ball.
+``PiCameraSource``) so the pixel centers match exactly what the robot sees at
+runtime.
 """
 
 from __future__ import annotations
@@ -47,9 +46,6 @@ THRESHOLDS_JSON = BALLALGO_DIR / "thresholds.json"
 # Use a video path for repeatable collection, or leave as None for the camera.
 VIDEO_PATH: str | None = None
 CAMERA_INDEX = 0
-
-# Frames averaged per saved sample (reduces center noise on a stationary ball).
-AVERAGE_FRAMES = 15
 
 WINDOW_NAME = "Ball distance data collection"
 CM_PER_INCH = 2.54
@@ -112,29 +108,6 @@ def prompt_for_distance(centered: tuple[float, float]) -> float | None:
     return inches_to_cm(measured_inches) + float(DISTANCE_ADJUSTMENT_CM)
 
 
-def average_centered_coords(
-    read_frame,
-    detector: CameraDetector,
-    offsets: tuple[int, int],
-    frames: int,
-) -> tuple[float, float] | None:
-    """Average the centered ball coordinates over up to ``frames`` detections."""
-    xoff, yoff = offsets
-    samples: list[tuple[float, float]] = []
-    for _ in range(frames):
-        ok, frame = read_frame()
-        if not ok or frame is None:
-            break
-        result = detector.detect(frame, annotate=False)
-        if result.ball.found and result.ball.center is not None:
-            cx, cy = result.ball.center
-            samples.append((cx - xoff, cy - yoff))
-    if not samples:
-        return None
-    arr = np.asarray(samples, dtype=np.float64)
-    return float(arr[:, 0].mean()), float(arr[:, 1].mean())
-
-
 def draw_overlay(result, offsets, saved_count: int) -> np.ndarray:
     # ``detect(annotate=True)`` already drew the ball/sectors; add status text.
     display = result.annotated_frame
@@ -166,7 +139,6 @@ def main() -> None:
 
     print(f"Writing samples to: {OUTPUT_CSV}")
     print(f"Pixel origin (offsets): {offsets}")
-    print(f"Averaging {AVERAGE_FRAMES} frames per sample.")
     print("Press Enter in the OpenCV window to save the current detected center; q to quit.")
 
     try:
@@ -184,19 +156,17 @@ def main() -> None:
             if key in (ord("q"), 27):
                 break
             if key in (10, 13):
-                if not result.ball.found:
+                if not result.ball.found or result.ball.center is None:
                     print("\nNo ball detected right now, so no sample was saved.")
                     continue
-                centered = average_centered_coords(read_frame, detector, offsets, AVERAGE_FRAMES)
-                if centered is None:
-                    print("\nLost the ball while averaging; no sample saved.")
-                    continue
+                cx, cy = result.ball.center
+                centered = (cx - offsets[0], cy - offsets[1])
                 measured_cm = prompt_for_distance(centered)
                 if measured_cm is None:
                     continue
                 append_measurement(OUTPUT_CSV, centered[0], centered[1], measured_cm)
                 saved_count += 1
-                print(f"Saved row: {centered[0]:.2f},{centered[1]:.2f},{measured_cm} cm")
+                print(f"Saved row: {centered[0]},{centered[1]},{measured_cm} cm")
     finally:
         close_capture()
         cv2.destroyAllWindows()

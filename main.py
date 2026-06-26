@@ -140,8 +140,8 @@ class FrameDetections:
     def snapshot_dict(self) -> dict[str, Any]:
         ball_px = {
             "found": self.ball.found,
-            "cx": int(round(self.ball.center[0])) if self.ball.center else 0,
-            "cy": int(round(self.ball.center[1])) if self.ball.center else 0,
+            "cx": self.ball.center[0] if self.ball.center else 0,
+            "cy": self.ball.center[1] if self.ball.center else 0,
         }
         return {
             "ball_found": self.ball.found,
@@ -379,7 +379,7 @@ def clamp_vec(vx: float, vy: float, vmax: float) -> tuple[float, float]:
     return vx * scale, vy * scale
 
 
-def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tuple[int, int, int, int], tuple[float, float], float] | None:
+def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tuple[int, int, int, int], tuple[int, int], float] | None:
     require_cv2()
     cnts, _ = cv2.findContours(bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not cnts:
@@ -394,16 +394,7 @@ def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tu
     if max_cnt is None:
         return None
     x, y, w, h = cv2.boundingRect(max_cnt)
-    # Sub-pixel centroid via image moments. More accurate and stable than the
-    # bounding-box midpoint, especially near the mirror rim where 1px maps to
-    # many cm and for partially-occluded (non-symmetric) blobs. Falls back to
-    # the bbox midpoint for degenerate (zero-area) contours.
-    moments = cv2.moments(max_cnt)
-    if moments["m00"] > 0.0:
-        center = (moments["m10"] / moments["m00"], moments["m01"] / moments["m00"])
-    else:
-        center = (x + w / 2.0, y + h / 2.0)
-    return (x, y, w, h), center, max_area
+    return (x, y, w, h), (x + w // 2, y + h // 2), max_area
 
 
 class CameraDetector:
@@ -588,13 +579,12 @@ class CameraDetector:
         distance_cm = self.distance_estimator.estimate_cm(center[0], center[1], dist_px, self.thresholds)
         if draw_frame is not None:
             x, y, w, h = bbox
-            center_px = (int(round(center[0])), int(round(center[1])))
             cv2.rectangle(draw_frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
-            cv2.circle(draw_frame, center_px, 4, (0, 0, 255), -1)
+            cv2.circle(draw_frame, center, 4, (0, 0, 255), -1)
             cv2.arrowedLine(
                 draw_frame,
-                center_px,
-                (center_px[0] + int(5 * self.v_ema[0]), center_px[1] + int(5 * self.v_ema[1])),
+                center,
+                (center[0] + int(5 * self.v_ema[0]), center[1] + int(5 * self.v_ema[1])),
                 (255, 0, 0),
                 2,
                 tipLength=0.3,

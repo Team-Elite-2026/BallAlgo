@@ -115,7 +115,7 @@ def draw_status_overlay(
         dx = cx - thresholds.offsets[0]
         dy = cy - thresholds.offsets[1]
         lines = [
-            f"BALL FOUND  raw=({cx:.1f},{cy:.1f}) centered=({dx:.1f},{dy:.1f})",
+            f"BALL FOUND  raw=({cx},{cy}) centered=({dx},{dy})",
             f"distance={result.ball.distance_cm:.1f} cm  {result.ball.distance_cm / 2.54:.1f} in  radius={result.ball.dist_px:.1f}px",
             f"angle={result.ball.angle_deg:.1f} deg  sector={result.ball.sector}",
         ]
@@ -197,7 +197,7 @@ def run_live(
                 dx = cx - thresholds.offsets[0]
                 dy = cy - thresholds.offsets[1]
                 print(
-                    f"{cx:6.1f},{cy:6.1f} "
+                    f"{cx:4d},{cy:4d} "
                     f"{dx:7.1f},{dy:7.1f} "
                     f"{result.ball.dist_px:8.1f} "
                     f"{result.ball.distance_cm:8.2f} "
