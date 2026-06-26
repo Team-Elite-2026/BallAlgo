@@ -1,0 +1,4 @@
+model,feature_mode,cv_mae_cm,cv_rmse_cm,cv_mape_percent,heldout_mae_cm,heldout_mape_percent,heldout_max_err_cm,notes
+parametric_log_poly_fourier,deg5_ord2,11.75,17.52,12.65,10.97,11.84,33.50,torch-free JSON; best CV MAPE and worst-case
+mlp_300ep,xy_radius,9.41,14.34,14.59,12.16,13.59,44.70,numpy reference impl
+mlp_300ep,polar,9.21,14.43,13.84,10.68,11.21,50.75,MOST ACCURATE overall (CV MAE + held-out MAE/MAPE)

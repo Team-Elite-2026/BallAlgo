@@ -38,8 +38,8 @@
   "focus": 108,
   "wb": 4000,
   "exposure": {
-    "time": 5000,
-    "sens": 1600
+    "time": 10000,
+    "sens": 0
   },
   "contrast": 1,
   "saturation": 1,

@@ -30,6 +30,9 @@
   "pose_kf_process_vel_var": 200.0,
   "pose_kf_meas_pos_var":    400.0,
   "pose_max_stale_s":        0.18,
+  "pose_kf_mouse_accel_var": 250000.0,
+  "pose_kf_mouse_meas_var":  2500.0,
+  "use_mouse_sensor":        false,
   "teensy_telemetry_stale_s": 0.25,
 
   "goal_bearing_base_var_rad2": 0.0035,
@@ -45,7 +48,7 @@
   "role_switch_margin_cm":           15.0,
   "role_confirm_samples":            3,
 
-  "enable_offense_state_machine":    true,
+  "enable_offense_state_machine":    false,
   "enable_pi_control_packet":        false,
   "ball_front_angle_deg":            90.0,
   "kick_max_scoring_goal_heading_deg": 70.0,
