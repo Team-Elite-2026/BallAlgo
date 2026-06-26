@@ -830,7 +830,6 @@ def _control_intent(
         "role_command": "offense",
         "mode": telemetry.robot_mode,
         "auto_role_mode": False,
-        "use_mouse_sensor": True,
         "ball_found": offense_input.ball_found,
         "ball_angle_deg": offense_input.ball_angle_deg,
         "ball_distance_cm": offense_input.ball_distance_cm,
@@ -952,15 +951,7 @@ def run_runtime(
                         heading,
                     )
 
-            if pose_filter.initialized and bool(params.get("use_mouse_sensor", True)):
-                pose_filter.predict_mouse(
-                    telemetry.mouse_vx_body_mm_s,
-                    telemetry.mouse_vy_body_mm_s,
-                    heading,
-                    dt_s,
-                )
-            else:
-                pose_filter.predict(dt_s)
+            pose_filter.predict(dt_s)
 
             ball_filter.predict(dt_s)
             if detections.ball.found:

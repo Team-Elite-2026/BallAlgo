@@ -30,9 +30,6 @@
   "pose_kf_process_vel_var": 200.0,
   "pose_kf_meas_pos_var":    400.0,
   "pose_max_stale_s":        0.18,
-  "pose_kf_mouse_accel_var": 250000.0,
-  "pose_kf_mouse_meas_var":  2500.0,
-  "use_mouse_sensor":        true,
   "teensy_telemetry_stale_s": 0.25,
 
   "goal_bearing_base_var_rad2": 0.0035,

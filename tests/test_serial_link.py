@@ -4,7 +4,12 @@ import struct
 import unittest
 import zlib
 
-from communication import PI_CONTROL_PAYLOAD_SIZE, format_control_frame, format_detection_packet
+from communication import (
+    PI_CONTROL_PAYLOAD_SIZE,
+    format_control_frame,
+    format_detection_packet,
+)
+from communication.serial_link import parse_teensy_telemetry_line
 
 
 class SerialLinkTests(unittest.TestCase):
@@ -48,6 +53,16 @@ class SerialLinkTests(unittest.TestCase):
         self.assertAlmostEqual(payload[4], -10.0)
         self.assertAlmostEqual(payload[5], 45.0)
         self.assertEqual(payload[6:], (1, 0, 1, 1, 0, 7, 255, 1))
+
+    def test_unknown_telemetry_fields_are_ignored(self):
+        telemetry = parse_teensy_telemetry_line(
+            "T,heading=12.5,has_ball=1,legacy_velocity=999,legacy_omega=3.2"
+        )
+        self.assertIsNotNone(telemetry)
+        assert telemetry is not None
+        self.assertEqual(telemetry.heading_deg, 12.5)
+        self.assertTrue(telemetry.has_ball)
+        self.assertFalse(hasattr(telemetry, "legacy_velocity"))
 
 
 if __name__ == "__main__":

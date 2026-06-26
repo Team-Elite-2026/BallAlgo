@@ -37,9 +37,6 @@ class TeensyTelemetry:
     blue_goal_angle_deg: float = LOST_SENTINEL
     yellow_goal_angle_deg: float = LOST_SENTINEL
     camera_fresh: bool = False
-    mouse_vx_body_mm_s: float = 0.0
-    mouse_vy_body_mm_s: float = 0.0
-    omega_rad_s: float = 0.0
     raw_line: str = ""
 
     @property
@@ -103,9 +100,6 @@ def parse_teensy_telemetry_line(line: str) -> TeensyTelemetry | None:
         blue_goal_angle_deg=_to_float(fields, "blue", LOST_SENTINEL),
         yellow_goal_angle_deg=_to_float(fields, "yellow", LOST_SENTINEL),
         camera_fresh=_to_bool(fields.get("cam_fresh", "0")),
-        mouse_vx_body_mm_s=_to_float(fields, "mouse_vx", 0.0),
-        mouse_vy_body_mm_s=_to_float(fields, "mouse_vy", 0.0),
-        omega_rad_s=_to_float(fields, "omega", 0.0),
         raw_line=text,
     )
 

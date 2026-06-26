@@ -70,20 +70,6 @@ def field_vel_to_body(
     )
 
 
-def body_vel_to_world(
-    vx_body_mm_s: float,
-    vy_body_mm_s: float,
-    heading_deg: float,
-) -> tuple[float, float]:
-    h = math.radians(heading_deg)
-    c = math.cos(h)
-    s = math.sin(h)
-    return (
-        c * vx_body_mm_s - s * vy_body_mm_s,
-        s * vx_body_mm_s + c * vy_body_mm_s,
-    )
-
-
 class BallKalman:
     """Constant-velocity ball filter ported from legacy BallKalman.cpp."""
 
@@ -173,29 +159,6 @@ class PoseKalman:
         q[2, 2] = q[3, 3] = _param(self.params, "pose_kf_process_vel_var", 200.0) * dt_s
         self.x = f @ self.x
         self.p = f @ self.p @ f.T + q
-
-    def predict_mouse(
-        self,
-        vx_body_mm_s: float,
-        vy_body_mm_s: float,
-        heading_deg: float,
-        dt_s: float,
-    ) -> None:
-        if not self.initialized or dt_s <= 0:
-            return
-        self.age_since_measurement_s += dt_s
-        self._cv_predict(dt_s, _param(self.params, "pose_kf_mouse_accel_var", 250000.0))
-        zx, zy = body_vel_to_world(vx_body_mm_s, vy_body_mm_s, heading_deg)
-        h = np.zeros((2, 4), dtype=np.float64)
-        h[0, 2] = 1.0
-        h[1, 3] = 1.0
-        r = np.eye(2, dtype=np.float64) * _param(self.params, "pose_kf_mouse_meas_var", 2500.0)
-        z = np.array([[zx], [zy]], dtype=np.float64)
-        innovation = z - h @ self.x
-        s = h @ self.p @ h.T + r
-        k = self.p @ h.T @ np.linalg.inv(s)
-        self.x = self.x + k @ innovation
-        self.p = (np.eye(4, dtype=np.float64) - k @ h) @ self.p
 
     def update(self, meas: PoseEstimate, heading_deg: float = 0.0) -> None:
         del heading_deg
