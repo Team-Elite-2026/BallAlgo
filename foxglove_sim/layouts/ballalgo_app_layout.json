@@ -1,0 +1,126 @@
+{
+  "configById": {
+    "3D!field": {
+      "cameraState": {
+        "perspective": false,
+        "distance": 3.2,
+        "phi": 0,
+        "thetaOffset": 0,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-none",
+      "followTf": "field",
+      "scene": {
+        "backgroundColor": "#101215",
+        "transforms": {
+          "enabled": false
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/field/scene/static": {
+          "visible": true
+        },
+        "/field/scene/live": {
+          "visible": true
+        },
+        "/lidar/scan": {
+          "visible": false,
+          "colorMode": "flat",
+          "flatColor": "#50c850",
+          "pointSize": 3
+        }
+      },
+      "layers": {},
+      "imageMode": {}
+    },
+    "Plot!angles": {
+      "paths": [
+        {
+          "value": "/robot/angular.heading_deg",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "robot heading",
+          "color": "#20d8ff"
+        },
+        {
+          "value": "/control/intent.ball_angle_deg",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "ball angle rel robot",
+          "color": "#f79a0c"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 10
+    },
+    "Plot!range": {
+      "paths": [
+        {
+          "value": "/control/intent.ball_distance_cm",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "ball distance (cm)",
+          "color": "#4cf5ae"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240,
+      "followingViewWidth": 10
+    },
+    "Tab!root": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Field",
+          "layout": {
+            "direction": "row",
+            "first": "3D!field",
+            "second": {
+              "direction": "column",
+              "first": "Plot!angles",
+              "second": "Plot!range",
+              "splitPercentage": 50
+            },
+            "splitPercentage": 70
+          }
+        }
+      ]
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "linkedGlobalVariables": [],
+  "playbackConfig": {
+    "speed": 1,
+    "messageOrder": "receiveTime"
+  },
+  "layout": "Tab!root"
+}
