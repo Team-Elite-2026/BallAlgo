@@ -15,7 +15,6 @@ PARAMS = {
     "kick_max_scoring_goal_heading_deg": 70.0,
     "own_goal_heading_block_deg": 70.0,
     "kick_aim_tolerance_deg": 12.0,
-    "spin_shot_possession_hold_ms": 90,
     "spin_shot_align_hold_ms": 80,
     "kick_cooldown_us": 750000,
     "dribbler_capture_power": 140,
@@ -56,11 +55,12 @@ class BasicOffenseTests(unittest.TestCase):
         self.assertFalse(out.kick_request)
         self.assertIsNone(controller.possession_since_us)
 
-    def test_no_ball_searches(self):
+    def test_no_ball_idles_without_search_state(self):
         controller = BasicOffenseController(PARAMS)
         out = controller.update(1000, active_input(ball_found=False, ball_angle_deg=-5, ball_distance_cm=-5))
-        self.assertEqual(out.command, BasicOffenseCommand.SearchBall)
+        self.assertEqual(out.command, BasicOffenseCommand.Idle)
         self.assertEqual(out.dribbler_power, 0)
+        self.assertFalse(hasattr(BasicOffenseCommand, "SearchBall"))
 
     def test_ball_behind_turns_to_ball(self):
         controller = BasicOffenseController(PARAMS)
@@ -84,8 +84,9 @@ class BasicOffenseTests(unittest.TestCase):
         controller = BasicOffenseController(PARAMS)
         out = controller.update(1000, active_input(own_goal_found=True, own_goal_angle_deg=0.0))
         self.assertEqual(out.command, BasicOffenseCommand.ChaseBall)
+        self.assertEqual(out.dribbler_power, 140)
 
-    def test_has_ball_spins_until_possession_and_aim_are_stable(self):
+    def test_has_ball_spins_until_aim_is_stable(self):
         controller = BasicOffenseController(PARAMS)
         first = controller.update(0, active_input(has_ball=True, scoring_goal_angle_deg=6.0))
         self.assertEqual(first.command, BasicOffenseCommand.SpinAlignLeft)
@@ -96,7 +97,7 @@ class BasicOffenseTests(unittest.TestCase):
         self.assertEqual(almost.command, BasicOffenseCommand.SpinAlignLeft)
         self.assertFalse(almost.kick_request)
 
-        kick = controller.update(100000, active_input(has_ball=True, scoring_goal_angle_deg=6.0))
+        kick = controller.update(80000, active_input(has_ball=True, scoring_goal_angle_deg=6.0))
         self.assertEqual(kick.command, BasicOffenseCommand.CommitKick)
         self.assertTrue(kick.kick_request)
         self.assertEqual(kick.dribbler_power, 0)
@@ -117,14 +118,14 @@ class BasicOffenseTests(unittest.TestCase):
     def test_kick_is_one_frame_then_cooldown(self):
         controller = BasicOffenseController(PARAMS)
         controller.update(0, active_input(has_ball=True, scoring_goal_angle_deg=0.0))
-        kick = controller.update(200000, active_input(has_ball=True, scoring_goal_angle_deg=0.0))
+        kick = controller.update(80000, active_input(has_ball=True, scoring_goal_angle_deg=0.0))
         self.assertEqual(kick.command, BasicOffenseCommand.CommitKick)
         self.assertTrue(kick.kick_request)
 
-        cooldown = controller.update(201000, active_input(has_ball=True, scoring_goal_angle_deg=0.0))
+        cooldown = controller.update(81000, active_input(has_ball=True, scoring_goal_angle_deg=0.0))
         self.assertEqual(cooldown.command, BasicOffenseCommand.KickCooldown)
         self.assertFalse(cooldown.kick_request)
-        self.assertEqual(cooldown.dribbler_power, 140)
+        self.assertEqual(cooldown.dribbler_power, 0)
 
     def test_command_link_must_be_fresh_to_kick(self):
         controller = BasicOffenseController(PARAMS)

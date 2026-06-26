@@ -11,7 +11,6 @@ ANGLE_EPSILON_DEG = 1e-3
 
 class BasicOffenseCommand(IntEnum):
     Idle = 0
-    SearchBall = 1
     ChaseBall = 2
     TurnToBehindBall = 3
     CaptureFast = 4
@@ -187,7 +186,7 @@ class BasicOffenseController:
             dribbler_power = _clamp_power(_param_int(self.params, "dribbler_capture_power", 140))
 
         if not ball_found:
-            command = BasicOffenseCommand.SearchBall
+            command = BasicOffenseCommand.Idle
             dribbler_power = 0
         elif not ball_in_front:
             command = BasicOffenseCommand.TurnToBehindBall
@@ -221,9 +220,8 @@ class BasicOffenseController:
         if self.possession_since_us is None:
             self.possession_since_us = now_us
 
-        possession_hold_us = _param_int(self.params, "spin_shot_possession_hold_ms", 90) * 1000
         align_hold_us = _param_int(self.params, "spin_shot_align_hold_ms", 80) * 1000
-        possession_stable = now_us - self.possession_since_us >= possession_hold_us
+        possession_stable = True
         aim_geometry_ok = (
             scoring_goal_found
             and facing_scoring_goal
@@ -242,7 +240,6 @@ class BasicOffenseController:
             offense_input.offense_active
             and offense_input.command_link_fresh
             and offense_input.has_ball
-            and possession_stable
             and aim_geometry_ok
             and aim_stable
         )
@@ -287,7 +284,7 @@ class BasicOffenseController:
             return None
         return BasicOffenseOutput(
             command=BasicOffenseCommand.KickCooldown,
-            dribbler_power=_clamp_power(_param_int(self.params, "dribbler_capture_power", 140)),
+            dribbler_power=0,
             kick_request=False,
             preferred_orbit_dir=self.preferred_orbit_dir,
             ball_in_front=ball_in_front,
