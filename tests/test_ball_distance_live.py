@@ -125,6 +125,32 @@ def draw_status_overlay(
         y += 24
 
 
+def draw_raw_feed_overlay(display, thresholds: ThresholdSet) -> None:
+    import cv2
+
+    cv2.drawMarker(display, thresholds.offsets, (255, 0, 0), cv2.MARKER_CROSS, 18, 2)
+    cv2.putText(
+        display,
+        "RAW CAMERA FEED",
+        (10, 28),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        display,
+        f"center={thresholds.offsets}",
+        (10, 54),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+
 def run_live(
     args: argparse.Namespace,
     thresholds: ThresholdSet,
@@ -171,10 +197,13 @@ def run_live(
                 last_print_s = now
 
             if not args.no_display:
+                raw_display = frame.copy()
+                draw_raw_feed_overlay(raw_display, thresholds)
                 display = result.annotated_frame if result.annotated_frame is not None else frame
                 draw_status_overlay(display, result, thresholds, feature_mode, model_path)
-                cv2.imshow("Ball distance live test", display)
-                if args.show_mask and result.mask_display is not None:
+                cv2.imshow("Ball distance raw feed", raw_display)
+                cv2.imshow("Ball distance annotated", display)
+                if result.mask_display is not None:
                     cv2.imshow("Ball distance mask", result.mask_display)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
@@ -196,7 +225,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--centered-y", type=float, help="Centered y for --dry-run.")
     parser.add_argument("--size", type=int, nargs=2, default=RESIZE_TO, metavar=("W", "H"), help="Camera/detection size.")
     parser.add_argument("--no-display", action="store_true", help="Run without OpenCV window; useful over SSH.")
-    parser.add_argument("--show-mask", action="store_true", help="Also show the searched ball mask window.")
     parser.add_argument("--frames", type=int, default=None, help="Stop after this many frames in --no-display mode.")
     parser.add_argument("--print-interval", type=float, default=0.15, help="Minimum seconds between console prints.")
     parser.add_argument("--print-missing", action="store_true", help="Print periodic lines when no ball is detected.")
