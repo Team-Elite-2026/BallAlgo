@@ -543,6 +543,6 @@ def process_video(showVideo):
 
 
 if __name__ == "__main__":
-   process_video(False)
+   process_video(True)
 
 
