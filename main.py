@@ -23,7 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - Pi runtime dependency
     Picamera2 = None
 
 from communication import SerialLink, TeensyTelemetry, format_detection_packet
-from estimation import BallKalman, PoseEstimate, PoseKalman
+from estimation import BallState, PoseState
 from estimation.kalman import polar_to_body_xy
 from foxglove_runtime import FoxgloveRuntimePublisher
 
@@ -35,6 +35,8 @@ SERIAL_PORT = "/dev/ttyAMA2"
 SERIAL_BAUD = 2000000
 SERIAL_TIMEOUT = 0.01
 ENABLE_SERIAL = True
+# When True, print the exact ASCII packet sent to the Teensy before each write.
+PRINT_TEENSY_PACKET = False
 
 THRESHOLDS_JSON = "thresholds.json"
 PARAMS_JSON = "params.json"
@@ -158,6 +160,41 @@ class FrameDetections:
             "process_ms": self.process_ms,
             "ball_px": ball_px,
         }
+
+
+def click_event(event, x, y, flags, params):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print(x, y)
+
+
+# Complementary filter weight on the *current* ball angle (previous gets 1-alpha).
+BALL_ANGLE_ALPHA = 0.8
+
+
+@dataclass(slots=True)
+class BallAngleFilter:
+    """Complementary smoothing for the ball angle.
+
+    Blends ``BALL_ANGLE_ALPHA`` (80%) of the current measurement with the
+    remaining 20% of the previous output. The blend is done on the circular
+    angle difference so motion across the 0/360 boundary doesn't glitch, and
+    the filter resets whenever the ball is lost.
+    """
+
+    alpha: float = BALL_ANGLE_ALPHA
+    prev_angle_deg: float = LOST_SENTINEL
+
+    def update(self, angle_deg: float) -> float:
+        if angle_deg == LOST_SENTINEL:
+            self.prev_angle_deg = LOST_SENTINEL
+            return LOST_SENTINEL
+        if self.prev_angle_deg == LOST_SENTINEL:
+            self.prev_angle_deg = angle_deg
+            return angle_deg
+        diff = (angle_deg - self.prev_angle_deg + 180.0) % 360.0 - 180.0
+        smoothed = (self.prev_angle_deg + self.alpha * diff) % 360.0
+        self.prev_angle_deg = smoothed
+        return smoothed
 
 
 @dataclass(slots=True)
@@ -775,21 +812,68 @@ def _camera_jpeg(frame: Any) -> bytes | None:
     return encoded.tobytes()
 
 
+# LD19 scan filtering — mirrors tools/lidar_visual.py filter_points().
+LIDAR_MIN_DIST_MM = 80
+LIDAR_MAX_DIST_MM = 6000
+LIDAR_MIN_INTENSITY = 20
+
+
+def _filter_lidar_points(points: list[Any]) -> list[Any]:
+    """Drop too-close / too-far / low-confidence returns before localization.
+
+    Matches tools/lidar_visual.py so the runtime localizer sees the same scan
+    the bench visualizer does.
+    """
+    return [
+        p
+        for p in points
+        if LIDAR_MIN_DIST_MM <= p.distance_mm <= LIDAR_MAX_DIST_MM
+        and p.intensity >= LIDAR_MIN_INTENSITY
+    ]
+
+
+def _lidar_pose_display_cm(x_mm: float, y_mm: float) -> tuple[float, float]:
+    """Convert a localizer pose (raw field-frame mm) to the field-centered cm
+    coordinates the --lidar-visual field panel prints, so the pose sent to the
+    Teensy matches the on-screen readout exactly.
+
+    Mirrors tools/lidar_visual.py draw_field_panel():
+        cx = (x_mm - W/2) / 10
+        cy = ((H - y_mm) - H/2) / 10        # display_field_y_mm flips y
+
+    """
+    x_cm = (x_mm - FIELD_WIDTH_MM / 2.0) / 10.0
+    y_cm = ((FIELD_HEIGHT_MM - y_mm) - FIELD_HEIGHT_MM / 2.0) / 10.0
+    return x_cm, y_cm
+
+
 def _init_lidar(enable_lidar: bool):
     if not enable_lidar:
-        return None, None, None
+        return None, None, None, None
+    # tools/py_lidar_bench/gpio_utils.py imports its sibling modules as the
+    # top-level package ``py_lidar_bench``, so the tools dir must be on sys.path
+    # (mirrors tools/lidar_visual.py).
+    import sys
+    tools_dir = str(Path(__file__).resolve().parent / "tools")
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
     from tools.py_lidar_bench import config as lidar_cfg
+    from tools.py_lidar_bench.gpio_utils import cleanup_gpio, setup_lidar_pwm_ground
     from tools.py_lidar_bench.lidar_bench import LD19Reader, LidarLocalizer
 
+    # The LD19 motor only spins when its PWM pin is held LOW; without this the
+    # reader connects but no scan data ever arrives. (See lidar_visual.py.)
+    gpio_handle = setup_lidar_pwm_ground()
     reader = LD19Reader(lidar_cfg.LIDAR_PORT, lidar_cfg.LIDAR_BAUD, lidar_cfg.LIDAR_TIMEOUT)
     if not reader.is_connected:
-        return None, None, None
+        cleanup_gpio(gpio_handle)
+        return None, None, None, None
     localizer = LidarLocalizer(
         field_width_mm=lidar_cfg.FIELD_WIDTH_MM,
         field_height_mm=lidar_cfg.FIELD_HEIGHT_MM,
         lidar_yaw_offset_deg=lidar_cfg.LIDAR_YAW_OFFSET_DEG,
     )
-    return reader, localizer, deque(maxlen=lidar_cfg.LIDAR_POINTS_WINDOW)
+    return reader, localizer, deque(maxlen=lidar_cfg.LIDAR_POINTS_WINDOW), gpio_handle
 
 
 def _telemetry_recent(telemetry: TeensyTelemetry, max_age_s: float) -> bool:
@@ -842,7 +926,9 @@ def run_runtime(
     show_video: bool = False,
     enable_serial: bool = ENABLE_SERIAL,
     enable_lidar: bool = False,
+    lidar_visual: bool = False,
     enable_foxglove: bool = False,
+    print_teensy_packet: bool = PRINT_TEENSY_PACKET,
 ) -> None:
     require_cv2()
     params = load_params()
@@ -852,16 +938,22 @@ def run_runtime(
     camera = PiCameraSource(thresholds)
     serial_link = open_serial() if enable_serial else None
     orbit_derivative = OrbitDerivativeTracker()
-    lidar_reader, lidar_localizer, lidar_window = _init_lidar(enable_lidar)
+    lidar_reader, lidar_localizer, lidar_window, lidar_gpio = _init_lidar(enable_lidar)
+    lidar_draw = None
+    if lidar_visual:
+        if lidar_reader is None:
+            print("[LIDAR] --lidar-visual requested but lidar is not active; pass --enable-lidar.")
+        else:
+            from tools import lidar_visual as lidar_draw
     foxglove = FoxgloveRuntimePublisher() if enable_foxglove else None
-    ball_filter = BallKalman(params, camera_fps=CAMERA_FPS)
-    pose_filter = PoseKalman(params)
+    ball_angle_filter = BallAngleFilter()
     telemetry_stale_s = float(params.get("teensy_telemetry_stale_s", 0.25))
     telemetry = TeensyTelemetry()
 
     loop_count = 0
     last_t = time.perf_counter()
     last_lidar_points: list[Any] = []
+    lidar_pose = {"valid": False, "x_mm": None, "y_mm": None}
 
     camera.start()
     print("BallAlgo Python runtime running. Press q in the debug window to quit.")
@@ -885,59 +977,65 @@ def run_runtime(
                 new_points = lidar_reader.poll_points()
                 if new_points:
                     lidar_window.extend(new_points)
-                last_lidar_points = list(lidar_window)
+                last_lidar_points = _filter_lidar_points(list(lidar_window))
                 if lidar_localizer is not None and last_lidar_points:
                     result = lidar_localizer.update(last_lidar_points, heading)
-                    pose_filter.update(
-                        PoseEstimate(
-                            valid=bool(result.get("valid")),
-                            x_mm=float(result.get("x_mm") or 0.0),
-                            y_mm=float(result.get("y_mm") or 0.0),
-                        ),
-                        heading,
-                    )
+                    valid = bool(result.get("valid"))
+                    lidar_pose = {
+                        "valid": valid,
+                        "x_mm": result.get("x_mm") if valid else None,
+                        "y_mm": result.get("y_mm") if valid else None,
+                    }
 
-            pose_filter.predict(dt_s)
-            pose_state = pose_filter.state(heading)
+            # Pose sent to the Teensy = the exact field-centered cm coordinates the
+            # --lidar-visual field panel displays (no Kalman filtering).
+            if lidar_pose["valid"]:
+                pose_x, pose_y = _lidar_pose_display_cm(lidar_pose["x_mm"], lidar_pose["y_mm"])
+            else:
+                pose_x = pose_y = LOST_SENTINEL
+
+            # Complementary-filtered ball angle (80% current / 20% previous).
+            ball_angle_deg = ball_angle_filter.update(detections.ball_angle_deg)
+            ball_distance_cm = detections.ball_distance_cm
 
             if serial_link is not None:
                 derivative = orbit_derivative.update(
-                    detections.ball_angle_deg,
-                    detections.ball_distance_cm,
+                    ball_angle_deg,
+                    ball_distance_cm,
                 )
+                if print_teensy_packet:
+                    # Exact ASCII string send_detection() will write to the Teensy.
+                    print("[TEENSY TX] " + format_detection_packet(
+                        ball_angle_deg,
+                        ball_distance_cm,
+                        detections.blue_goal_angle_deg,
+                        detections.yellow_goal_angle_deg,
+                        derivative,
+                        pose_x,
+                        pose_y,
+                    ))
                 serial_link.send_detection(
-                    detections.ball_angle_deg,
-                    detections.ball_distance_cm,
+                    ball_angle_deg,
+                    ball_distance_cm,
                     detections.blue_goal_angle_deg,
                     detections.yellow_goal_angle_deg,
                     derivative,
-                    pose_state.x_mm if pose_state.valid else LOST_SENTINEL,
-                    pose_state.y_mm if pose_state.valid else LOST_SENTINEL,
+                    pose_x,
+                    pose_y,
                 )
 
-            ball_filter.predict(dt_s)
             if detections.ball.found:
-                x_m, y_m = polar_to_body_xy(detections.ball_angle_deg, detections.ball_distance_cm * 0.01)
-                ball_filter.update(x_m, y_m, True)
-            ball_state = ball_filter.state()
+                bx_m, by_m = polar_to_body_xy(ball_angle_deg, ball_distance_cm * 0.01)
+                ball_state = BallState(visible=True, x_m=bx_m, y_m=by_m)
+            else:
+                ball_state = BallState()
 
-            if detections.blue_goal.found and detections.blue_goal.certainty >= float(params.get("goal_certainty_threshold", 0.25)):
-                pose_filter.update_goal_bearing(
-                    math.radians(detections.blue_goal.angle_deg - 180.0),
-                    BLUE_GOAL_X_MM,
-                    BLUE_GOAL_Y_MM,
-                    heading,
-                    detections.blue_goal.certainty,
-                )
-            if detections.yellow_goal.found and detections.yellow_goal.certainty >= float(params.get("goal_certainty_threshold", 0.25)):
-                pose_filter.update_goal_bearing(
-                    math.radians(detections.yellow_goal.angle_deg - 180.0),
-                    YELLOW_GOAL_X_MM,
-                    YELLOW_GOAL_Y_MM,
-                    heading,
-                    detections.yellow_goal.certainty,
-                )
-            pose_state = pose_filter.state(heading)
+            # Unfiltered LiDAR pose for telemetry (field-frame mm, as localized).
+            pose_state = PoseState(
+                valid=lidar_pose["valid"],
+                x_mm=float(lidar_pose["x_mm"]) if lidar_pose["valid"] else 0.0,
+                y_mm=float(lidar_pose["y_mm"]) if lidar_pose["valid"] else 0.0,
+            )
 
             if foxglove is not None:
                 publish_frame = detections.annotated_frame if detections.annotated_frame is not None else frame
@@ -958,14 +1056,25 @@ def run_runtime(
                     dt_s=dt_s,
                 )
 
+            if lidar_draw is not None:
+                polar = lidar_draw.draw_polar_panel(last_lidar_points)
+                field = lidar_draw.draw_field_panel(
+                    last_lidar_points, heading, lidar_pose, heading_live=telemetry_fresh
+                )
+                cv2.imshow("LiDAR Localization", np.hstack([polar, field]))
+
             if show_video:
                 raw_view = frame.copy()
                 cv2.putText(raw_view, "Raw camera feed", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA)
                 cv2.imshow("Raw Camera", raw_view)
+                cv2.setMouseCallback('Raw Camera', click_event)
                 view = detections.annotated_frame if detections.annotated_frame is not None else frame
-                cv2.imshow("Ball Detection", cv2.cvtColor(view, COLOR_RGB2BGR))
+                cv2.imshow("Ball Detection", cv2.cvtColor(view, cv2.COLOR_RGB2BGR))
                 if detections.mask_display is not None:
                     cv2.imshow("Mask (binary)", detections.mask_display)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+            elif lidar_draw is not None:
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
     finally:
@@ -974,6 +1083,9 @@ def run_runtime(
             serial_link.close()
         if lidar_reader is not None:
             lidar_reader.close()
+        if lidar_gpio is not None:
+            from tools.py_lidar_bench.gpio_utils import cleanup_gpio
+            cleanup_gpio(lidar_gpio)
         if foxglove is not None:
             foxglove.close()
         cv2.destroyAllWindows()
@@ -988,7 +1100,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--show-video", action="store_true", help="Show OpenCV debug windows")
     parser.add_argument("--no-serial", action="store_true", help="Do not open Pi/Teensy serial")
     parser.add_argument("--enable-lidar", action="store_true", help="Enable LD19 lidar localization")
+    parser.add_argument(
+        "--lidar-visual",
+        action="store_true",
+        help="Show the LD19 polar/field debug window (requires --enable-lidar)",
+    )
     parser.add_argument("--enable-foxglove", action="store_true", help="Publish runtime snapshots to foxglove_sim sidecar")
+    parser.add_argument(
+        "--print-packet",
+        action="store_true",
+        help="Print the exact ASCII packet sent to the Teensy before each serial write",
+    )
     return parser.parse_args()
 
 
@@ -998,7 +1120,9 @@ def main() -> int:
         show_video=args.show_video,
         enable_serial=not args.no_serial,
         enable_lidar=args.enable_lidar,
+        lidar_visual=args.lidar_visual,
         enable_foxglove=args.enable_foxglove,
+        print_teensy_packet=args.print_packet or PRINT_TEENSY_PACKET,
     )
     return 0
 
