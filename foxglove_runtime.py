@@ -109,20 +109,8 @@ class FoxgloveRuntimePublisher:
             "control_intent": control_intent,
             "teensy_raw": {
                 "heading_deg": telemetry_dict.get("heading_deg", 0.0),
-                "has_ball": bool(telemetry_dict.get("has_ball", False)),
-                "start_enabled": bool(telemetry_dict.get("start_enabled", False)),
-                "goal_is_blue": bool(telemetry_dict.get("goal_is_blue", True)),
-                "mode_override": telemetry_dict.get("robot_mode", "unknown"),
                 "telemetry_fresh": bool(getattr(telemetry, "telemetry_fresh", False)),
-                "line_angle_deg": telemetry_dict.get("line_angle_deg", -5.0),
-                "avoidance_angle_deg": telemetry_dict.get("avoidance_angle_deg", -5.0),
-                "chord_length": telemetry_dict.get("chord_length", -5.0),
-                "cross_line": bool(telemetry_dict.get("cross_line", False)),
-                "camera_ball_angle_deg": telemetry_dict.get("ball_angle_deg", -5.0),
-                "camera_ball_distance_cm": telemetry_dict.get("ball_distance_cm", -5.0),
-                "camera_blue_goal_angle_deg": telemetry_dict.get("blue_goal_angle_deg", -5.0),
-                "camera_yellow_goal_angle_deg": telemetry_dict.get("yellow_goal_angle_deg", -5.0),
-                "camera_fresh": bool(telemetry_dict.get("camera_fresh", False)),
+                "raw_line": telemetry_dict.get("raw_line", ""),
             },
         }
 

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import math
-import struct
 import time
 from dataclasses import dataclass
-from typing import Any
-import zlib
 
 try:
     import serial
@@ -14,42 +11,17 @@ except ModuleNotFoundError:  # pragma: no cover - hardware dependency
 
 
 LOST_SENTINEL = -5
-PROTOCOL_MAGIC = 0xCEFAEDFE
-MSG_PI_CONTROL = 0x05
-_FRAME_HEADER = struct.Struct("<IBH")
-_PI_CONTROL_PAYLOAD = struct.Struct("<IQffffBBBBBBBB")
-PI_CONTROL_PAYLOAD_SIZE = _PI_CONTROL_PAYLOAD.size
 
 
 @dataclass(slots=True)
 class TeensyTelemetry:
     timestamp_s: float = 0.0
     heading_deg: float = 0.0
-    has_ball: bool = False
-    start_enabled: bool = False
-    goal_is_blue: bool = True
-    robot_mode: str = "unknown"
-    line_angle_deg: float = LOST_SENTINEL
-    avoidance_angle_deg: float = LOST_SENTINEL
-    chord_length: float = LOST_SENTINEL
-    cross_line: bool = False
-    ball_angle_deg: float = LOST_SENTINEL
-    ball_distance_cm: float = LOST_SENTINEL
-    blue_goal_angle_deg: float = LOST_SENTINEL
-    yellow_goal_angle_deg: float = LOST_SENTINEL
-    camera_fresh: bool = False
     raw_line: str = ""
 
     @property
     def telemetry_fresh(self) -> bool:
         return self.timestamp_s > 0.0
-
-
-def _to_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    text = str(value).strip().lower()
-    return text in {"1", "true", "yes", "on", "high"}
 
 
 def _to_float(fields: dict[str, str], key: str, default: float) -> float:
@@ -59,20 +31,14 @@ def _to_float(fields: dict[str, str], key: str, default: float) -> float:
         return default
 
 
-def _to_str(fields: dict[str, str], key: str, default: str) -> str:
-    value = fields.get(key)
-    return default if value is None else value
-
-
 def parse_teensy_telemetry_line(line: str) -> TeensyTelemetry | None:
     """Parse a Teensy telemetry line.
 
     Expected wire shape:
 
-        T,heading=1.2,has_ball=0,start=1,goal_blue=1,mode=offense,...
+        T,heading=1.2
 
-    Unknown keys are ignored so the Teensy can add fields without breaking the
-    Pi runtime.
+    Unknown keys are ignored, but the Pi only consumes heading from Teensy.
     """
     text = line.strip()
     if not text.startswith("T,"):
@@ -88,19 +54,6 @@ def parse_teensy_telemetry_line(line: str) -> TeensyTelemetry | None:
     return TeensyTelemetry(
         timestamp_s=time.monotonic(),
         heading_deg=_to_float(fields, "heading", 0.0),
-        has_ball=_to_bool(fields.get("has_ball", "0")),
-        start_enabled=_to_bool(fields.get("start", "0")),
-        goal_is_blue=_to_bool(fields.get("goal_blue", "1")),
-        robot_mode=_to_str(fields, "mode", "unknown"),
-        line_angle_deg=_to_float(fields, "line", LOST_SENTINEL),
-        avoidance_angle_deg=_to_float(fields, "avoid", LOST_SENTINEL),
-        chord_length=_to_float(fields, "chord", LOST_SENTINEL),
-        cross_line=_to_bool(fields.get("cross", "0")),
-        ball_angle_deg=_to_float(fields, "ball", LOST_SENTINEL),
-        ball_distance_cm=_to_float(fields, "dist", LOST_SENTINEL),
-        blue_goal_angle_deg=_to_float(fields, "blue", LOST_SENTINEL),
-        yellow_goal_angle_deg=_to_float(fields, "yellow", LOST_SENTINEL),
-        camera_fresh=_to_bool(fields.get("cam_fresh", "0")),
         raw_line=text,
     )
 
@@ -177,51 +130,6 @@ def format_detection_packet(
     return packet
 
 
-def _wire_u8(value: float | int | bool | None) -> int:
-    if value is None:
-        return 0
-    return max(0, min(255, int(value)))
-
-
-def format_control_frame(
-    *,
-    seq: int,
-    pi_time_us: int,
-    ball_angle_deg: float,
-    ball_distance_cm: float,
-    blue_goal_angle_deg: float,
-    yellow_goal_angle_deg: float,
-    ball_found: bool,
-    blue_goal_found: bool,
-    yellow_goal_found: bool,
-    role_command: int,
-    manual_mode: int,
-    offense_command: int,
-    dribbler_power: int,
-    kick_request: bool,
-) -> bytes:
-    """Build the fixed-size PiControlPayload frame consumed by the Teensy."""
-    payload = _PI_CONTROL_PAYLOAD.pack(
-        int(seq) & 0xFFFFFFFF,
-        int(pi_time_us) & 0xFFFFFFFFFFFFFFFF,
-        float(ball_angle_deg),
-        float(ball_distance_cm),
-        float(blue_goal_angle_deg),
-        float(yellow_goal_angle_deg),
-        _wire_u8(ball_found),
-        _wire_u8(blue_goal_found),
-        _wire_u8(yellow_goal_found),
-        _wire_u8(role_command),
-        _wire_u8(manual_mode),
-        _wire_u8(offense_command),
-        _wire_u8(dribbler_power),
-        _wire_u8(kick_request),
-    )
-    header = _FRAME_HEADER.pack(PROTOCOL_MAGIC, MSG_PI_CONTROL, len(payload))
-    crc = zlib.crc32(header + payload) & 0xFFFFFFFF
-    return header + payload + struct.pack("<I", crc)
-
-
 class SerialLink:
     """Full-duplex ASCII serial link.
 
@@ -267,34 +175,6 @@ class SerialLink:
             pose_y_mm,
         )
         self._serial.write(packet.encode("ascii"))
-
-    def send_control(
-        self,
-        *,
-        seq: int,
-        pi_time_us: int,
-        ball_angle_deg: float,
-        ball_distance_cm: float,
-        blue_goal_angle_deg: float,
-        yellow_goal_angle_deg: float,
-        ball_found: bool,
-        blue_goal_found: bool,
-        yellow_goal_found: bool,
-        role_command: int,
-        manual_mode: int,
-        offense_command: int,
-        dribbler_power: int,
-        kick_request: bool,
-    ) -> None:
-        frame = format_control_frame(
-            seq=seq, pi_time_us=pi_time_us, ball_angle_deg=ball_angle_deg,
-            ball_distance_cm=ball_distance_cm, blue_goal_angle_deg=blue_goal_angle_deg,
-            yellow_goal_angle_deg=yellow_goal_angle_deg, ball_found=ball_found,
-            blue_goal_found=blue_goal_found, yellow_goal_found=yellow_goal_found,
-            role_command=role_command, manual_mode=manual_mode,
-            offense_command=offense_command, dribbler_power=dribbler_power,
-            kick_request=kick_request)
-        self._serial.write(frame)
 
     def poll_telemetry(self) -> TeensyTelemetry:
         try:

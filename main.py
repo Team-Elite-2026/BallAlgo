@@ -23,7 +23,6 @@ except ModuleNotFoundError:  # pragma: no cover - Pi runtime dependency
     Picamera2 = None
 
 from communication import SerialLink, TeensyTelemetry, format_detection_packet
-from control import BasicOffenseController, BasicOffenseInput, BasicOffenseOutput, wrap_control_angle
 from estimation import BallKalman, PoseEstimate, PoseKalman
 from estimation.kalman import polar_to_body_xy
 from foxglove_runtime import FoxgloveRuntimePublisher
@@ -793,78 +792,31 @@ def _init_lidar(enable_lidar: bool):
     return reader, localizer, deque(maxlen=lidar_cfg.LIDAR_POINTS_WINDOW)
 
 
-def _params_bool(params: dict[str, Any], key: str, default: bool) -> bool:
-    value = params.get(key, default)
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
 def _telemetry_recent(telemetry: TeensyTelemetry, max_age_s: float) -> bool:
     if telemetry.timestamp_s <= 0.0:
         return False
     return (time.monotonic() - telemetry.timestamp_s) <= max_age_s
 
 
-def _manual_mode_code(robot_mode: str) -> int:
-    mode = robot_mode.strip().lower().replace("-", "_").replace(" ", "_")
-    if "offense" in mode:
-        return 1
-    if "defense" in mode:
-        return 2
-    return 0
-
-
-def _build_offense_input(
-    detections: FrameDetections,
-    telemetry: TeensyTelemetry,
-    telemetry_fresh: bool,
-) -> BasicOffenseInput:
-    ball_found = detections.ball.found
-    ball_angle = wrap_control_angle(detections.ball_angle_deg)
-    ball_distance = detections.ball_distance_cm if ball_found else LOST_SENTINEL
-    blue_goal_angle = wrap_control_angle(detections.blue_goal_angle_deg)
-    yellow_goal_angle = wrap_control_angle(detections.yellow_goal_angle_deg)
-
-    if telemetry.goal_is_blue:
-        scoring_goal_found = detections.blue_goal.found
-        scoring_goal_angle = blue_goal_angle
-        own_goal_found = detections.yellow_goal.found
-        own_goal_angle = yellow_goal_angle
-    else:
-        scoring_goal_found = detections.yellow_goal.found
-        scoring_goal_angle = yellow_goal_angle
-        own_goal_found = detections.blue_goal.found
-        own_goal_angle = blue_goal_angle
-
-    command_link_fresh = bool(telemetry.start_enabled and telemetry_fresh)
-    return BasicOffenseInput(
-        offense_active=command_link_fresh,
-        command_link_fresh=command_link_fresh,
-        has_ball=telemetry.has_ball,
-        ball_found=ball_found,
-        ball_angle_deg=ball_angle,
-        ball_distance_cm=ball_distance,
-        scoring_goal_found=scoring_goal_found,
-        scoring_goal_angle_deg=scoring_goal_angle,
-        own_goal_found=own_goal_found,
-        own_goal_angle_deg=own_goal_angle,
-    )
+def wrap_control_angle(angle_deg: float | int | None) -> float:
+    """Convert valid camera angles to -180..180 while preserving the lost sentinel."""
+    if angle_deg is None:
+        return LOST_SENTINEL
+    angle = float(angle_deg)
+    if angle == LOST_SENTINEL:
+        return LOST_SENTINEL
+    wrapped = angle % 360.0
+    if wrapped > 180.0:
+        wrapped -= 360.0
+    return wrapped
 
 
 def _control_intent(
     seq: int,
     pi_time_us: int,
     detections: FrameDetections,
-    telemetry: TeensyTelemetry,
-    offense_input: BasicOffenseInput,
-    offense_output: BasicOffenseOutput,
     *,
     telemetry_fresh: bool,
-    state_machine_enabled: bool,
-    control_packet_enabled: bool,
 ) -> dict[str, Any]:
     blue_goal_angle = wrap_control_angle(detections.blue_goal_angle_deg)
     yellow_goal_angle = wrap_control_angle(detections.yellow_goal_angle_deg)
@@ -872,30 +824,16 @@ def _control_intent(
         "seq": seq,
         "pi_time_us": pi_time_us,
         "role_command": "offense",
-        "mode": telemetry.robot_mode,
+        "mode": "heading_only_telemetry",
         "auto_role_mode": False,
-        "ball_found": offense_input.ball_found,
-        "ball_angle_deg": offense_input.ball_angle_deg,
-        "ball_distance_cm": offense_input.ball_distance_cm,
+        "ball_found": detections.ball.found,
+        "ball_angle_deg": wrap_control_angle(detections.ball_angle_deg),
+        "ball_distance_cm": detections.ball_distance_cm if detections.ball.found else LOST_SENTINEL,
         "blue_goal_found": detections.blue_goal.found,
         "blue_goal_angle_deg": blue_goal_angle,
         "yellow_goal_found": detections.yellow_goal.found,
         "yellow_goal_angle_deg": yellow_goal_angle,
-        "scoring_goal_found": offense_input.scoring_goal_found,
-        "scoring_goal_angle_deg": offense_input.scoring_goal_angle_deg,
-        "own_goal_found": offense_input.own_goal_found,
-        "own_goal_angle_deg": offense_input.own_goal_angle_deg,
-        "offense_active": offense_input.offense_active,
-        "state_machine_enabled": state_machine_enabled,
-        "control_packet_enabled": control_packet_enabled,
-        "command_link_fresh": offense_input.command_link_fresh,
         "telemetry_fresh": telemetry_fresh,
-        "offense_command": int(offense_output.command),
-        "offense_command_name": offense_output.command_name,
-        "dribbler_power": int(offense_output.dribbler_power),
-        "kick_request": bool(offense_output.kick_request),
-        "preferred_orbit_dir": int(offense_output.preferred_orbit_dir),
-        "kick_cooldown_active": bool(offense_output.cooldown_active),
     }
 
 
@@ -905,8 +843,6 @@ def run_runtime(
     enable_serial: bool = ENABLE_SERIAL,
     enable_lidar: bool = False,
     enable_foxglove: bool = False,
-    disable_state_machine: bool = False,
-    enable_control_packet: bool = False,
 ) -> None:
     require_cv2()
     params = load_params()
@@ -920,9 +856,6 @@ def run_runtime(
     foxglove = FoxgloveRuntimePublisher() if enable_foxglove else None
     ball_filter = BallKalman(params, camera_fps=CAMERA_FPS)
     pose_filter = PoseKalman(params)
-    offense_controller = BasicOffenseController(params)
-    state_machine_enabled = _params_bool(params, "enable_offense_state_machine", True) and not disable_state_machine
-    control_packet_enabled = _params_bool(params, "enable_pi_control_packet", False) or enable_control_packet
     telemetry_stale_s = float(params.get("teensy_telemetry_stale_s", 0.25))
     telemetry = TeensyTelemetry()
 
@@ -946,12 +879,6 @@ def run_runtime(
             detections = detector.detect(frame, annotate=show_video or bool(foxglove and foxglove.stream_camera))
             pi_time_us = time.monotonic_ns() // 1000
             telemetry_fresh = _telemetry_recent(telemetry, telemetry_stale_s)
-            offense_input = _build_offense_input(detections, telemetry, telemetry_fresh)
-            if state_machine_enabled:
-                offense_output = offense_controller.update(pi_time_us, offense_input)
-            else:
-                offense_controller.reset()
-                offense_output = BasicOffenseOutput.disabled()
 
             heading = telemetry.heading_deg
             if lidar_reader is not None and lidar_window is not None:
@@ -974,37 +901,19 @@ def run_runtime(
             pose_state = pose_filter.state(heading)
 
             if serial_link is not None:
-                if control_packet_enabled:
-                    serial_link.send_control(
-                        seq=loop_count,
-                        pi_time_us=pi_time_us,
-                        ball_angle_deg=offense_input.ball_angle_deg,
-                        ball_distance_cm=offense_input.ball_distance_cm,
-                        blue_goal_angle_deg=wrap_control_angle(detections.blue_goal_angle_deg),
-                        yellow_goal_angle_deg=wrap_control_angle(detections.yellow_goal_angle_deg),
-                        ball_found=offense_input.ball_found,
-                        blue_goal_found=detections.blue_goal.found,
-                        yellow_goal_found=detections.yellow_goal.found,
-                        role_command=1,
-                        manual_mode=_manual_mode_code(telemetry.robot_mode),
-                        offense_command=int(offense_output.command),
-                        dribbler_power=offense_output.dribbler_power,
-                        kick_request=offense_output.kick_request,
-                    )
-                else:
-                    derivative = orbit_derivative.update(
-                        detections.ball_angle_deg,
-                        detections.ball_distance_cm,
-                    )
-                    serial_link.send_detection(
-                        detections.ball_angle_deg,
-                        detections.ball_distance_cm,
-                        detections.blue_goal_angle_deg,
-                        detections.yellow_goal_angle_deg,
-                        derivative,
-                        pose_state.x_mm if pose_state.valid else LOST_SENTINEL,
-                        pose_state.y_mm if pose_state.valid else LOST_SENTINEL,
-                    )
+                derivative = orbit_derivative.update(
+                    detections.ball_angle_deg,
+                    detections.ball_distance_cm,
+                )
+                serial_link.send_detection(
+                    detections.ball_angle_deg,
+                    detections.ball_distance_cm,
+                    detections.blue_goal_angle_deg,
+                    detections.yellow_goal_angle_deg,
+                    derivative,
+                    pose_state.x_mm if pose_state.valid else LOST_SENTINEL,
+                    pose_state.y_mm if pose_state.valid else LOST_SENTINEL,
+                )
 
             ball_filter.predict(dt_s)
             if detections.ball.found:
@@ -1041,12 +950,7 @@ def run_runtime(
                         loop_count,
                         pi_time_us,
                         detections,
-                        telemetry,
-                        offense_input,
-                        offense_output,
                         telemetry_fresh=telemetry_fresh,
-                        state_machine_enabled=state_machine_enabled,
-                        control_packet_enabled=control_packet_enabled,
                     ),
                     lidar_points=last_lidar_points,
                     camera_jpeg_bytes=_camera_jpeg(publish_frame) if foxglove.stream_camera else None,
@@ -1085,8 +989,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-serial", action="store_true", help="Do not open Pi/Teensy serial")
     parser.add_argument("--enable-lidar", action="store_true", help="Enable LD19 lidar localization")
     parser.add_argument("--enable-foxglove", action="store_true", help="Publish runtime snapshots to foxglove_sim sidecar")
-    parser.add_argument("--disable-state-machine", action="store_true", help="Disable basic offense state-machine outputs")
-    parser.add_argument("--enable-control-packet", action="store_true", help="Send binary Pi control frames instead of legacy ASCII camera packets")
     return parser.parse_args()
 
 
@@ -1097,8 +999,6 @@ def main() -> int:
         enable_serial=not args.no_serial,
         enable_lidar=args.enable_lidar,
         enable_foxglove=args.enable_foxglove,
-        disable_state_machine=args.disable_state_machine,
-        enable_control_packet=args.enable_control_packet,
     )
     return 0
 
