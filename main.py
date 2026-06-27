@@ -161,9 +161,52 @@ class FrameDetections:
         }
 
 
+@dataclass(slots=True)
+class OrbitDerivativeTracker:
+    prev_ball_angle_deg: float = LOST_SENTINEL
+    prev_ball_distance_cm: float = LOST_SENTINEL
+
+    def update(self, ball_angle_deg: float, ball_distance_cm: float) -> float:
+        derivative = compute_orbit_derivative(
+            ball_angle_deg,
+            ball_distance_cm,
+            self.prev_ball_angle_deg,
+            self.prev_ball_distance_cm,
+        )
+        if ball_angle_deg != LOST_SENTINEL and ball_distance_cm != LOST_SENTINEL:
+            self.prev_ball_angle_deg = ball_angle_deg
+            self.prev_ball_distance_cm = ball_distance_cm
+        return derivative
+
+
 def require_cv2() -> None:
     if cv2 is None:
         raise RuntimeError("OpenCV is required for camera detection. Install python3-opencv or opencv-python.")
+
+
+def compute_orbit_derivative(
+    ball_angle_deg: float,
+    ball_distance_cm: float,
+    prev_ball_angle_deg: float,
+    prev_ball_distance_cm: float,
+) -> float:
+    if (
+        ball_angle_deg == LOST_SENTINEL
+        or ball_distance_cm == LOST_SENTINEL
+        or prev_ball_angle_deg == LOST_SENTINEL
+        or prev_ball_distance_cm == LOST_SENTINEL
+    ):
+        return LOST_SENTINEL
+
+    new_ball_angle = 360 - ball_angle_deg if ball_angle_deg > 180 else ball_angle_deg
+    prev_new_ball_angle = 360 - prev_ball_angle_deg if prev_ball_angle_deg > 180 else prev_ball_angle_deg
+    d_input = (
+        math.sin(math.radians(int(new_ball_angle))) * int(ball_distance_cm)
+        - math.sin(math.radians(int(prev_new_ball_angle))) * int(prev_ball_distance_cm)
+    )
+    if d_input < 0 and (ball_angle_deg < 90 or ball_angle_deg > 270):
+        return round((-d_input) * 100) / 100
+    return LOST_SENTINEL
 
 
 def clamp(value: int, lower: int, upper: int) -> int:
@@ -872,6 +915,7 @@ def run_runtime(
     detector = CameraDetector(thresholds, distance_estimator)
     camera = PiCameraSource(thresholds)
     serial_link = open_serial() if enable_serial else None
+    orbit_derivative = OrbitDerivativeTracker()
     lidar_reader, lidar_localizer, lidar_window = _init_lidar(enable_lidar)
     foxglove = FoxgloveRuntimePublisher() if enable_foxglove else None
     ball_filter = BallKalman(params, camera_fps=CAMERA_FPS)
@@ -928,11 +972,16 @@ def run_runtime(
                         kick_request=offense_output.kick_request,
                     )
                 else:
+                    derivative = orbit_derivative.update(
+                        detections.ball_angle_deg,
+                        detections.ball_distance_cm,
+                    )
                     serial_link.send_detection(
                         detections.ball_angle_deg,
                         detections.ball_distance_cm,
                         detections.blue_goal_angle_deg,
                         detections.yellow_goal_angle_deg,
+                        derivative,
                     )
 
             heading = telemetry.heading_deg

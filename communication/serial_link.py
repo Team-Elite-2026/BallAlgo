@@ -230,7 +230,6 @@ class SerialLink:
         self._serial = serial.Serial(port=port, baudrate=baud, timeout=timeout)
         self._rx_text = ""
         self.latest_telemetry = TeensyTelemetry()
-        self._orbit_derivative = OrbitDerivativeTracker()
         time.sleep(0.1)
         print(f"[SERIAL] Connected on {port} @ {baud}")
 
@@ -249,8 +248,8 @@ class SerialLink:
         ball_distance_cm: float,
         blue_goal_angle_deg: float,
         yellow_goal_angle_deg: float,
+        derivative: float = LOST_SENTINEL,
     ) -> None:
-        derivative = self._orbit_derivative.update(ball_angle_deg, ball_distance_cm)
         packet = format_detection_packet(
             ball_angle_deg,
             ball_distance_cm,
