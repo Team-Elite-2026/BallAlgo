@@ -60,10 +60,10 @@
   "dribbler_capture_dist_mm":        220.0,
   "spin_shot_dribbler_power":        255,
 
-  "ball_distance_mode":              "parametric",
+  "ball_distance_mode":              "onnx",
   "use_ball_distance_onnx_model":    true,
   "ball_distance_min_cm":             0.0,
   "ball_distance_max_cm":             350.0,
   "ball_distance_parametric_path":    "training/parametric_model.json",
-  "ball_distance_model_path":         "training/run_cleaned_center_330_318_polar_2000/exported/ball_distance_polar_epoch_1800.onnx"
+  "ball_distance_model_path":         "training/run_newframe_cleaned_polar/exported/ball_distance_newframe_cleaned_polar.onnx"
 }

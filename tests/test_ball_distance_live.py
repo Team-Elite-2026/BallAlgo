@@ -36,7 +36,7 @@ from main import (  # noqa: E402
 )
 
 
-DEFAULT_MODEL = Path("training/run_cleaned_center_330_318_polar_2000/exported/ball_distance_polar_epoch_1800.onnx")
+DEFAULT_MODEL = Path("training/run_newframe_cleaned_polar/exported/ball_distance_newframe_cleaned_polar.onnx")
 
 
 def resolve_model_path(model_path: str | Path | None) -> Path:
