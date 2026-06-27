@@ -1,4 +1,5 @@
 import serial
+import time
 
 
 class TeensyReader:
@@ -53,3 +54,31 @@ class TeensyReader:
                 except ValueError:
                     pass
         return heading
+
+
+def main() -> int:
+    try:
+        from . import config as cfg
+    except ImportError:
+        import config as cfg
+
+    reader = TeensyReader(cfg.TEENSY_PORT, cfg.TEENSY_BAUD)
+    if not reader.is_connected:
+        return 1
+
+    print("Reading Teensy heading. Ctrl+C to quit.")
+    try:
+        while True:
+            heading = reader.poll()
+            if heading is not None:
+                print(f"heading={heading:.2f}")
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        reader.close()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
