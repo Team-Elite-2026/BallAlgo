@@ -161,15 +161,20 @@ def format_detection_packet(
     blue_goal_angle_deg: float,
     yellow_goal_angle_deg: float,
     derivative: float = LOST_SENTINEL,
+    pose_x_mm: float = LOST_SENTINEL,
+    pose_y_mm: float = LOST_SENTINEL,
 ) -> str:
     """Format the ASCII packet consumed by Offense2026's Cam.cpp."""
-    return (
+    packet = (
         f"{_wire_int(ball_angle_deg)}b"
         f"{_wire_int(ball_distance_cm)}a"
         f"{_wire_int(blue_goal_angle_deg)}c"
         f"{_wire_int(yellow_goal_angle_deg)}d"
         f"{derivative}f"
     )
+    if pose_x_mm != LOST_SENTINEL or pose_y_mm != LOST_SENTINEL:
+        packet += f"{_wire_int(pose_x_mm)}x{_wire_int(pose_y_mm)}y"
+    return packet
 
 
 def _wire_u8(value: float | int | bool | None) -> int:
@@ -249,6 +254,8 @@ class SerialLink:
         blue_goal_angle_deg: float,
         yellow_goal_angle_deg: float,
         derivative: float = LOST_SENTINEL,
+        pose_x_mm: float = LOST_SENTINEL,
+        pose_y_mm: float = LOST_SENTINEL,
     ) -> None:
         packet = format_detection_packet(
             ball_angle_deg,
@@ -256,6 +263,8 @@ class SerialLink:
             blue_goal_angle_deg,
             yellow_goal_angle_deg,
             derivative,
+            pose_x_mm,
+            pose_y_mm,
         )
         self._serial.write(packet.encode("ascii"))
 

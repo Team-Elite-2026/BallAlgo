@@ -18,6 +18,12 @@ class SerialLinkTests(unittest.TestCase):
     def test_detection_packet_stays_legacy_ascii(self):
         self.assertEqual(format_detection_packet(12.9, 34.2, -5, 270), "12b34a-5c270d-5f")
 
+    def test_detection_packet_can_append_pose_ascii(self):
+        self.assertEqual(
+            format_detection_packet(12.9, 34.2, -5, 270, -5, 101.6, 202.4),
+            "12b34a-5c270d-5f101x202y",
+        )
+
     def test_compute_orbit_derivative_matches_legacy_camera_logic(self):
         self.assertEqual(compute_orbit_derivative(350, 20, 340, 30), 6.79)
         self.assertEqual(compute_orbit_derivative(300, 40, 320, 30), -5)

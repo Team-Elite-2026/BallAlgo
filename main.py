@@ -953,6 +953,26 @@ def run_runtime(
                 offense_controller.reset()
                 offense_output = BasicOffenseOutput.disabled()
 
+            heading = telemetry.heading_deg
+            if lidar_reader is not None and lidar_window is not None:
+                new_points = lidar_reader.poll_points()
+                if new_points:
+                    lidar_window.extend(new_points)
+                last_lidar_points = list(lidar_window)
+                if lidar_localizer is not None and last_lidar_points:
+                    result = lidar_localizer.update(last_lidar_points, heading)
+                    pose_filter.update(
+                        PoseEstimate(
+                            valid=bool(result.get("valid")),
+                            x_mm=float(result.get("x_mm") or 0.0),
+                            y_mm=float(result.get("y_mm") or 0.0),
+                        ),
+                        heading,
+                    )
+
+            pose_filter.predict(dt_s)
+            pose_state = pose_filter.state(heading)
+
             if serial_link is not None:
                 if control_packet_enabled:
                     serial_link.send_control(
@@ -982,26 +1002,9 @@ def run_runtime(
                         detections.blue_goal_angle_deg,
                         detections.yellow_goal_angle_deg,
                         derivative,
+                        pose_state.x_mm if pose_state.valid else LOST_SENTINEL,
+                        pose_state.y_mm if pose_state.valid else LOST_SENTINEL,
                     )
-
-            heading = telemetry.heading_deg
-            if lidar_reader is not None and lidar_window is not None:
-                new_points = lidar_reader.poll_points()
-                if new_points:
-                    lidar_window.extend(new_points)
-                last_lidar_points = list(lidar_window)
-                if lidar_localizer is not None and last_lidar_points:
-                    result = lidar_localizer.update(last_lidar_points, heading)
-                    pose_filter.update(
-                        PoseEstimate(
-                            valid=bool(result.get("valid")),
-                            x_mm=float(result.get("x_mm") or 0.0),
-                            y_mm=float(result.get("y_mm") or 0.0),
-                        ),
-                        heading,
-                    )
-
-            pose_filter.predict(dt_s)
 
             ball_filter.predict(dt_s)
             if detections.ball.found:
