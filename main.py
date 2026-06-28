@@ -1119,7 +1119,7 @@ def main() -> int:
     run_runtime(
         show_video=args.show_video,
         enable_serial=not args.no_serial,
-        enable_lidar=args.enable_lidar,
+        enable_lidar=True,
         lidar_visual=args.lidar_visual,
         enable_foxglove=args.enable_foxglove,
         print_teensy_packet=args.print_packet or PRINT_TEENSY_PACKET,
