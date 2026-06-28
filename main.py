@@ -320,7 +320,7 @@ def angle_and_distance_cpp(cx: int, cy: int, xoffset: int = 0, yoffset: int = 0)
 def apply_ball_distance_calibration(dist_px: float) -> float:
     if dist_px == LOST_SENTINEL:
         return LOST_SENTINEL
-    return 0.00255386 * math.pow(dist_px, 2.09612)
+    return 1.56307 * math.pow(1.01893, dist_px)
 
 
 DISTANCE_MODES = ("parametric", "onnx", "exponential")
@@ -1066,7 +1066,7 @@ def run_runtime(
             if show_video:
                 raw_view = frame.copy()
                 cv2.putText(raw_view, "Raw camera feed", (10, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA)
-                cv2.imshow("Raw Camera", raw_view)
+                cv2.imshow("Raw Camera", cv2.cvtColor(raw_view, cv2.COLOR_RGB2BGR))
                 cv2.setMouseCallback('Raw Camera', click_event)
                 view = detections.annotated_frame if detections.annotated_frame is not None else frame
                 cv2.imshow("Ball Detection", cv2.cvtColor(view, cv2.COLOR_RGB2BGR))

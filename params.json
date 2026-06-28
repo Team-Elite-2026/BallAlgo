@@ -48,10 +48,10 @@
   "role_switch_margin_cm":           15.0,
   "role_confirm_samples":            3,
 
-  "ball_distance_mode":              "parametric",
-  "use_ball_distance_onnx_model":    true,
+  "ball_distance_mode":              "exponential",
+  "use_ball_distance_onnx_model":    false,
   "ball_distance_min_cm":             0.0,
-  "ball_distance_max_cm":             350.0,
+  "ball_distance_max_cm":             250.0,
   "ball_distance_parametric_path":    "training/parametric_model.json",
   "ball_distance_model_path":         "training/run_cleaned_center_330_318_polar_2000/exported/ball_distance_polar_epoch_1800.onnx"
 }
