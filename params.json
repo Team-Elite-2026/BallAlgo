@@ -48,6 +48,16 @@
   "role_switch_margin_cm":           15.0,
   "role_confirm_samples":            3,
 
+  "bluetooth": {
+    "enabled":        true,
+    "role":           "master",
+    "rfcomm_channel": 1,
+    "self_mac":       "XX:XX:XX:XX:XX:XX",
+    "peer_mac":       "YY:YY:YY:YY:YY:YY",
+    "send_hz":        30.0,
+    "peer_stale_s":   0.3
+  },
+
   "ball_distance_mode":              "exponential",
   "use_ball_distance_onnx_model":    false,
   "ball_distance_min_cm":             0.0,

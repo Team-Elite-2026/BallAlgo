@@ -12,12 +12,18 @@ from communication.serial_link import parse_teensy_telemetry_line
 
 class SerialLinkTests(unittest.TestCase):
     def test_detection_packet_stays_legacy_ascii(self):
-        self.assertEqual(format_detection_packet(12.9, 34.2, -5, 270), "12b34a-5c270d-5f")
+        self.assertEqual(format_detection_packet(12.9, 34.2, -5, 270), "12b34a-5c270d-5p-5f")
 
     def test_detection_packet_can_append_pose_ascii(self):
         self.assertEqual(
             format_detection_packet(12.9, 34.2, -5, 270, -5, 101.6, 202.4),
-            "12b34a-5c270d-5f101x202y",
+            "12b34a-5c270d-5p-5f101x202y",
+        )
+
+    def test_detection_packet_can_send_predicted_ball_angle(self):
+        self.assertEqual(
+            format_detection_packet(12.9, 34.2, -5, 270, predicted_ball_angle_deg=20.6),
+            "12b34a-5c270d20p-5f",
         )
 
     def test_compute_orbit_derivative_matches_legacy_camera_logic(self):

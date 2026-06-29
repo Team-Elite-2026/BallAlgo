@@ -111,6 +111,7 @@ class FrameDetections:
     searched_sectors: list[int]
     predicted_sector: int | None
     process_ms: float
+    predicted_ball_angle_deg: float = LOST_SENTINEL
     annotated_frame: Any = None
     mask_display: Any = None
 
@@ -136,6 +137,7 @@ class FrameDetections:
             self.ball_distance_cm,
             self.blue_goal_angle_deg,
             self.yellow_goal_angle_deg,
+            predicted_ball_angle_deg=self.predicted_ball_angle_deg,
         )
 
     def snapshot_dict(self) -> dict[str, Any]:
@@ -157,6 +159,7 @@ class FrameDetections:
             "yellow_goal_certainty": self.yellow_goal.certainty,
             "searched_sectors": self.searched_sectors,
             "predicted_sector": self.predicted_sector,
+            "predicted_ball_angle_deg": self.predicted_ball_angle_deg,
             "process_ms": self.process_ms,
             "ball_px": ball_px,
         }
@@ -458,6 +461,11 @@ def clamp_vec(vx: float, vy: float, vmax: float) -> tuple[float, float]:
     return vx * scale, vy * scale
 
 
+def adaptive_lookahead_frames(speed: float) -> int:
+    lookahead = LOOKAHEAD_MIN + (1 if speed > LOOKAHEAD_SPEED_THRESH else 0)
+    return min(LOOKAHEAD_MAX, lookahead)
+
+
 def find_largest_contour(bin_img: Any, min_area: int = MIN_AREA_PIX) -> tuple[tuple[int, int, int, int], tuple[int, int], float] | None:
     require_cv2()
     cnts, _ = cv2.findContours(bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -531,7 +539,7 @@ class CameraDetector:
 
         yellow_goal = self._goal_detection(bin_yellow, draw_frame, "YELLOW GOAL", (0, 255, 255))
         blue_goal = self._goal_detection(bin_blue, draw_frame, "BLUE GOAL", (255, 0, 0))
-        ball, searched, predicted = self._ball_detection(bin_ball, draw_frame)
+        ball, searched, predicted, predicted_ball_angle = self._ball_detection(bin_ball, draw_frame)
 
         mask_display = None
         if annotate:
@@ -558,6 +566,7 @@ class CameraDetector:
             searched_sectors=searched,
             predicted_sector=predicted,
             process_ms=(time.perf_counter() - t0) * 1000.0,
+            predicted_ball_angle_deg=predicted_ball_angle,
             annotated_frame=draw_frame,
             mask_display=mask_display,
         )
@@ -582,7 +591,7 @@ class CameraDetector:
             certainty=min(1.0, area / GOAL_CERT_REF_AREA),
         )
 
-    def _ball_detection(self, bin_ball: Any, draw_frame: Any) -> tuple[BlobDetection, list[int], int | None]:
+    def _ball_detection(self, bin_ball: Any, draw_frame: Any) -> tuple[BlobDetection, list[int], int | None, float]:
         searched: list[int] = []
         best = None
         predicted_sector = None
@@ -598,8 +607,7 @@ class CameraDetector:
         else:
             if self.last_position is not None and self.v_ema is not None:
                 speed = math.hypot(self.v_ema[0], self.v_ema[1])
-                lookahead = LOOKAHEAD_MIN + (1 if speed > LOOKAHEAD_SPEED_THRESH else 0)
-                lookahead = min(LOOKAHEAD_MAX, lookahead)
+                lookahead = adaptive_lookahead_frames(speed)
                 px = self.last_position[0] + self.v_ema[0] * lookahead
                 py = self.last_position[1] + self.v_ema[1] * lookahead
                 ang = (math.degrees(math.atan2(py - self.sector_center[1], px - self.sector_center[0])) + 360.0) % 360.0
@@ -638,7 +646,7 @@ class CameraDetector:
         if best is None:
             if self.v_ema is not None:
                 self.v_ema = (0.9 * self.v_ema[0], 0.9 * self.v_ema[1])
-            return BlobDetection(), searched, predicted_sector
+            return BlobDetection(), searched, predicted_sector, LOST_SENTINEL
 
         bbox, center, area, sector = best
         if self.last_position is not None:
@@ -655,6 +663,11 @@ class CameraDetector:
         self.last_sector = sector
 
         angle, dist_px = angle_and_distance_cpp(center[0], center[1], *self.thresholds.offsets)
+        speed = math.hypot(self.v_ema[0], self.v_ema[1]) if self.v_ema is not None else 0.0
+        lookahead = adaptive_lookahead_frames(speed)
+        predicted_cx = center[0] + (self.v_ema[0] if self.v_ema is not None else 0.0) * lookahead
+        predicted_cy = center[1] + (self.v_ema[1] if self.v_ema is not None else 0.0) * lookahead
+        predicted_ball_angle, _ = angle_and_distance_cpp(predicted_cx, predicted_cy, *self.thresholds.offsets)
         distance_cm = self.distance_estimator.estimate_cm(center[0], center[1], dist_px, self.thresholds)
         if draw_frame is not None:
             x, y, w, h = bbox
@@ -689,7 +702,7 @@ class CameraDetector:
             distance_cm=distance_cm,
             certainty=1.0,
             sector=sector,
-        ), searched, predicted_sector
+        ), searched, predicted_sector, predicted_ball_angle
 
     def _draw_sector_overlay(
         self,
@@ -912,6 +925,7 @@ def _control_intent(
         "auto_role_mode": False,
         "ball_found": detections.ball.found,
         "ball_angle_deg": wrap_control_angle(detections.ball_angle_deg),
+        "predicted_ball_angle_deg": wrap_control_angle(detections.predicted_ball_angle_deg),
         "ball_distance_cm": detections.ball_distance_cm if detections.ball.found else LOST_SENTINEL,
         "blue_goal_found": detections.blue_goal.found,
         "blue_goal_angle_deg": blue_goal_angle,
@@ -1013,6 +1027,7 @@ def run_runtime(
                         derivative,
                         pose_x,
                         pose_y,
+                        predicted_ball_angle_deg=detections.predicted_ball_angle_deg,
                     ))
                 serial_link.send_detection(
                     ball_angle_deg,
@@ -1022,6 +1037,7 @@ def run_runtime(
                     derivative,
                     pose_x,
                     pose_y,
+                    predicted_ball_angle_deg=detections.predicted_ball_angle_deg,
                 )
 
             if detections.ball.found:
