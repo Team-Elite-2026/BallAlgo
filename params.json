@@ -49,7 +49,7 @@
   "role_confirm_samples":            3,
 
   "bluetooth": {
-    "enabled":        true,
+    "enabled":        false,
     "role":           "master",
     "rfcomm_channel": 1,
     "self_mac":       "XX:XX:XX:XX:XX:XX",
