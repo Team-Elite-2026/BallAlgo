@@ -49,11 +49,11 @@
   "role_confirm_samples":            3,
 
   "bluetooth": {
-    "enabled":        false,
+    "enabled":        true,
     "role":           "master",
     "rfcomm_channel": 1,
-    "self_mac":       "XX:XX:XX:XX:XX:XX",
-    "peer_mac":       "YY:YY:YY:YY:YY:YY",
+    "self_mac":       "88:A2:9E:53:82:48",
+    "peer_mac":       "2C:CF:67:E3:A9:B8",
     "send_hz":        30.0,
     "peer_stale_s":   0.3
   },
